@@ -5,7 +5,9 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen flex flex-col bg-bg-primary">
       <Header />
-      <main className="flex-1">{children}</main>
+      <main id="top" className="flex-1">
+        {children}
+      </main>
       <Footer />
     </div>
   );
