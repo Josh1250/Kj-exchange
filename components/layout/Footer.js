@@ -13,18 +13,14 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Column 1: Brand */}
           <div className="space-y-4">
-            <Link href="/" className="flex items-center gap-2 group">
+            <Link href="/" className="block group">
               <Image
                 src="/logo.png"
                 alt="KJ Exchange"
-                width={40}
-                height={40}
-                className="h-10 w-auto transition-transform group-hover:scale-105"
+                width={80}
+                height={80}
+                className="w-20 h-auto transition-transform group-hover:scale-105"
               />
-              <span className="text-xl font-bold">
-                <span className="text-purple">KJ</span>
-                <span className="text-gray-400">Exchange</span>
-              </span>
             </Link>
             <p className="text-text-muted text-sm leading-relaxed max-w-xs">
               Trade Smart. Trade Secure.
