@@ -3,12 +3,16 @@ import Image from 'next/image';
 import { useAuth } from '../../pages/_app';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Header() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [isDark, setIsDark] = useState(true);
+  const [isServicesOpen, setIsServicesOpen] = useState(false);
+  const [isAssetsOpen, setIsAssetsOpen] = useState(false);
+  const servicesRef = useRef(null);
+  const assetsRef = useRef(null);
 
   // Load theme preference
   useEffect(() => {
@@ -20,6 +24,20 @@ export default function Header() {
       setIsDark(true);
       document.documentElement.classList.remove('light-mode');
     }
+  }, []);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (servicesRef.current && !servicesRef.current.contains(event.target)) {
+        setIsServicesOpen(false);
+      }
+      if (assetsRef.current && !assetsRef.current.contains(event.target)) {
+        setIsAssetsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const toggleTheme = () => {
@@ -43,7 +61,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 bg-bg-secondary/80 backdrop-blur-lg border-b border-border">
       <div className="container mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 group">
+        <Link href="/" className="flex items-center gap-2 group shrink-0">
           <Image
             src="/logo.png"
             alt="KJ Exchange"
@@ -59,16 +77,161 @@ export default function Header() {
         </Link>
 
         {/* Navigation Links (Desktop) */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden md:flex items-center gap-6">
+          {/* Home */}
           <Link href="/" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
             Home
           </Link>
-          <Link href="#services" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
-            Services
-          </Link>
-          <Link href="#assets" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
-            Assets
-          </Link>
+
+          {/* Services Dropdown */}
+          <div ref={servicesRef} className="relative">
+            <button
+              onClick={() => setIsServicesOpen(!isServicesOpen)}
+              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium"
+            >
+              Services
+              <svg className={`w-4 h-4 transition-transform duration-200 ${isServicesOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {isServicesOpen && (
+              <div className="absolute top-full left-0 mt-2 w-56 bg-bg-card backdrop-blur-xl border border-border rounded-xl shadow-2xl py-2 overflow-hidden">
+                <Link
+                  href="/dashboard/sell-gift-card"
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsServicesOpen(false)}
+                >
+                  <span className="text-lg">🎁</span>
+                  <div>
+                    <p className="font-medium">Gift Cards</p>
+                    <p className="text-xs text-text-muted">Sell Apple, Amazon & more</p>
+                  </div>
+                </Link>
+                <Link
+                  href="/dashboard/sell-crypto"
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsServicesOpen(false)}
+                >
+                  <span className="text-lg">₿</span>
+                  <div>
+                    <p className="font-medium">Crypto</p>
+                    <p className="text-xs text-text-muted">Sell BTC, USDT, ETH & more</p>
+                  </div>
+                </Link>
+                <div className="border-t border-border my-1"></div>
+                <div className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted opacity-60">
+                  <span className="text-lg">💡</span>
+                  <div>
+                    <p className="font-medium">Pay Bills <span className="text-[10px] text-orange ml-1">Soon</span></p>
+                    <p className="text-xs text-text-muted">Electricity, TV, Internet</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted opacity-60">
+                  <span className="text-lg">📱</span>
+                  <div>
+                    <p className="font-medium">Buy Airtime <span className="text-[10px] text-orange ml-1">Soon</span></p>
+                    <p className="text-xs text-text-muted">MTN, Glo, Airtel, 9mobile</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Assets Dropdown */}
+          <div ref={assetsRef} className="relative">
+            <button
+              onClick={() => setIsAssetsOpen(!isAssetsOpen)}
+              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium"
+            >
+              Assets
+              <svg className={`w-4 h-4 transition-transform duration-200 ${isAssetsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {isAssetsOpen && (
+              <div className="absolute top-full left-0 mt-2 w-56 bg-bg-card backdrop-blur-xl border border-border rounded-xl shadow-2xl py-2 overflow-hidden">
+                <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider text-text-muted font-semibold">Crypto</div>
+                <Link
+                  href="#assets"
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsAssetsOpen(false)}
+                >
+                  <span className="text-lg text-[#f7931a]">₿</span>
+                  <span>Bitcoin (BTC)</span>
+                </Link>
+                <Link
+                  href="#assets"
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsAssetsOpen(false)}
+                >
+                  <span className="text-lg text-[#26a17b]">₮</span>
+                  <span>Tether (USDT)</span>
+                </Link>
+                <Link
+                  href="#assets"
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsAssetsOpen(false)}
+                >
+                  <span className="text-lg text-[#627eea]">⟠</span>
+                  <span>Ethereum (ETH)</span>
+                </Link>
+                <Link
+                  href="#assets"
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsAssetsOpen(false)}
+                >
+                  <span className="text-lg text-[#9945FF]">◎</span>
+                  <span>Solana (SOL)</span>
+                </Link>
+                <div className="border-t border-border my-1"></div>
+                <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider text-text-muted font-semibold">Gift Cards</div>
+                <Link
+                  href="#assets"
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsAssetsOpen(false)}
+                >
+                  <span className="text-lg text-[#a2aaad]">🍎</span>
+                  <span>Apple</span>
+                </Link>
+                <Link
+                  href="#assets"
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsAssetsOpen(false)}
+                >
+                  <span className="text-lg text-[#ff9900]">📦</span>
+                  <span>Amazon</span>
+                </Link>
+                <Link
+                  href="#assets"
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsAssetsOpen(false)}
+                >
+                  <span className="text-lg text-[#34a853]">▶️</span>
+                  <span>Google Play</span>
+                </Link>
+                <Link
+                  href="#assets"
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition"
+                  onClick={() => setIsAssetsOpen(false)}
+                >
+                  <span className="text-lg">🎮</span>
+                  <span>Steam</span>
+                </Link>
+                <div className="border-t border-border my-1"></div>
+                <Link
+                  href="#assets"
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-orange hover:bg-orange/10 transition"
+                  onClick={() => setIsAssetsOpen(false)}
+                >
+                  <span>View All Assets →</span>
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Simple Links */}
           <Link href="#calculator" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
             Rates
           </Link>
@@ -112,7 +275,7 @@ export default function Header() {
             <>
               <Link
                 href="/auth/login"
-                className="text-text-muted hover:text-text-primary transition text-sm font-medium"
+                className="text-text-muted hover:text-text-primary transition text-sm font-medium hidden sm:inline"
               >
                 Login
               </Link>
