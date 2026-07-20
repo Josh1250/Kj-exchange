@@ -1,11 +1,8 @@
 import Link from 'next/link';
 import Layout from '../components/layout/Layout';
 import RateCalculator from '../components/calculator/RateCalculator';
-import { useState } from 'react';
 
 export default function Home() {
-  const [tradeType, setTradeType] = useState('sell');
-
   return (
     <Layout>
       {/* ============ HERO ============ */}
@@ -20,31 +17,8 @@ export default function Home() {
             ⚡ 0% Fees — No Hidden Charges
           </span>
 
-          <div className="flex bg-black/20 dark:bg-white/5 rounded-xl p-1 max-w-xs mx-auto mb-8 backdrop-blur-sm border border-border">
-            <button
-              className={`flex-1 py-2.5 px-6 rounded-lg text-center font-semibold transition-all duration-300 ${
-                tradeType === 'sell'
-                  ? 'bg-orange text-white shadow-lg shadow-orange/30'
-                  : 'text-text-muted hover:text-text-primary'
-              }`}
-              onClick={() => setTradeType('sell')}
-            >
-              💰 Sell
-            </button>
-            <button
-              className={`flex-1 py-2.5 px-6 rounded-lg text-center font-semibold transition-all duration-300 ${
-                tradeType === 'buy'
-                  ? 'bg-orange text-white shadow-lg shadow-orange/30'
-                  : 'text-text-muted hover:text-text-primary'
-              }`}
-              onClick={() => setTradeType('buy')}
-            >
-              🛍️ Buy
-            </button>
-          </div>
-
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight">
-            {tradeType === 'sell' ? 'Sell' : 'Buy'} Crypto &amp;{' '}
+            Sell Crypto &amp;{' '}
             <span className="bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
               Gift Cards
             </span>
@@ -56,9 +30,7 @@ export default function Home() {
           </h1>
 
           <p className="text-text-muted text-lg md:text-xl mt-6 max-w-2xl mx-auto leading-relaxed">
-            {tradeType === 'sell'
-              ? 'Sell your crypto & gift cards instantly. 0% fees. No delays. Just the best rate.'
-              : 'Buy gift cards at the best rates. 0% fees. Instant delivery.'}
+            Sell your crypto & gift cards instantly. <strong>0% fees</strong>. No delays. Just the best rate.
           </p>
 
           <div className="flex flex-wrap gap-4 justify-center mt-8">
@@ -413,14 +385,6 @@ export default function Home() {
         }
         .btn-pulse {
           animation: pulse-cta 2.4s infinite;
-        }
-
-        @keyframes float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-        .float-animation {
-          animation: float 4s ease-in-out infinite;
         }
       `}</style>
     </Layout>
