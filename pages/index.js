@@ -1,4 +1,4 @@
-          import Link from 'next/link';
+import Link from 'next/link';
 import Layout from '../components/layout/Layout';
 import RateCalculator from '../components/calculator/RateCalculator';
 import { useState, useEffect } from 'react';
@@ -34,7 +34,6 @@ export default function Home() {
     <Layout>
       {/* ============ NAVIGATION BAR ============ */}
       <nav className="container mx-auto px-4 py-4 flex items-center justify-between border-b border-border">
-        {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group">
           <span className="text-2xl font-bold">
             <span className="text-purple">KJ</span>
@@ -42,7 +41,6 @@ export default function Home() {
           </span>
         </Link>
 
-        {/* Nav Links */}
         <div className="hidden md:flex items-center gap-8">
           <Link href="/" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
             Home
@@ -61,7 +59,6 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Right Side */}
         <div className="flex items-center gap-4">
           <Link
             href="/auth/login"
@@ -296,7 +293,7 @@ export default function Home() {
         <RateCalculator />
       </section>
 
-      {/* ============ SUPPORTED ASSETS (WITH REAL ICONS) ============ */}
+      {/* ============ SUPPORTED ASSETS ============ */}
       <section id="assets" className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Assets</span>
@@ -305,7 +302,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
-          {/* Crypto — Real Brand Colors */}
+          {/* Crypto */}
           <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
             <i className="fab fa-bitcoin text-4xl block mb-1" style={{ color: '#f7931a' }}></i>
             <p className="font-semibold text-sm">Bitcoin</p>
@@ -327,7 +324,7 @@ export default function Home() {
             <p className="text-text-muted text-xs">SOL</p>
           </div>
 
-          {/* Gift Cards — Real Brand Icons */}
+          {/* Gift Cards */}
           <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
             <i className="fab fa-apple text-4xl block mb-1" style={{ color: '#a2aaad' }}></i>
             <p className="font-semibold text-sm">Apple</p>
@@ -502,5 +499,4 @@ export default function Home() {
       `}</style>
     </Layout>
   );
-}                                              .light-mode .bg-bg-card { background: rgba(255,255,255,0.85); backdrop-filter: blur(8px); box-shadow: 0 4px 24px rgba(78,31,145,0.06); }
-        
+}
