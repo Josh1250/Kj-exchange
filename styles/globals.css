@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap');
+
+:root {
+  --purple: #4E1F91;
+  --purple-light: #7B3FBF;
+  --orange: #FF7300;
+  --orange-light: #FF9A44;
+  --bg-primary: #05030A;
+  --bg-secondary: #0B0815;
+  --bg-card: rgba(23, 16, 33, 0.7);
+  --text-primary: #F0EDF5;
+  --text-secondary: #B8B0C9;
+  --text-muted: #7A728F;
+  --border-subtle: rgba(255, 255, 255, 0.05);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--purple);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--orange);
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Animated gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, var(--purple-light), var(--orange-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Pulse animation for buttons */
+@keyframes pulse-cta {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 115, 0, 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 20px rgba(255, 115, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 115, 0, 0);
+  }
+}
+
+.btn-pulse {
+  animation: pulse-cta 2.4s infinite;
+}
+
+/* Gradient border animation */
+@keyframes shimmer {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.shimmer-border {
+  background: linear-gradient(90deg, var(--purple), var(--orange), var(--purple));
+  background-size: 200% 100%;
+  animation: shimmer 4s ease-in-out infinite;
+}
+
+/* Float animation for WhatsApp */
+@keyframes float-whatsapp {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.whatsapp-float {
+  animation: float-whatsapp 3s ease-in-out infinite;
+}
+
+/* Hide scrollbar for ticker */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
