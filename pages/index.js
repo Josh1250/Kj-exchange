@@ -1,15 +1,12 @@
-import Link from 'next/link';
+          import Link from 'next/link';
 import Layout from '../components/layout/Layout';
 import RateCalculator from '../components/calculator/RateCalculator';
 import { useState, useEffect } from 'react';
 
 export default function Home() {
-  // Theme state
   const [isDark, setIsDark] = useState(true);
-  // Trade type state (the missing piece!)
   const [tradeType, setTradeType] = useState('sell');
 
-  // Load theme preference
   useEffect(() => {
     const savedTheme = localStorage.getItem('kj-theme');
     if (savedTheme === 'light') {
@@ -35,7 +32,53 @@ export default function Home() {
 
   return (
     <Layout>
-      {/* Theme Toggle */}
+      {/* ============ NAVIGATION BAR ============ */}
+      <nav className="container mx-auto px-4 py-4 flex items-center justify-between border-b border-border">
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-2 group">
+          <span className="text-2xl font-bold">
+            <span className="text-purple">KJ</span>
+            <span className="text-gray-400">Exchange</span>
+          </span>
+        </Link>
+
+        {/* Nav Links */}
+        <div className="hidden md:flex items-center gap-8">
+          <Link href="/" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
+            Home
+          </Link>
+          <Link href="#services" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
+            Services
+          </Link>
+          <Link href="#assets" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
+            Assets
+          </Link>
+          <Link href="#calculator" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
+            Rates
+          </Link>
+          <Link href="#faq" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
+            FAQ
+          </Link>
+        </div>
+
+        {/* Right Side */}
+        <div className="flex items-center gap-4">
+          <Link
+            href="/auth/login"
+            className="text-text-muted hover:text-text-primary transition text-sm font-medium"
+          >
+            Login
+          </Link>
+          <Link
+            href="/auth/signup"
+            className="bg-orange text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-orange-600 transition shadow-lg shadow-orange/30"
+          >
+            Sign Up Free
+          </Link>
+        </div>
+      </nav>
+
+      {/* ============ THEME TOGGLE ============ */}
       <div className="container mx-auto px-4 pt-4 flex justify-end">
         <button
           onClick={toggleTheme}
@@ -55,7 +98,7 @@ export default function Home() {
         </button>
       </div>
 
-      {/* ===================== HERO ===================== */}
+      {/* ============ HERO ============ */}
       <section className="container mx-auto px-4 pt-8 pb-16">
         <div className="text-center max-w-5xl mx-auto">
           <span className="inline-block bg-orange/10 text-orange border border-orange/20 px-5 py-1.5 rounded-full text-sm font-semibold mb-6 backdrop-blur-sm">
@@ -127,23 +170,23 @@ export default function Home() {
               <p className="text-text-muted text-sm mt-1">Satisfied Customers</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-bold text-white dark:text-black">2022</p>
-              <p className="text-text-muted text-sm mt-1">Established</p>
-            </div>
-            <div className="text-center">
               <p className="text-3xl font-bold text-green-400">0%</p>
               <p className="text-text-muted text-sm mt-1">Fees</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-white dark:text-black">⭐ 4.9</p>
+              <p className="text-text-muted text-sm mt-1">Average Rating</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ===================== SERVICES ===================== */}
-      <section className="container mx-auto px-4 py-20 border-t border-border">
+      {/* ============ SERVICES ============ */}
+      <section id="services" className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Services</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Everything You Need</h2>
-          <p className="text-text-muted mt-2 max-w-2xl mx-auto">Sell or buy gift cards and crypto with 0% fees</p>
+          <p className="text-text-muted mt-2 max-w-2xl mx-auto">Buy, sell, and pay all in one place</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -163,18 +206,18 @@ export default function Home() {
               cta: 'Sell Crypto →'
             },
             {
-              icon: '🧮',
-              title: 'Rate Calculator',
-              desc: 'See exactly how much you\'ll get in Naira',
-              link: '#calculator',
-              cta: 'Calculate →'
+              icon: '💡',
+              title: 'Pay Bills',
+              desc: 'Electricity, TV, Internet & more',
+              link: '#',
+              cta: 'Coming Soon →'
             },
             {
-              icon: '💰',
-              title: 'Zero Fees',
-              desc: 'No hidden charges. 0% commission.',
+              icon: '📱',
+              title: 'Buy Airtime',
+              desc: 'MTN, Glo, Airtel, 9mobile & more',
               link: '#',
-              cta: '✓ 0% Fees'
+              cta: 'Coming Soon →'
             }
           ].map((service, idx) => (
             <div
@@ -197,7 +240,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===================== WHY CHOOSE ===================== */}
+      {/* ============ WHY CHOOSE ============ */}
       <section className="container mx-auto px-4 py-20 border-t border-border">
         <div className="grid md:grid-cols-2 gap-16 items-center">
           <div>
@@ -213,7 +256,7 @@ export default function Home() {
                 { icon: '⚡', title: 'Lightning Fast', desc: 'Get paid in 5-15 minutes after verification' },
                 { icon: '🔒', title: 'Bank-Grade Security', desc: 'All transactions are encrypted and protected' },
                 { icon: '🧩', title: 'Easy to Use', desc: 'Simple steps from signup to payout' },
-                { icon: '🔄', title: 'Flexible Options', desc: 'Sell gift cards, crypto, or swap between them' }
+                { icon: '🔄', title: 'Flexible Options', desc: 'Sell gift cards, crypto, pay bills & buy airtime' }
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-4 group">
                   <span className="text-2xl text-orange group-hover:scale-110 transition-transform duration-300">
@@ -243,7 +286,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===================== RATE CALCULATOR ===================== */}
+      {/* ============ CALCULATOR ============ */}
       <section id="calculator" className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Calculator</span>
@@ -253,7 +296,7 @@ export default function Home() {
         <RateCalculator />
       </section>
 
-      {/* ===================== SUPPORTED ASSETS ===================== */}
+      {/* ============ SUPPORTED ASSETS (WITH REAL ICONS) ============ */}
       <section id="assets" className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Assets</span>
@@ -262,33 +305,63 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
-          {[
-            { icon: '₿', label: 'Bitcoin', sub: 'BTC' },
-            { icon: '₮', label: 'Tether', sub: 'USDT' },
-            { icon: '⟠', label: 'Ethereum', sub: 'ETH' },
-            { icon: '◎', label: 'Solana', sub: 'SOL' },
-            { icon: '🍎', label: 'Apple', sub: 'Gift Card' },
-            { icon: '📦', label: 'Amazon', sub: 'Gift Card' },
-            { icon: '▶️', label: 'Google Play', sub: 'Gift Card' },
-            { icon: '🎮', label: 'Steam', sub: 'Gift Card' },
-            { icon: '💄', label: 'Sephora', sub: 'Gift Card' },
-            { icon: '🎬', label: 'Netflix', sub: 'Gift Card' },
-            { icon: '🐉', label: 'Razer Gold', sub: 'Gift Card' },
-            { icon: '+', label: '50+ More', sub: 'Contact us' },
-          ].map((asset, i) => (
-            <div
-              key={i}
-              className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10"
-            >
-              <span className="text-3xl block mb-1">{asset.icon}</span>
-              <p className="font-semibold text-sm">{asset.label}</p>
-              <p className="text-text-muted text-xs">{asset.sub}</p>
-            </div>
-          ))}
+          {/* Crypto — Real Brand Colors */}
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fab fa-bitcoin text-4xl block mb-1" style={{ color: '#f7931a' }}></i>
+            <p className="font-semibold text-sm">Bitcoin</p>
+            <p className="text-text-muted text-xs">BTC</p>
+          </div>
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fas fa-coins text-4xl block mb-1" style={{ color: '#26a17b' }}></i>
+            <p className="font-semibold text-sm">Tether</p>
+            <p className="text-text-muted text-xs">USDT</p>
+          </div>
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fab fa-ethereum text-4xl block mb-1" style={{ color: '#627eea' }}></i>
+            <p className="font-semibold text-sm">Ethereum</p>
+            <p className="text-text-muted text-xs">ETH</p>
+          </div>
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fas fa-bolt text-4xl block mb-1" style={{ color: '#9945FF' }}></i>
+            <p className="font-semibold text-sm">Solana</p>
+            <p className="text-text-muted text-xs">SOL</p>
+          </div>
+
+          {/* Gift Cards — Real Brand Icons */}
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fab fa-apple text-4xl block mb-1" style={{ color: '#a2aaad' }}></i>
+            <p className="font-semibold text-sm">Apple</p>
+            <p className="text-text-muted text-xs">Gift Card</p>
+          </div>
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fab fa-amazon text-4xl block mb-1" style={{ color: '#ff9900' }}></i>
+            <p className="font-semibold text-sm">Amazon</p>
+            <p className="text-text-muted text-xs">Gift Card</p>
+          </div>
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fab fa-google-play text-4xl block mb-1" style={{ color: '#34a853' }}></i>
+            <p className="font-semibold text-sm">Google Play</p>
+            <p className="text-text-muted text-xs">Gift Card</p>
+          </div>
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fas fa-gamepad text-4xl block mb-1" style={{ color: '#1b2838' }}></i>
+            <p className="font-semibold text-sm">Steam</p>
+            <p className="text-text-muted text-xs">Gift Card</p>
+          </div>
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fas fa-spa text-4xl block mb-1" style={{ color: '#e74c3c' }}></i>
+            <p className="font-semibold text-sm">Sephora</p>
+            <p className="text-text-muted text-xs">Gift Card</p>
+          </div>
+          <div className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10">
+            <i className="fas fa-plus-circle text-4xl block mb-1 text-orange"></i>
+            <p className="font-semibold text-sm">50+ More</p>
+            <p className="text-text-muted text-xs">Contact us</p>
+          </div>
         </div>
       </section>
 
-      {/* ===================== TESTIMONIALS ===================== */}
+      {/* ============ TESTIMONIALS ============ */}
       <section className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Testimonials</span>
@@ -336,8 +409,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===================== FAQ ===================== */}
-      <section className="container mx-auto px-4 py-20 border-t border-border">
+      {/* ============ FAQ ============ */}
+      <section id="faq" className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">FAQ</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Frequently Asked Questions</h2>
@@ -374,7 +447,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===================== FINAL CTA ===================== */}
+      {/* ============ FINAL CTA ============ */}
       <section className="container mx-auto px-4 py-20 border-t border-border">
         <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-12 text-center border border-border max-w-4xl mx-auto backdrop-blur-sm shadow-2xl">
           <h2 className="text-3xl md:text-4xl font-bold">Join 500+ Customers</h2>
@@ -389,7 +462,7 @@ export default function Home() {
           >
             Sign Up for Free →
           </Link>
-          <p className="text-text-muted text-xs mt-4">Trusted since 2022</p>
+          <p className="text-text-muted text-xs mt-4">Trusted and verified</p>
         </div>
       </section>
 
@@ -429,4 +502,5 @@ export default function Home() {
       `}</style>
     </Layout>
   );
-}
+}                                              .light-mode .bg-bg-card { background: rgba(255,255,255,0.85); backdrop-filter: blur(8px); box-shadow: 0 4px 24px rgba(78,31,145,0.06); }
+        
