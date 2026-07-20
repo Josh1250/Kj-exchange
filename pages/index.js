@@ -1,103 +1,21 @@
 import Link from 'next/link';
 import Layout from '../components/layout/Layout';
 import RateCalculator from '../components/calculator/RateCalculator';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export default function Home() {
-  const [isDark, setIsDark] = useState(true);
   const [tradeType, setTradeType] = useState('sell');
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('kj-theme');
-    if (savedTheme === 'light') {
-      setIsDark(false);
-      document.documentElement.classList.add('light-mode');
-    } else {
-      setIsDark(true);
-      document.documentElement.classList.remove('light-mode');
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = !isDark;
-    setIsDark(newTheme);
-    if (newTheme) {
-      document.documentElement.classList.remove('light-mode');
-      localStorage.setItem('kj-theme', 'dark');
-    } else {
-      document.documentElement.classList.add('light-mode');
-      localStorage.setItem('kj-theme', 'light');
-    }
-  };
 
   return (
     <Layout>
-      {/* ============ NAVIGATION BAR ============ */}
-      <nav className="container mx-auto px-4 py-4 flex items-center justify-between border-b border-border">
-        <Link href="/" className="flex items-center gap-2 group">
-          <span className="text-2xl font-bold">
-            <span className="text-purple">KJ</span>
-            <span className="text-gray-400">Exchange</span>
-          </span>
-        </Link>
-
-        <div className="hidden md:flex items-center gap-8">
-          <Link href="/" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
-            Home
-          </Link>
-          <Link href="#services" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
-            Services
-          </Link>
-          <Link href="#assets" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
-            Assets
-          </Link>
-          <Link href="#calculator" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
-            Rates
-          </Link>
-          <Link href="#faq" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
-            FAQ
-          </Link>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <Link
-            href="/auth/login"
-            className="text-text-muted hover:text-text-primary transition text-sm font-medium"
-          >
-            Login
-          </Link>
-          <Link
-            href="/auth/signup"
-            className="bg-orange text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-orange-600 transition shadow-lg shadow-orange/30"
-          >
-            Sign Up Free
-          </Link>
-        </div>
-      </nav>
-
-      {/* ============ THEME TOGGLE ============ */}
-      <div className="container mx-auto px-4 pt-4 flex justify-end">
-        <button
-          onClick={toggleTheme}
-          className="flex items-center gap-2 bg-bg-card/60 backdrop-blur-sm border border-border rounded-full px-4 py-2 text-sm hover:border-orange transition-all duration-300 shadow-lg"
-        >
-          {isDark ? (
-            <>
-              <span className="text-yellow-400">☀️</span>
-              <span className="text-text-muted">Light</span>
-            </>
-          ) : (
-            <>
-              <span className="text-indigo-400">🌙</span>
-              <span className="text-text-muted">Dark</span>
-            </>
-          )}
-        </button>
-      </div>
-
       {/* ============ HERO ============ */}
-      <section className="container mx-auto px-4 pt-8 pb-16">
-        <div className="text-center max-w-5xl mx-auto">
+      <section className="relative overflow-hidden py-20 md:py-28">
+        {/* Animated Gradient Background */}
+        <div className="absolute inset-0 -z-10 bg-gradient-to-br from-purple-900/20 via-transparent to-orange-900/20"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+
+        <div className="container mx-auto px-4 text-center max-w-5xl">
           <span className="inline-block bg-orange/10 text-orange border border-orange/20 px-5 py-1.5 rounded-full text-sm font-semibold mb-6 backdrop-blur-sm">
             ⚡ 0% Fees — No Hidden Charges
           </span>
@@ -464,7 +382,7 @@ export default function Home() {
       </section>
 
       {/* =============================================
-          GLOBAL LIGHT MODE STYLES
+          GLOBAL LIGHT MODE STYLES & ANIMATION
       ============================================= */}
       <style jsx global>{`
         .light-mode {
@@ -495,6 +413,14 @@ export default function Home() {
         }
         .btn-pulse {
           animation: pulse-cta 2.4s infinite;
+        }
+
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        .float-animation {
+          animation: float 4s ease-in-out infinite;
         }
       `}</style>
     </Layout>
