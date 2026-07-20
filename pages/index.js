@@ -52,20 +52,22 @@ export default function Home() {
           </div>
 
           <div className="flex flex-wrap justify-center gap-8 md:gap-16 border-t border-border mt-10 pt-10 max-w-2xl mx-auto">
-            <div className="text-center">
-              <p className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">500+</p>
-              <p className="text-text-muted text-sm mt-1">Satisfied Customers</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-green-400">0%</p>
-              <p className="text-text-muted text-sm mt-1">Fees</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-white dark:text-black">⭐ 4.9</p>
-              <p className="text-text-muted text-sm mt-1">Average Rating</p>
-            </div>
-          </div>
-        </div>
+  <div className="text-center">
+    <p className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">500+</p>
+    <p className="text-text-muted text-sm mt-1">Satisfied Customers</p>
+  </div>
+  <div className="text-center">
+    <p className="text-3xl font-bold text-green-400">0%</p>
+    <p className="text-text-muted text-sm mt-1">Fees</p>
+  </div>
+  <div className="text-center">
+    <p className="text-3xl font-bold text-white dark:text-black flex items-center justify-center gap-1">
+      <span className="text-orange text-3xl">★</span> 4.9
+    </p>
+    <p className="text-text-muted text-sm mt-1">Average Rating</p>
+  </div>
+</div>
+    </div>
       </section>
 
       {/* ============ SERVICES ============ */}
