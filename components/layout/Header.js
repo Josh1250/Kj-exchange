@@ -60,36 +60,30 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-bg-secondary/80 backdrop-blur-lg border-b border-border">
       <div className="container mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
-        {/* Logo - BIGGER */}
+        {/* Logo - BIGGER (w-28 = 112px) */}
         <Link href="/" className="shrink-0 group">
           <Image
             src="/logo.png"
             alt="KJ Exchange"
-            width={80}
-            height={80}
-            className="w-20 h-auto transition-transform group-hover:scale-105"
+            width={112}
+            height={112}
+            className="w-28 h-auto transition-transform group-hover:scale-105"
             priority
           />
         </Link>
 
-        {/* Navigation - ALWAYS VISIBLE (no hidden classes) */}
+        {/* Navigation - ALWAYS VISIBLE */}
         <nav className="flex items-center gap-6">
-          <Link href="/" className="text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap">
-            Home
-          </Link>
+          <Link href="/" className="text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap">Home</Link>
 
           {/* Services Dropdown */}
           <div ref={servicesRef} className="relative">
-            <button
-              onClick={() => setIsServicesOpen(!isServicesOpen)}
-              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap"
-            >
+            <button onClick={() => setIsServicesOpen(!isServicesOpen)} className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap">
               Services
               <svg className={`w-4 h-4 transition-transform duration-200 ${isServicesOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-
             {isServicesOpen && (
               <div className="absolute top-full left-0 mt-2 w-56 bg-bg-card backdrop-blur-xl border border-border rounded-xl shadow-2xl py-2 overflow-hidden">
                 <Link href="/dashboard/sell-gift-card" className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-orange/10 hover:text-orange transition" onClick={() => setIsServicesOpen(false)}>
@@ -115,16 +109,12 @@ export default function Header() {
 
           {/* Assets Dropdown */}
           <div ref={assetsRef} className="relative">
-            <button
-              onClick={() => setIsAssetsOpen(!isAssetsOpen)}
-              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap"
-            >
+            <button onClick={() => setIsAssetsOpen(!isAssetsOpen)} className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap">
               Assets
               <svg className={`w-4 h-4 transition-transform duration-200 ${isAssetsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-
             {isAssetsOpen && (
               <div className="absolute top-full left-0 mt-2 w-56 bg-bg-card backdrop-blur-xl border border-border rounded-xl shadow-2xl py-2 overflow-hidden">
                 <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider text-text-muted font-semibold">Crypto</div>
