@@ -35,6 +35,13 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Close menu on route change
+  useEffect(() => {
+    const handleRouteChange = () => setIsMenuOpen(false);
+    router.events?.on('routeChangeStart', handleRouteChange);
+    return () => router.events?.off('routeChangeStart', handleRouteChange);
+  }, [router.events]);
+
   const toggleTheme = () => {
     const newTheme = !isDark;
     setIsDark(newTheme);
@@ -134,72 +141,127 @@ export default function Header() {
       </div>
 
       {/* ========== SLIDE-OUT MENU (DRAWER) ========== */}
-      <div
-        ref={menuRef}
-        className={`fixed top-0 left-0 h-full w-72 bg-bg-card backdrop-blur-xl border-r border-border shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${
-          isMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="p-6 flex flex-col h-full">
-          {/* Close button */}
-          <button
-            onClick={closeMenu}
-            className="self-end p-2 rounded-lg hover:bg-white/10 transition"
-          >
-            ✕
-          </button>
-
-          {/* Logo inside drawer (optional) */}
-          <div className="mt-4 mb-8">
-            <Image
-              src="/logo.png"
-              alt="KJ Exchange"
-              width={80}
-              height={80}
-              className="w-20 h-auto"
-            />
-          </div>
-
-          <nav className="flex flex-col gap-4">
-            <Link href="/" className="text-text-primary hover:text-orange transition text-lg font-medium" onClick={closeMenu}>
-              🏠 Home
-            </Link>
-            <Link href="/dashboard/sell-gift-card" className="text-text-primary hover:text-orange transition text-lg font-medium" onClick={closeMenu}>
-              🎁 Gift Cards
-            </Link>
-            <Link href="/dashboard/sell-crypto" className="text-text-primary hover:text-orange transition text-lg font-medium" onClick={closeMenu}>
-              ₿ Crypto
-            </Link>
-            <div className="text-text-muted text-lg font-medium opacity-60 flex items-center gap-2">
-              💡 Pay Bills <span className="text-xs text-orange">Soon</span>
-            </div>
-            <div className="text-text-muted text-lg font-medium opacity-60 flex items-center gap-2">
-              📱 Buy Airtime <span className="text-xs text-orange">Soon</span>
-            </div>
-            <Link href="#calculator" className="text-text-primary hover:text-orange transition text-lg font-medium" onClick={closeMenu}>
-              📊 Rates
-            </Link>
-            <Link href="#faq" className="text-text-primary hover:text-orange transition text-lg font-medium" onClick={closeMenu}>
-              ❓ FAQ
-            </Link>
-            <Link href="#contact" className="text-text-primary hover:text-orange transition text-lg font-medium" onClick={closeMenu}>
-              📞 Contact
-            </Link>
-          </nav>
-
-          <div className="mt-auto pt-6 border-t border-border">
-            <p className="text-text-muted text-sm">Trade Smart. Trade Secure.</p>
-            <p className="text-text-muted text-xs mt-1">0% fees · Trusted since 2022</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Overlay */}
       {isMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-          onClick={closeMenu}
-        ></div>
+        <>
+          {/* Overlay */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            onClick={closeMenu}
+          ></div>
+
+          {/* Drawer */}
+          <div
+            ref={menuRef}
+            className={`fixed top-0 left-0 h-full w-80 bg-bg-secondary/95 backdrop-blur-xl border-r border-border shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
+              isMenuOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            <div className="p-6 flex flex-col h-full">
+              {/* Header inside drawer */}
+              <div className="flex items-center justify-between">
+                <Image
+                  src="/logo.png"
+                  alt="KJ Exchange"
+                  width={60}
+                  height={60}
+                  className="w-16 h-auto"
+                />
+                <button
+                  onClick={closeMenu}
+                  className="p-2 rounded-lg hover:bg-white/10 transition text-text-primary text-2xl"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="border-t border-border my-6"></div>
+
+              {/* Navigation Links */}
+              <nav className="flex flex-col gap-2">
+                <Link
+                  href="/"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-primary hover:bg-orange/10 hover:text-orange transition text-base font-medium"
+                  onClick={closeMenu}
+                >
+                  <span className="text-2xl">🏠</span> Home
+                </Link>
+                <Link
+                  href="/dashboard/sell-gift-card"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-primary hover:bg-orange/10 hover:text-orange transition text-base font-medium"
+                  onClick={closeMenu}
+                >
+                  <span className="text-2xl">🎁</span> Gift Cards
+                </Link>
+                <Link
+                  href="/dashboard/sell-crypto"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-primary hover:bg-orange/10 hover:text-orange transition text-base font-medium"
+                  onClick={closeMenu}
+                >
+                  <span className="text-2xl">₿</span> Crypto
+                </Link>
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-muted text-base font-medium opacity-60">
+                  <span className="text-2xl">💡</span> Pay Bills <span className="text-xs text-orange ml-1">Soon</span>
+                </div>
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-muted text-base font-medium opacity-60">
+                  <span className="text-2xl">📱</span> Buy Airtime <span className="text-xs text-orange ml-1">Soon</span>
+                </div>
+                <Link
+                  href="#calculator"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-primary hover:bg-orange/10 hover:text-orange transition text-base font-medium"
+                  onClick={closeMenu}
+                >
+                  <span className="text-2xl">📊</span> Rates
+                </Link>
+                <Link
+                  href="#faq"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-primary hover:bg-orange/10 hover:text-orange transition text-base font-medium"
+                  onClick={closeMenu}
+                >
+                  <span className="text-2xl">❓</span> FAQ
+                </Link>
+                <Link
+                  href="#contact"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-primary hover:bg-orange/10 hover:text-orange transition text-base font-medium"
+                  onClick={closeMenu}
+                >
+                  <span className="text-2xl">📞</span> Contact
+                </Link>
+              </nav>
+
+              {/* Footer inside drawer */}
+              <div className="mt-auto pt-6 border-t border-border">
+                <p className="text-text-muted text-sm">Trade Smart. Trade Secure.</p>
+                <p className="text-text-muted text-xs mt-1">0% fees · Trusted since 2022</p>
+                <div className="flex gap-4 mt-4">
+                  <a
+                    href="https://instagram.com/kj_xchange"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-muted hover:text-orange transition text-xl"
+                  >
+                    <i className="fab fa-instagram"></i>
+                  </a>
+                  <a
+                    href="https://tiktok.com/@kj_xchange"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-muted hover:text-orange transition text-xl"
+                  >
+                    <i className="fab fa-tiktok"></i>
+                  </a>
+                  <a
+                    href="https://wa.me/2348160678317"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-muted hover:text-orange transition text-xl"
+                  >
+                    <i className="fab fa-whatsapp"></i>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </header>
   );
