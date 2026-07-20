@@ -60,21 +60,21 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-bg-secondary/80 backdrop-blur-lg border-b border-border">
       <div className="container mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
-        {/* Logo - ONLY IMAGE, BIGGER */}
+        {/* Logo - BIGGER */}
         <Link href="/" className="shrink-0 group">
           <Image
             src="/logo.png"
             alt="KJ Exchange"
-            width={64}
-            height={64}
-            className="h-16 w-auto transition-transform group-hover:scale-105"
+            width={80}
+            height={80}
+            className="w-20 h-auto transition-transform group-hover:scale-105"
             priority
           />
         </Link>
 
-        {/* Navigation Links (Desktop) */}
-        <nav className="hidden md:flex items-center gap-6">
-          <Link href="/" className="text-text-muted hover:text-text-primary transition text-sm font-medium">
+        {/* Navigation - ALWAYS VISIBLE (no hidden classes) */}
+        <nav className="flex items-center gap-6">
+          <Link href="/" className="text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap">
             Home
           </Link>
 
@@ -82,7 +82,7 @@ export default function Header() {
           <div ref={servicesRef} className="relative">
             <button
               onClick={() => setIsServicesOpen(!isServicesOpen)}
-              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium"
+              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap"
             >
               Services
               <svg className={`w-4 h-4 transition-transform duration-200 ${isServicesOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,7 +117,7 @@ export default function Header() {
           <div ref={assetsRef} className="relative">
             <button
               onClick={() => setIsAssetsOpen(!isAssetsOpen)}
-              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium"
+              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap"
             >
               Assets
               <svg className={`w-4 h-4 transition-transform duration-200 ${isAssetsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,8 +162,8 @@ export default function Header() {
             )}
           </div>
 
-          <Link href="#calculator" className="text-text-muted hover:text-text-primary transition text-sm font-medium">Rates</Link>
-          <Link href="#faq" className="text-text-muted hover:text-text-primary transition text-sm font-medium">FAQ</Link>
+          <Link href="#calculator" className="text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap">Rates</Link>
+          <Link href="#faq" className="text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap">FAQ</Link>
         </nav>
 
         {/* Right Side */}
@@ -174,13 +174,13 @@ export default function Header() {
 
           {!loading && user ? (
             <>
-              <Link href="/dashboard" className="text-text-muted hover:text-text-primary transition text-sm font-medium">Dashboard</Link>
-              <button onClick={handleLogout} className="text-orange hover:text-orange-light transition text-sm font-medium">Logout</button>
+              <Link href="/dashboard" className="text-text-muted hover:text-text-primary transition text-sm font-medium whitespace-nowrap">Dashboard</Link>
+              <button onClick={handleLogout} className="text-orange hover:text-orange-light transition text-sm font-medium whitespace-nowrap">Logout</button>
             </>
           ) : (
             <>
-              <Link href="/auth/login" className="text-text-muted hover:text-text-primary transition text-sm font-medium hidden sm:inline">Login</Link>
-              <Link href="/auth/signup" className="bg-orange text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-orange-600 transition shadow-lg shadow-orange/30">Sign Up Free</Link>
+              <Link href="/auth/login" className="text-text-muted hover:text-text-primary transition text-sm font-medium hidden sm:inline whitespace-nowrap">Login</Link>
+              <Link href="/auth/signup" className="bg-orange text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-orange-600 transition shadow-lg shadow-orange/30 whitespace-nowrap">Sign Up Free</Link>
             </>
           )}
         </div>
