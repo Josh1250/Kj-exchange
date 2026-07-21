@@ -5,7 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
 
-// Platform wallet addresses (your addresses)
+// Platform wallet addresses
 const PLATFORM_WALLETS = {
   BTC: '1HjJpZByFHnhSPZ37qStqCMUqVGaQvKw4i',
   USDT: 'TJpaXiQChRaGHaZzYqb3Qngf26EafH5CbH',
@@ -84,53 +84,60 @@ export default function SellCrypto() {
     setSuccess('');
     setSubmitting(true);
 
-    const cryptoAmount = parseFloat(amount);
-    if (isNaN(cryptoAmount) || cryptoAmount <= 0) {
-      setError('Please enter a valid amount');
-      setSubmitting(false);
-      return;
-    }
-    if (cryptoAmount < selectedAsset.min) {
-      setError(`Minimum amount is ${selectedAsset.min} ${selectedAsset.id}`);
-      setSubmitting(false);
-      return;
-    }
+    try {
+      const cryptoAmount = parseFloat(amount);
+      if (isNaN(cryptoAmount) || cryptoAmount <= 0) {
+        setError('Please enter a valid amount');
+        setSubmitting(false);
+        return;
+      }
+      if (cryptoAmount < selectedAsset.min) {
+        setError(`Minimum amount is ${selectedAsset.min} ${selectedAsset.id}`);
+        setSubmitting(false);
+        return;
+      }
 
-    const rate = getRate();
-    const valueNgn = cryptoAmount * rate;
+      const rate = getRate();
+      const valueNgn = cryptoAmount * rate;
 
-    const { data, error } = await supabase
-      .from('orders')
-      .insert({
-        user_id: user.id,
-        type: 'crypto',
-        asset: selectedAsset.id,
-        amount: cryptoAmount,
-        rate: rate,
-        value_ngn: valueNgn,
-        status: 'pending',
-        details: {
-          asset_name: selectedAsset.name,
-          network: selectedAsset.network,
-        },
-      })
-      .select();
+      const { data, error } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user.id,
+          type: 'crypto',
+          asset: selectedAsset.id,
+          amount: cryptoAmount,
+          rate: rate,
+          value_ngn: valueNgn,
+          status: 'pending',
+          details: {
+            asset_name: selectedAsset.name,
+            network: selectedAsset.network,
+          },
+        })
+        .select();
 
-    if (error) {
-      setError('Failed to submit order. Please try again.');
-      console.error(error);
-    } else {
+      if (error) throw error;
+
       setOrderId(data[0].id);
       setSuccess(`Order submitted! You'll receive ₦${valueNgn.toLocaleString()} after verification.`);
       setShowWalletInfo(true);
       setAmount('');
+    } catch (err) {
+      setError('Failed to submit order. Please try again.');
+      console.error(err);
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    alert('✅ Wallet address copied to clipboard!');
+    try {
+      navigator.clipboard.writeText(text);
+      alert('✅ Wallet address copied to clipboard!');
+    } catch (err) {
+      alert('Please copy the address manually.');
+    }
   };
 
   return (
@@ -223,23 +230,6 @@ export default function SellCrypto() {
                       ₦{estimatedNgn().toLocaleString()}
                     </span>
                   </div>
-                </div>
-
-                {/* Quick Amount Buttons (Optional) */}
-                <div className="flex gap-2">
-                  {['25%', '50%', '75%', '100%'].map((pct) => (
-                    <button
-                      key={pct}
-                      type="button"
-                      onClick={() => {
-                        // We don't have user balance, so just placeholder
-                        // Could be implemented if we fetch user balance
-                      }}
-                      className="flex-1 py-1.5 border border-border rounded-lg text-xs text-text-muted hover:border-orange hover:text-orange transition"
-                    >
-                      {pct}
-                    </button>
-                  ))}
                 </div>
 
                 {error && <p className="text-red-400 text-sm"><i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}</p>}
