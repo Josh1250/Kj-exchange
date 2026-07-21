@@ -19,29 +19,45 @@ export default function AdminLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    console.log('🔵 AdminLayout mounted. user:', user, 'loading:', loading);
+    
     const checkAdmin = async () => {
       if (!user) {
+        console.log('🔴 No user, redirecting to login');
         setChecking(false);
+        router.push('/auth/login');
         return;
       }
       try {
+        console.log('🟢 Checking admin status for user:', user.id);
         const { data, error } = await supabase
           .from('users')
           .select('is_admin')
           .eq('id', user.id)
           .single();
         
+        console.log('📦 Admin check response:', data, error);
+        
+        if (error) {
+          console.error('❌ Supabase error:', error);
+          setError(error.message);
+          setChecking(false);
+          return;
+        }
+        
         if (data?.is_admin === true) {
+          console.log('✅ User is admin!');
           setIsAdmin(true);
         } else {
+          console.log('⛔ User is NOT admin, redirecting to dashboard');
           router.push('/dashboard');
         }
       } catch (err) {
-        console.error('Admin check error:', err);
-        // If there's an error, redirect to dashboard
-        router.push('/dashboard');
+        console.error('❌ Unexpected error:', err);
+        setError(err.message);
       } finally {
         setChecking(false);
       }
@@ -57,17 +73,20 @@ export default function AdminLayout({ children }) {
     router.push('/');
   };
 
+  // Show loading state
   if (loading || checking) {
     return (
       <div className="flex items-center justify-center min-h-screen text-text-primary">
         <div className="text-center">
           <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
           <p className="mt-3 text-text-muted">Loading admin panel...</p>
+          {error && <p className="mt-2 text-red-400 text-sm">Error: {error}</p>}
         </div>
       </div>
     );
   }
 
+  // If not admin, don't render anything (will redirect)
   if (!user || !isAdmin) {
     return null;
   }
