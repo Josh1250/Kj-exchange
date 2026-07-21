@@ -1,21 +1,36 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../_app';
-import AdminLayout from '../../components/layout/AdminLayout';
 import { supabase } from '../../lib/supabaseClient';
+import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
 export default function AdminUsers() {
-  const { user, loading } = useAuth();
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && user) {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/login');
+        return;
+      }
+      const { data } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+      if (!data?.is_admin) {
+        router.push('/dashboard');
+        return;
+      }
+      setLoading(false);
       fetchUsers();
-    }
-  }, [user, loading]);
+    };
+    checkAuth();
+  }, [router]);
 
   const fetchUsers = async () => {
     try {
@@ -152,7 +167,7 @@ export default function AdminUsers() {
                           {u.kyc_status === 'Approved' && (
                             <span className="text-green-400 text-xs">✅ Approved</span>
                           )}
-                          {!u.kyc_status || u.kyc_status === 'Not Submitted' && (
+                          {(!u.kyc_status || u.kyc_status === 'Not Submitted') && (
                             <span className="text-text-muted text-xs">No KYC</span>
                           )}
                         </td>
