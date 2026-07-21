@@ -10,6 +10,7 @@ const navItems = [
   { name: 'Products', href: '/dashboard/products', icon: 'fa-solid fa-box' },
   { name: 'Transactions', href: '/dashboard/orders', icon: 'fa-solid fa-credit-card' },
   { name: 'Wallet', href: '/dashboard/wallet', icon: 'fa-solid fa-wallet' },
+  { name: 'Profile', href: '/dashboard/profile', icon: 'fa-solid fa-user' },
   { name: 'Settings', href: '/dashboard/settings', icon: 'fa-solid fa-gear' },
 ];
 
@@ -17,6 +18,26 @@ export default function DashboardLayout({ children }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('read', false)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (data) {
+        setNotifications(data);
+        setUnreadCount(data.length);
+      }
+    };
+    fetchNotifications();
+  }, [user]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -66,9 +87,21 @@ export default function DashboardLayout({ children }) {
           <button className="md:hidden p-2 rounded-lg hover:bg-white/10 transition" onClick={() => setIsSidebarOpen(true)}>
             <i className="fa-solid fa-bars text-xl text-text-primary"></i>
           </button>
-          <div className="flex items-center gap-3">
-            <i className="fa-regular fa-user text-text-muted"></i>
-            <span className="text-sm text-text-muted">{user?.email}</span>
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard/notifications" className="relative p-2 rounded-full hover:bg-white/10 transition">
+              <i className="fa-regular fa-bell text-xl text-text-muted"></i>
+              {unreadCount > 0 && (
+                <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                  {unreadCount}
+                </span>
+              )}
+            </Link>
+            <Link href="/dashboard/profile" className="flex items-center gap-2 hover:bg-white/10 rounded-full px-3 py-1 transition">
+              <div className="w-8 h-8 rounded-full bg-orange/20 flex items-center justify-center text-orange font-bold text-sm">
+                {user?.email?.charAt(0).toUpperCase() || 'U'}
+              </div>
+              <span className="text-sm text-text-muted hidden sm:inline">{user?.email?.split('@')[0]}</span>
+            </Link>
           </div>
         </header>
         <main className="flex-1 p-6">{children}</main>
