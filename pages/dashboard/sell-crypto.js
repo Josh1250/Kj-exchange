@@ -52,38 +52,58 @@ export default function SellCrypto() {
         }
         setNgnRate(ngn);
 
-        // Fetch all prices including USDTUSDT
-        const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'USDTUSDT'];
-        const pricePromises = symbols.map(sym =>
-          fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}`)
-            .then(res => res.json())
-            .then(data => ({ symbol: sym, price: parseFloat(data.price) || 0 }))
-            .catch(() => ({ symbol: sym, price: 0 }))
-        );
-        const prices = await Promise.all(pricePromises);
+        // 1. Try CoinGecko for crypto prices
+        let cryptoUsd = {};
+        try {
+          const geoRes = await fetch(
+            'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,tether,ethereum,solana&vs_currencies=usd'
+          );
+          const geoData = await geoRes.json();
+          cryptoUsd = {
+            BTC: geoData.bitcoin?.usd || 0,
+            USDT: geoData.tether?.usd || 1,
+            ETH: geoData.ethereum?.usd || 0,
+            SOL: geoData.solana?.usd || 0,
+          };
+          console.log('CoinGecko prices:', cryptoUsd);
+        } catch (e) {
+          console.warn('CoinGecko failed, trying Binance');
+          // 2. Fallback to Binance
+          const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+          const pricePromises = symbols.map(sym =>
+            fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}`)
+              .then(res => res.json())
+              .then(data => ({ symbol: sym, price: parseFloat(data.price) || 0 }))
+              .catch(() => ({ symbol: sym, price: 0 }))
+          );
+          const prices = await Promise.all(pricePromises);
+          cryptoUsd = {
+            BTC: prices.find(p => p.symbol === 'BTCUSDT')?.price || 0,
+            ETH: prices.find(p => p.symbol === 'ETHUSDT')?.price || 0,
+            USDT: 1,
+            SOL: prices.find(p => p.symbol === 'SOLUSDT')?.price || 0,
+          };
+        }
 
-        const priceMap = {
-          BTC: prices.find(p => p.symbol === 'BTCUSDT')?.price || 0,
-          ETH: prices.find(p => p.symbol === 'ETHUSDT')?.price || 0,
-          SOL: prices.find(p => p.symbol === 'SOLUSDT')?.price || 0,
-          USDT: prices.find(p => p.symbol === 'USDTUSDT')?.price || 1, // fallback to 1
-        };
+        // Ensure USDT is always 1
+        cryptoUsd.USDT = 1;
 
         setRates({
-          btc: priceMap.BTC * ngn,
-          eth: priceMap.ETH * ngn,
-          usdt: priceMap.USDT * ngn,
-          sol: priceMap.SOL * ngn,
+          btc: cryptoUsd.BTC * ngn,
+          eth: cryptoUsd.ETH * ngn,
+          usdt: cryptoUsd.USDT * ngn,
+          sol: cryptoUsd.SOL * ngn,
         });
 
-        console.log('Rates fetched:', {
-          btc: priceMap.BTC * ngn,
-          eth: priceMap.ETH * ngn,
-          usdt: priceMap.USDT * ngn,
-          sol: priceMap.SOL * ngn,
+        console.log('Final rates:', {
+          btc: cryptoUsd.BTC * ngn,
+          eth: cryptoUsd.ETH * ngn,
+          usdt: cryptoUsd.USDT * ngn,
+          sol: cryptoUsd.SOL * ngn,
         });
       } catch (err) {
         console.error('Rate fetch error:', err);
+        // Final fallback
         setRates({
           btc: 95200,
           eth: 4210,
