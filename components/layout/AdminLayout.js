@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { useAuth } from '../../pages/_app';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const navItems = [
   { name: 'Dashboard', href: '/admin', icon: 'fa-solid fa-gauge-high' },
@@ -14,7 +13,6 @@ const navItems = [
 ];
 
 export default function AdminLayout({ children }) {
-  const { user, loading } = useAuth();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -22,22 +20,6 @@ export default function AdminLayout({ children }) {
     await supabase.auth.signOut();
     router.push('/');
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen text-text-primary">
-        <div className="text-center">
-          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
-          <p className="mt-3 text-text-muted">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    router.push('/auth/login');
-    return null;
-  }
 
   const isActive = (path) => {
     if (path === '/admin') return router.pathname === '/admin';
@@ -110,12 +92,6 @@ export default function AdminLayout({ children }) {
           </button>
           <div className="flex items-center gap-4 ml-auto">
             <span className="text-xs text-orange font-semibold bg-orange/10 px-3 py-1 rounded-full">Admin</span>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
-                {user?.email?.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm text-text-muted hidden sm:inline">{user?.email}</span>
-            </div>
           </div>
         </header>
         <main className="flex-1 p-4 md:p-6">{children}</main>
