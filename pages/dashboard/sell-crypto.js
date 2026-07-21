@@ -22,14 +22,6 @@ const CRYPTO_ASSETS = [
 
 const FEE_PERCENTAGE = 0.01; // 1%
 
-// Fallback rates (different per coin to distinguish them)
-const FALLBACK_RATES = {
-  BTC: 95200,
-  ETH: 4210,
-  USDT: 1550,
-  SOL: 185,
-};
-
 export default function SellCrypto() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -38,95 +30,65 @@ export default function SellCrypto() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [rates, setRates] = useState(FALLBACK_RATES);
-  const [ngnRate, setNgnRate] = useState(1550);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const [orderId, setOrderId] = useState(null);
+  const [rates, setRates] = useState({ btc: 0, eth: 0, usdt: 0, sol: 0 });
+  const [ngnRate, setNgnRate] = useState(1550);
   const [isLoadingRates, setIsLoadingRates] = useState(true);
 
-  // Fetch rates (same logic as your Rate Calculator)
+  // Exactly the same fetch logic as your Rate Calculator
   useEffect(() => {
     const fetchRates = async () => {
       try {
         setIsLoadingRates(true);
 
-        // 1. Get NGN rate
-        let ngn = 1550;
-        try {
-          const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
-          const fxData = await fxRes.json();
-          if (fxData.rates?.NGN) {
-            ngn = fxData.rates.NGN * 0.98; // 2% spread
-          }
-        } catch (e) {
-          console.warn('FX API fallback');
-        }
-        setNgnRate(ngn);
+        // 1. Get NGN rate from ExchangeRate.fun
+        const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
+        const fxData = await fxRes.json();
+        const ngn = fxData.rates?.NGN || 1550;
+        // Apply a 2% spread to be competitive
+        const ngnWithSpread = ngn * 0.98;
+        setNgnRate(ngnWithSpread);
 
-        // 2. Get crypto USD prices (using the same API as Rate Calculator)
-        let cryptoUsd = { BTC: 0, ETH: 0, USDT: 1, SOL: 0 };
-        try {
-          // CoinGecko is reliable for major coins
-          const geoRes = await fetch(
-            'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,tether,ethereum,solana&vs_currencies=usd'
-          );
-          const geoData = await geoRes.json();
-          cryptoUsd = {
-            BTC: geoData.bitcoin?.usd || 0,
-            USDT: geoData.tether?.usd || 1,
-            ETH: geoData.ethereum?.usd || 0,
-            SOL: geoData.solana?.usd || 0,
-          };
-          console.log('✅ CoinGecko prices:', cryptoUsd);
-        } catch (e) {
-          console.warn('CoinGecko failed, trying Binance');
-          try {
-            const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
-            const pricePromises = symbols.map(sym =>
-              fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}`)
-                .then(res => res.json())
-                .then(data => ({ symbol: sym, price: parseFloat(data.price) || 0 }))
-                .catch(() => ({ symbol: sym, price: 0 }))
-            );
-            const prices = await Promise.all(pricePromises);
-            cryptoUsd = {
-              BTC: prices.find(p => p.symbol === 'BTCUSDT')?.price || 0,
-              ETH: prices.find(p => p.symbol === 'ETHUSDT')?.price || 0,
-              USDT: 1,
-              SOL: prices.find(p => p.symbol === 'SOLUSDT')?.price || 0,
-            };
-            console.log('✅ Binance prices:', cryptoUsd);
-          } catch (binanceErr) {
-            console.warn('Binance failed, using fallback');
-          }
-        }
+        // 2. Get crypto prices from CoinGecko
+        const cryptoRes = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,tether,ethereum,solana&vs_currencies=usd'
+        );
+        const cryptoData = await cryptoRes.json();
 
-        // Ensure USDT is 1
-        cryptoUsd.USDT = 1;
+        // Extract prices
+        const btcUsd = cryptoData.bitcoin?.usd || 0;
+        const usdtUsd = cryptoData.tether?.usd || 1;
+        const ethUsd = cryptoData.ethereum?.usd || 0;
+        const solUsd = cryptoData.solana?.usd || 0;
 
-        // If any price is 0, use fallback (so we don't show 0)
-        const finalRates = {
-          BTC: (cryptoUsd.BTC || FALLBACK_RATES.BTC) * ngn,
-          ETH: (cryptoUsd.ETH || FALLBACK_RATES.ETH) * ngn,
-          USDT: (cryptoUsd.USDT || FALLBACK_RATES.USDT) * ngn,
-          SOL: (cryptoUsd.SOL || FALLBACK_RATES.SOL) * ngn,
-        };
+        // Compute NGN rates
+        const btcNgn = btcUsd * ngnWithSpread;
+        const usdtNgn = usdtUsd * ngnWithSpread;
+        const ethNgn = ethUsd * ngnWithSpread;
+        const solNgn = solUsd * ngnWithSpread;
 
-        setRates(finalRates);
-        console.log('✅ Final NGN rates:', finalRates);
-      } catch (err) {
-        console.error('Rate fetch error:', err);
-        // Use fallback rates
         setRates({
-          BTC: FALLBACK_RATES.BTC * 1550,
-          ETH: FALLBACK_RATES.ETH * 1550,
-          USDT: FALLBACK_RATES.USDT * 1550,
-          SOL: FALLBACK_RATES.SOL * 1550,
+          btc: btcNgn || 95200, // fallback if 0
+          eth: ethNgn || 4210,
+          usdt: usdtNgn || 1550,
+          sol: solNgn || 185,
+        });
+
+        console.log('✅ Rates loaded:', { btc: btcNgn, eth: ethNgn, usdt: usdtNgn, sol: solNgn });
+      } catch (error) {
+        console.warn('⚠️ Rate fetch failed, using fallback', error);
+        setRates({
+          btc: 95200,
+          eth: 4210,
+          usdt: 1550,
+          sol: 185,
         });
       } finally {
         setIsLoadingRates(false);
       }
     };
+
     fetchRates();
     const interval = setInterval(fetchRates, 60000);
     return () => clearInterval(interval);
@@ -138,23 +100,21 @@ export default function SellCrypto() {
     return null;
   }
 
+  // Helper to get rate for selected asset
   const getAssetRate = () => {
     switch (selectedAsset.id) {
-      case 'BTC': return rates.BTC;
-      case 'ETH': return rates.ETH;
-      case 'USDT': return rates.USDT;
-      case 'SOL': return rates.SOL;
+      case 'BTC': return rates.btc;
+      case 'ETH': return rates.eth;
+      case 'USDT': return rates.usdt;
+      case 'SOL': return rates.sol;
       default: return 0;
     }
   };
 
-  const getAssetUsdPrice = () => {
-    const rate = getAssetRate();
-    return ngnRate > 0 ? rate / ngnRate : 0;
-  };
-
+  const rate = getAssetRate();
+  const usdPrice = ngnRate > 0 ? rate / ngnRate : 0;
   const usdValue = parseFloat(usdAmount) || 0;
-  const cryptoAmount = usdValue > 0 && getAssetUsdPrice() > 0 ? usdValue / getAssetUsdPrice() : 0;
+  const cryptoAmount = usdValue > 0 && usdPrice > 0 ? usdValue / usdPrice : 0;
   const beforeFee = usdValue * ngnRate;
   const fee = beforeFee * FEE_PERCENTAGE;
   const afterFee = beforeFee - fee;
@@ -178,7 +138,6 @@ export default function SellCrypto() {
         return;
       }
 
-      const rate = getAssetRate();
       const valueNgn = afterFee;
 
       const { data, error } = await supabase
@@ -224,9 +183,6 @@ export default function SellCrypto() {
     }
   };
 
-  const rate = getAssetRate();
-  const usdPrice = getAssetUsdPrice();
-
   return (
     <>
       <Head>
@@ -235,6 +191,11 @@ export default function SellCrypto() {
       <DashboardLayout>
         <div className="max-w-3xl mx-auto">
           <h1 className="text-2xl font-bold mb-6">Sell Crypto</h1>
+
+          {/* Debug info */}
+          <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-2 mb-4 text-xs text-yellow-400">
+            Debug: BTC Rate = ₦{rates.btc.toLocaleString()} | ETH = ₦{rates.eth.toLocaleString()} | USDT = ₦{rates.usdt.toLocaleString()} | SOL = ₦{rates.sol.toLocaleString()}
+          </div>
 
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
             {!showWalletInfo ? (
@@ -246,6 +207,7 @@ export default function SellCrypto() {
                   </div>
                 ) : (
                   <>
+                    {/* Asset Selection */}
                     <div>
                       <label className="block text-sm font-medium text-text-secondary mb-2">Crypto Asset</label>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -265,6 +227,7 @@ export default function SellCrypto() {
                       </div>
                     </div>
 
+                    {/* Selected Asset Info */}
                     <div className="bg-black/20 rounded-lg p-3 flex items-center justify-between border border-border">
                       <div className="flex items-center gap-3">
                         <i className={`${selectedAsset.icon} text-2xl`} style={{ color: selectedAsset.color }}></i>
@@ -286,6 +249,7 @@ export default function SellCrypto() {
                       </div>
                     )}
 
+                    {/* USD Amount Input */}
                     <div>
                       <label className="block text-sm font-medium text-text-secondary mb-2">Amount (USD)</label>
                       <div className="relative">
@@ -308,6 +272,7 @@ export default function SellCrypto() {
                       )}
                     </div>
 
+                    {/* Rate & Fee Display */}
                     <div className="bg-black/20 rounded-lg p-4 border border-border space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-text-muted">Rate</span>
