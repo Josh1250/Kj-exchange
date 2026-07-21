@@ -1,128 +1,84 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../_app';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase, getSupabaseServer } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
-export default function AdminTopups() {
-  const { user, loading } = useAuth();
+export default function AdminUsers({ user }) {
   const router = useRouter();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const [topups, setTopups] = useState([]);
+  const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (loading) return;
     if (!user) {
       router.push('/auth/login');
       return;
     }
-    const checkAdmin = async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single();
-      if (error || !data?.is_admin) {
-        router.push('/dashboard');
-        return;
-      }
-      setIsAdmin(true);
-      setChecking(false);
-      fetchTopups();
-    };
-    checkAdmin();
-  }, [user, loading, router]);
+    fetchUsers();
+  }, [user, router]);
 
-  const fetchTopups = async () => {
+  const fetchUsers = async () => {
     try {
       setIsLoading(true);
       const { data } = await supabase
-        .from('transactions')
-        .select('*, users(email, full_name)')
-        .eq('type', 'deposit')
-        .eq('status', 'pending')
+        .from('users')
+        .select('*')
         .order('created_at', { ascending: false });
-      if (data) setTopups(data);
+      if (data) setUsers(data);
     } catch (err) {
-      console.error('Error fetching top-ups:', err);
+      console.error('Error fetching users:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const verifyTopup = async (txId, userId, amount) => {
+  const approveKyc = async (userId) => {
     try {
       await supabase
-        .from('transactions')
-        .update({ status: 'completed' })
-        .eq('id', txId);
-
-      const { data: wallet } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('user_id', userId)
-        .single();
-      await supabase
-        .from('wallets')
-        .update({ balance: (wallet?.balance || 0) + amount })
-        .eq('user_id', userId);
-
+        .from('users')
+        .update({ kyc_status: 'Approved', kyc_level: 2 })
+        .eq('id', userId);
       await supabase
         .from('notifications')
         .insert({
           user_id: userId,
-          message: `💰 Your top-up of ₦${amount.toLocaleString()} has been verified!`,
+          message: '✅ Your KYC has been approved! You can now withdraw up to ₦50,000.',
         });
-
-      fetchTopups();
+      fetchUsers();
     } catch (err) {
       console.error(err);
     }
   };
 
-  const rejectTopup = async (txId, userId) => {
+  const rejectKyc = async (userId) => {
     try {
       await supabase
-        .from('transactions')
-        .update({ status: 'failed' })
-        .eq('id', txId);
+        .from('users')
+        .update({ kyc_status: 'Rejected' })
+        .eq('id', userId);
       await supabase
         .from('notifications')
         .insert({
           user_id: userId,
-          message: `❌ Your top-up request was rejected. Please contact support.`,
+          message: '❌ Your KYC was rejected. Please submit a valid ID and BVN.',
         });
-      fetchTopups();
+      fetchUsers();
     } catch (err) {
       console.error(err);
     }
   };
 
-  if (loading || checking) {
-    return (
-      <div className="flex items-center justify-center min-h-screen text-text-primary">
-        <div className="text-center">
-          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
-          <p className="mt-3 text-text-muted">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user || !isAdmin) return null;
+  if (!user) return null;
 
   return (
     <>
-      <Head><title>Admin Top-Ups · KJ Exchange</title></Head>
+      <Head><title>Admin Users · KJ Exchange</title></Head>
       <AdminLayout>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Manage Top-Ups</h1>
+            <h1 className="text-2xl font-bold">Manage Users</h1>
             <button
-              onClick={fetchTopups}
+              onClick={fetchUsers}
               className="flex items-center gap-2 text-text-muted hover:text-text-primary transition text-sm px-4 py-2 rounded-full border border-border hover:border-orange"
             >
               <i className="fa-solid fa-rotate"></i> Refresh
@@ -133,42 +89,77 @@ export default function AdminTopups() {
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <i className="fa-solid fa-spinner fa-spin text-2xl text-orange"></i>
-                <span className="ml-3 text-text-muted">Loading top-ups...</span>
+                <span className="ml-3 text-text-muted">Loading users...</span>
               </div>
-            ) : topups.length === 0 ? (
+            ) : users.length === 0 ? (
               <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto rounded-full bg-bg-card border border-border flex items-center justify-center text-text-muted text-3xl">
-                  <i className="fa-regular fa-circle-check"></i>
-                </div>
-                <p className="text-text-muted mt-4">No pending top-ups.</p>
+                <p className="text-text-muted">No users found.</p>
               </div>
             ) : (
-              <div className="divide-y divide-border">
-                {topups.map((tx) => (
-                  <div key={tx.id} className="p-4 hover:bg-white/5 transition">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <p className="font-bold">₦{tx.amount.toLocaleString()}</p>
-                        <p className="text-text-muted text-sm">User: {tx.users?.email || tx.users?.full_name || 'Unknown'}</p>
-                        <p className="text-text-muted text-xs">{new Date(tx.created_at).toLocaleString()}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => verifyTopup(tx.id, tx.user_id, tx.amount)}
-                          className="bg-green-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-600 transition flex items-center gap-1"
-                        >
-                          <i className="fa-regular fa-circle-check"></i> Verify
-                        </button>
-                        <button
-                          onClick={() => rejectTopup(tx.id, tx.user_id)}
-                          className="bg-red-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-red-600 transition flex items-center gap-1"
-                        >
-                          <i className="fa-regular fa-circle-xmark"></i> Reject
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-black/30">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">User</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Email</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">KYC</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Joined</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {users.map((u) => (
+                      <tr key={u.id} className="hover:bg-white/5 transition">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-orange/20 flex items-center justify-center text-orange font-bold text-sm">
+                              {u.full_name?.charAt(0) || u.email?.charAt(0) || 'U'}
+                            </div>
+                            <span className="font-medium">{u.full_name || 'N/A'}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-text-muted text-sm">{u.email}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                            u.kyc_status === 'Approved' ? 'bg-green-400/20 text-green-400 border-green-400/20' :
+                            u.kyc_status === 'Pending' ? 'bg-yellow-400/20 text-yellow-400 border-yellow-400/20' :
+                            u.kyc_status === 'Rejected' ? 'bg-red-400/20 text-red-400 border-red-400/20' :
+                            'bg-gray-400/20 text-gray-400 border-gray-400/20'
+                          }`}>
+                            {u.kyc_status || 'Not Submitted'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-text-muted text-sm">
+                          {new Date(u.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {u.kyc_status === 'Pending' && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => approveKyc(u.id)}
+                                className="bg-green-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-green-600 transition"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => rejectKyc(u.id)}
+                                className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-red-600 transition"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                          {u.kyc_status === 'Approved' && (
+                            <span className="text-green-400 text-xs">✅ Approved</span>
+                          )}
+                          {(!u.kyc_status || u.kyc_status === 'Not Submitted') && (
+                            <span className="text-text-muted text-xs">No KYC</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -176,4 +167,21 @@ export default function AdminTopups() {
       </AdminLayout>
     </>
   );
+}
+
+export async function getServerSideProps({ req }) {
+  const supabase = getSupabaseServer(req);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return { redirect: { destination: '/auth/login', permanent: false } };
+  }
+  const { data } = await supabase
+    .from('users')
+    .select('is_admin')
+    .eq('id', session.user.id)
+    .single();
+  if (!data?.is_admin) {
+    return { redirect: { destination: '/dashboard', permanent: false } };
+  }
+  return { props: { user: session.user } };
 }
