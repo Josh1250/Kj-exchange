@@ -4,33 +4,18 @@ import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
-export default function AdminUsers() {
+export default function AdminUsers({ user }) {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push('/auth/login');
-        return;
-      }
-      const { data } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', session.user.id)
-        .single();
-      if (!data?.is_admin) {
-        router.push('/dashboard');
-        return;
-      }
-      setLoading(false);
-      fetchUsers();
-    };
-    checkAuth();
-  }, [router]);
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+    fetchUsers();
+  }, [user, router]);
 
   const fetchUsers = async () => {
     try {
@@ -83,7 +68,7 @@ export default function AdminUsers() {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (!user) return null;
 
   return (
     <>
@@ -182,4 +167,20 @@ export default function AdminUsers() {
       </AdminLayout>
     </>
   );
+}
+
+export async function getServerSideProps({ req }) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return { redirect: { destination: '/auth/login', permanent: false } };
+  }
+  const { data } = await supabase
+    .from('users')
+    .select('is_admin')
+    .eq('id', session.user.id)
+    .single();
+  if (!data?.is_admin) {
+    return { redirect: { destination: '/dashboard', permanent: false } };
+  }
+  return { props: { user: session.user } };
 }
