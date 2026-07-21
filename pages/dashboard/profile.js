@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router'; // ✅ REQUIRED
 import { useAuth } from '../_app';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
@@ -6,6 +7,7 @@ import Head from 'next/head';
 
 export default function Profile() {
   const { user, loading } = useAuth();
+  const router = useRouter(); // ✅ Now this works
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [bankName, setBankName] = useState('');
@@ -13,6 +15,7 @@ export default function Profile() {
   const [accountName, setAccountName] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState(''); // 'success' or 'error'
 
   useEffect(() => {
     if (user) {
@@ -21,17 +24,21 @@ export default function Profile() {
   }, [user]);
 
   const fetchProfile = async () => {
-    const { data } = await supabase
-      .from('users')
-      .select('full_name, phone, bank_name, account_number, account_name')
-      .eq('id', user.id)
-      .single();
-    if (data) {
-      setFullName(data.full_name || '');
-      setPhone(data.phone || '');
-      setBankName(data.bank_name || '');
-      setAccountNumber(data.account_number || '');
-      setAccountName(data.account_name || '');
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('full_name, phone, bank_name, account_number, account_name')
+        .eq('id', user.id)
+        .single();
+      if (data) {
+        setFullName(data.full_name || '');
+        setPhone(data.phone || '');
+        setBankName(data.bank_name || '');
+        setAccountNumber(data.account_number || '');
+        setAccountName(data.account_name || '');
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err);
     }
   };
 
@@ -39,27 +46,37 @@ export default function Profile() {
     e.preventDefault();
     setSaving(true);
     setMessage('');
-    const { error } = await supabase
-      .from('users')
-      .update({
-        full_name: fullName,
-        phone: phone,
-        bank_name: bankName,
-        account_number: accountNumber,
-        account_name: accountName,
-      })
-      .eq('id', user.id);
-    if (error) {
-      setMessage('Error saving profile.');
-      console.error(error);
-    } else {
+    setMessageType('');
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          full_name: fullName,
+          phone: phone,
+          bank_name: bankName,
+          account_number: accountNumber,
+          account_name: accountName,
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
       setMessage('Profile updated successfully!');
+      setMessageType('success');
+    } catch (err) {
+      setMessage('Error saving profile. Please try again.');
+      setMessageType('error');
+      console.error(err);
     }
     setSaving(false);
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  if (!user) return null;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
+  if (!user) {
+    router.push('/auth/login');
+    return null;
+  }
 
   return (
     <>
@@ -89,15 +106,17 @@ export default function Profile() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="w-full bg-black/40 border border-border rounded-lg px-4 py-2 text-text-primary focus:border-orange focus:outline-none"
+                  placeholder="Your full name"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">Phone Number</label>
                 <input
-                  type="text"
+                  type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full bg-black/40 border border-border rounded-lg px-4 py-2 text-text-primary focus:border-orange focus:outline-none"
+                  placeholder="e.g., 08012345678"
                 />
               </div>
               <div className="border-t border-border pt-4">
@@ -110,6 +129,7 @@ export default function Profile() {
                       value={bankName}
                       onChange={(e) => setBankName(e.target.value)}
                       className="w-full bg-black/40 border border-border rounded-lg px-4 py-2 text-text-primary focus:border-orange focus:outline-none"
+                      placeholder="e.g., GTBank"
                     />
                   </div>
                   <div>
@@ -119,6 +139,7 @@ export default function Profile() {
                       value={accountNumber}
                       onChange={(e) => setAccountNumber(e.target.value)}
                       className="w-full bg-black/40 border border-border rounded-lg px-4 py-2 text-text-primary focus:border-orange focus:outline-none"
+                      placeholder="10-digit account number"
                     />
                   </div>
                   <div>
@@ -128,19 +149,29 @@ export default function Profile() {
                       value={accountName}
                       onChange={(e) => setAccountName(e.target.value)}
                       className="w-full bg-black/40 border border-border rounded-lg px-4 py-2 text-text-primary focus:border-orange focus:outline-none"
+                      placeholder="Account holder name"
                     />
                   </div>
                 </div>
               </div>
 
-              {message && <p className="text-green-400 text-sm">{message}</p>}
+              {message && (
+                <p className={`text-sm ${messageType === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                  <i className={`fa-regular ${messageType === 'success' ? 'fa-circle-check' : 'fa-circle-xmark'} mr-1`}></i>
+                  {message}
+                </p>
+              )}
 
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50"
+                className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {saving ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>Saving...</> : 'Save Changes'}
+                {saving ? (
+                  <><i className="fa-solid fa-spinner fa-spin"></i> Saving...</>
+                ) : (
+                  <><i className="fa-regular fa-floppy-disk mr-2"></i> Save Changes</>
+                )}
               </button>
             </form>
           </div>
