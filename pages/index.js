@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import Layout from '../components/layout/Layout';
-import RateCalculator from '../components/calculator/RateCalculator';
 import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
@@ -8,6 +7,7 @@ export default function Home() {
   const [prices, setPrices] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
   const [changes, setChanges] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
   const [isLoading, setIsLoading] = useState(true);
+  const [openFaq, setOpenFaq] = useState(null);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('kj-theme');
@@ -32,7 +32,6 @@ export default function Home() {
     }
   };
 
-  // Fetch live prices for ticker
   useEffect(() => {
     const fetchPrices = async () => {
       try {
@@ -58,7 +57,6 @@ export default function Home() {
           SOL: solUsd,
         });
 
-        // Simulate 24h changes (random for demo — could be fetched from another API)
         setChanges({
           BTC: (Math.random() * 6 - 2).toFixed(2),
           ETH: (Math.random() * 6 - 2).toFixed(2),
@@ -79,7 +77,7 @@ export default function Home() {
   return (
     <Layout>
       {/* Theme Toggle */}
-      <div className="container mx-auto px-4 pt-4 flex justify-end">
+      <div className="container mx-auto px-4 pt-4 flex justify-end z-20 relative">
         <button
           onClick={toggleTheme}
           className="flex items-center gap-2 bg-bg-card/60 backdrop-blur-sm border border-border rounded-full px-4 py-2 text-sm hover:border-orange transition-all duration-300 shadow-lg"
@@ -97,6 +95,73 @@ export default function Home() {
           )}
         </button>
       </div>
+
+      {/* ====== HERO ====== */}
+      <section className="relative overflow-hidden pt-8 pb-16 md:py-20">
+        {/* Animated background orbs */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"></div>
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/20 rounded-full blur-3xl animate-float-delayed"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-64 bg-purple-400/10 rounded-full blur-2xl animate-pulse-slow"></div>
+
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="max-w-5xl mx-auto text-center">
+            <span className="inline-block bg-orange/10 text-orange border border-orange/20 px-5 py-1.5 rounded-full text-sm font-semibold mb-6 backdrop-blur-sm animate-fade-down">
+              🔒 Transparent Pricing — No Hidden Fees
+            </span>
+
+            {/* NEW HERO HEADLINE */}
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight animate-fade-up">
+              Buy &amp; Sell your{' '}
+              <span className="bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
+                Digital Assets
+              </span>
+              <br />
+              with{' '}
+              <span className="bg-gradient-to-r from-orange-400 to-orange-500 bg-clip-text text-transparent">
+                Confidence
+              </span>
+            </h1>
+
+            <p className="text-text-muted text-lg md:text-xl mt-6 max-w-2xl mx-auto leading-relaxed animate-fade-up animation-delay-200">
+              Buy, sell, and swap crypto & gift cards with live rates, instant payouts, and zero hidden fees.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-4 justify-center animate-fade-up animation-delay-300">
+              <Link
+                href="/auth/signup"
+                className="group relative bg-orange text-white px-10 py-3.5 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-xl shadow-orange/30 hover:shadow-orange/50 flex items-center gap-2 overflow-hidden"
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  <i className="fas fa-rocket"></i> Get Started
+                </span>
+                <span className="absolute inset-0 bg-gradient-to-r from-orange-400 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+              </Link>
+              <Link
+                href="/rates"
+                className="border border-border text-text-primary px-10 py-3.5 rounded-full font-semibold hover:border-orange hover:text-orange transition-all duration-300 backdrop-blur-sm bg-white/5"
+              >
+                <i className="fa-solid fa-chart-simple mr-2"></i>View Rates →
+              </Link>
+            </div>
+
+            {/* Stats */}
+            <div className="flex flex-wrap justify-center gap-8 md:gap-16 border-t border-border mt-10 pt-10 max-w-2xl mx-auto animate-fade-up animation-delay-400">
+              <div className="text-center">
+                <p className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">500+</p>
+                <p className="text-text-muted text-sm mt-1">Satisfied Customers</p>
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-bold text-white dark:text-black">⚡</p>
+                <p className="text-text-muted text-sm mt-1">Instant Payout</p>
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-bold text-green-400">🔒</p>
+                <p className="text-text-muted text-sm mt-1">No Hidden Fees</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ====== LIVE PRICE TICKER ====== */}
       <div className="bg-bg-card/40 backdrop-blur-sm border-y border-border py-2 overflow-hidden">
@@ -119,68 +184,9 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ====== HERO ====== */}
-      <section className="container mx-auto px-4 py-12 md:py-20">
-        <div className="max-w-5xl mx-auto text-center">
-          {/* Tagline */}
-          <span className="inline-block bg-orange/10 text-orange border border-orange/20 px-5 py-1.5 rounded-full text-sm font-semibold mb-6 backdrop-blur-sm">
-            🔒 Transparent Pricing — No Hidden Fees
-          </span>
-
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight">
-            Your{' '}
-            <span className="bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
-              Ultimate
-            </span>{' '}
-            <br className="hidden sm:block" />
-            <span className="bg-gradient-to-r from-orange-400 to-orange-500 bg-clip-text text-transparent">
-              Exchange Hub
-            </span>
-          </h1>
-
-          <p className="text-text-muted text-lg md:text-xl mt-6 max-w-2xl mx-auto leading-relaxed">
-            Buy, sell, and swap crypto & gift cards with live rates, instant payouts, and zero hidden fees.
-          </p>
-
-          <div className="mt-8 flex flex-wrap gap-4 justify-center">
-            <Link
-              href="/auth/signup"
-              className="group relative bg-orange text-white px-10 py-3.5 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-xl shadow-orange/30 hover:shadow-orange/50 flex items-center gap-2 overflow-hidden"
-            >
-              <span className="relative z-10 flex items-center gap-2">
-                <i className="fas fa-rocket"></i> Get Started
-              </span>
-              <span className="absolute inset-0 bg-gradient-to-r from-orange-400 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-            </Link>
-            <Link
-              href="/rates"
-              className="border border-border text-text-primary px-10 py-3.5 rounded-full font-semibold hover:border-orange hover:text-orange transition-all duration-300 backdrop-blur-sm bg-white/5"
-            >
-              <i className="fa-solid fa-chart-simple mr-2"></i>View Rates →
-            </Link>
-          </div>
-
-          {/* Stats */}
-          <div className="flex flex-wrap justify-center gap-8 md:gap-16 border-t border-border mt-10 pt-10 max-w-2xl mx-auto">
-            <div className="text-center">
-              <p className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">500+</p>
-              <p className="text-text-muted text-sm mt-1">Satisfied Customers</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-white dark:text-black">⭐ 4.9</p>
-              <p className="text-text-muted text-sm mt-1">Average Rating</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-green-400">🔒</p>
-              <p className="text-text-muted text-sm mt-1">No Hidden Fees</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ====== SERVICES ====== */}
       <section id="services" className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14">
+        <div className="text-center mb-14 animate-fade-up">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Services</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Everything You Need</h2>
           <p className="text-text-muted mt-2 max-w-2xl mx-auto">Buy, sell, and manage your assets all in one place</p>
@@ -240,7 +246,7 @@ export default function Home() {
 
       {/* ====== HOW IT WORKS ====== */}
       <section className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14">
+        <div className="text-center mb-14 animate-fade-up">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">How It Works</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Simple Steps to Start</h2>
           <p className="text-text-muted mt-2 max-w-2xl mx-auto">Get started in minutes with our streamlined process</p>
@@ -270,7 +276,7 @@ export default function Home() {
       {/* ====== WHY CHOOSE ====== */}
       <section className="container mx-auto px-4 py-20 border-t border-border">
         <div className="grid md:grid-cols-2 gap-16 items-center">
-          <div>
+          <div className="animate-fade-up">
             <span className="text-orange text-sm font-semibold uppercase tracking-widest">Why Choose Us</span>
             <h2 className="text-3xl md:text-4xl font-bold mt-2">
               Built for <span className="bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">Trust &amp; Speed</span>
@@ -295,7 +301,7 @@ export default function Home() {
             </ul>
           </div>
 
-          <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-8 border border-border backdrop-blur-sm text-center shadow-2xl animate-fade-up">
+          <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-8 border border-border backdrop-blur-sm text-center shadow-2xl animate-fade-up animation-delay-200">
             <div className="text-6xl font-bold text-orange mb-2">🔒</div>
             <p className="text-text-muted text-sm">Transparent Pricing</p>
             <div className="w-16 h-1 bg-orange mx-auto my-4 rounded-full"></div>
@@ -310,19 +316,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ====== RATE CALCULATOR ====== */}
-      <section id="calculator" className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14">
-          <span className="text-orange text-sm font-semibold uppercase tracking-widest">Calculator</span>
-          <h2 className="text-3xl md:text-4xl font-bold mt-2">Live Rate Calculator</h2>
-          <p className="text-text-muted mt-2">See exactly how much you'll get in Naira</p>
-        </div>
-        <RateCalculator />
-      </section>
-
       {/* ====== SUPPORTED ASSETS ====== */}
       <section id="assets" className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14">
+        <div className="text-center mb-14 animate-fade-up">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Assets</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">What We Accept</h2>
           <p className="text-text-muted mt-2">Over 50+ gift cards and crypto assets supported</p>
@@ -358,7 +354,7 @@ export default function Home() {
 
       {/* ====== TESTIMONIALS ====== */}
       <section className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14">
+        <div className="text-center mb-14 animate-fade-up">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Testimonials</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Hear From Our Happy Customers</h2>
         </div>
@@ -407,13 +403,13 @@ export default function Home() {
 
       {/* ====== FAQ ====== */}
       <section id="faq" className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14">
+        <div className="text-center mb-14 animate-fade-up">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">FAQ</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Frequently Asked Questions</h2>
-          <p className="text-text-muted mt-2">Quick answers to common questions</p>
+          <p className="text-text-muted mt-2">Click a question to reveal the answer</p>
         </div>
 
-        <div className="max-w-3xl mx-auto space-y-4">
+        <div className="max-w-3xl mx-auto space-y-3">
           {[
             {
               q: 'How fast do I get paid?',
@@ -431,16 +427,33 @@ export default function Home() {
               q: 'Do you charge hidden fees?',
               a: 'Never. We offer a <strong>transparent fee structure</strong>. What you see is exactly what you get — no hidden charges or surprises.'
             }
-          ].map((faq, i) => (
-            <div
-              key={i}
-              className="group bg-bg-card/60 backdrop-blur-sm rounded-xl p-5 border border-border hover:border-orange transition-all duration-300 hover:shadow-lg hover:shadow-orange/5 animate-fade-up"
-              style={{ animationDelay: `${i * 100}ms` }}
-            >
-              <h4 className="font-semibold group-hover:text-orange transition-colors duration-300">{faq.q}</h4>
-              <p className="text-text-muted text-sm mt-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: faq.a }} />
-            </div>
-          ))}
+          ].map((faq, i) => {
+            const isOpen = openFaq === i;
+            return (
+              <div
+                key={i}
+                className="bg-bg-card/60 backdrop-blur-sm rounded-xl border border-border overflow-hidden transition-all duration-300 hover:border-orange/40 animate-fade-up"
+                style={{ animationDelay: `${i * 100}ms` }}
+              >
+                <button
+                  onClick={() => setOpenFaq(isOpen ? null : i)}
+                  className="w-full px-6 py-4 flex items-center justify-between text-left font-semibold hover:bg-white/5 transition-colors duration-200"
+                >
+                  <span className="text-text-primary">{faq.q}</span>
+                  <span className="text-orange ml-4 flex-shrink-0">
+                    <i className={`fa-solid ${isOpen ? 'fa-chevron-up' : 'fa-chevron-down'} transition-transform duration-300`}></i>
+                  </span>
+                </button>
+                <div
+                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                    isOpen ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+                  }`}
+                >
+                  <div className="px-6 pb-4 text-text-muted text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: faq.a }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -462,6 +475,16 @@ export default function Home() {
           <p className="text-text-muted text-xs mt-4">Trusted and verified</p>
         </div>
       </section>
+
+      {/* ====== TAGLINE TICKER (Your Ultimate Exchange Hub) ====== */}
+      <div className="border-t border-border bg-bg-card/40 backdrop-blur-sm py-3 overflow-hidden">
+        <div className="flex animate-marquee whitespace-nowrap gap-12 text-sm font-medium tracking-wide text-text-secondary">
+          <span>✦ Your Ultimate Exchange Hub ✦</span>
+          <span>✦ Your Ultimate Exchange Hub ✦</span>
+          <span>✦ Your Ultimate Exchange Hub ✦</span>
+          <span>✦ Your Ultimate Exchange Hub ✦</span>
+        </div>
+      </div>
 
       {/* ====== ANIMATIONS & STYLES ====== */}
       <style jsx global>{`
@@ -487,7 +510,7 @@ export default function Home() {
         .light-mode .bg-white\\/5 { background: rgba(78,31,145,0.04); }
         .light-mode .bg-bg-card\\/60 { background: rgba(255,255,255,0.7); }
 
-        /* Animations */
+        /* Marquee */
         @keyframes marquee {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
@@ -498,15 +521,46 @@ export default function Home() {
           width: max-content;
         }
 
+        /* Fade animations */
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
         .animate-fade-up {
           opacity: 0;
-          animation: fadeUp 0.6s ease forwards;
+          animation: fadeUp 0.8s ease forwards;
         }
 
+        @keyframes fadeDown {
+          from { opacity: 0; transform: translateY(-20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-down {
+          opacity: 0;
+          animation: fadeDown 0.8s ease forwards;
+        }
+
+        /* Float animations for background orbs */
+        @keyframes float {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-20px) scale(1.05); }
+        }
+        .animate-float {
+          animation: float 8s ease-in-out infinite;
+        }
+        .animate-float-delayed {
+          animation: float 10s ease-in-out infinite 2s;
+        }
+
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.7; }
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 6s ease-in-out infinite;
+        }
+
+        /* Pulse for CTA */
         @keyframes pulse-cta {
           0% { box-shadow: 0 0 0 0 rgba(255, 115, 0, 0.4); }
           70% { box-shadow: 0 0 0 15px rgba(255, 115, 0, 0); }
@@ -516,8 +570,14 @@ export default function Home() {
           animation: pulse-cta 2.4s infinite;
         }
 
-        /* Ensures animations run on page load */
-        .animate-fade-up {
+        /* Animation delays */
+        .animation-delay-200 { animation-delay: 0.2s; }
+        .animation-delay-300 { animation-delay: 0.3s; }
+        .animation-delay-400 { animation-delay: 0.4s; }
+        .animation-delay-500 { animation-delay: 0.5s; }
+
+        /* Ensure animations run on page load */
+        .animate-fade-up, .animate-fade-down {
           animation-fill-mode: both;
         }
       `}</style>
