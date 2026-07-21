@@ -1,157 +1,125 @@
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
 import { useAuth } from '../_app';
-import Layout from '../../components/layout/Layout';
+import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Link from 'next/link';
-import Head from 'next/head';
 
-export default function Dashboard() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
+export default function DashboardOverview() {
+  const { user } = useAuth();
   const [balance, setBalance] = useState(0);
+  const [bonusBalance, setBonusBalance] = useState(0);
+  const [hasTraded, setHasTraded] = useState(false);
   const [recentOrders, setRecentOrders] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/auth/login');
-    }
-  }, [user, loading, router]);
+    const fetchData = async () => {
+      if (!user) return;
+      try {
+        const { data: wallet } = await supabase
+          .from('wallets')
+          .select('balance, bonus_balance')
+          .eq('user_id', user.id)
+          .single();
+        if (wallet) {
+          setBalance(wallet.balance || 0);
+          setBonusBalance(wallet.bonus_balance || 0);
+        }
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('status', 'completed')
+          .limit(1);
+        setHasTraded(orders && orders.length > 0);
 
-  useEffect(() => {
-    if (user) {
-      fetchDashboardData();
-    }
+        const { data: txs } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        setRecentOrders(txs || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, [user]);
 
-  const fetchDashboardData = async () => {
-    try {
-      setIsLoading(true);
-
-      // Get wallet balance
-      const { data: wallet } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('user_id', user.id)
-        .single();
-
-      if (wallet) {
-        setBalance(wallet.balance);
-      }
-
-      // Get recent orders
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (orders) {
-        setRecentOrders(orders);
-      }
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (loading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-text-primary">
-        Loading...
-      </div>
-    );
-  }
-
-  const statusColors = {
-    pending: 'text-yellow-400',
-    verifying: 'text-blue-400',
-    verified: 'text-green-400',
-    completed: 'text-green-500',
-    failed: 'text-red-400',
-  };
+  const totalBalance = balance + bonusBalance;
 
   return (
-    <>
-      <Head>
-        <title>Dashboard · KJ Exchange</title>
-      </Head>
-      <Layout>
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold mb-6">Welcome back, {user.email?.split('@')[0] || 'User'} 👋</h1>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <p className="text-text-muted">Welcome back, {user?.email?.split('@')[0] || 'User'} 👋</p>
 
-          {/* Balance Card */}
-          <div className="bg-gradient-to-r from-purple/20 to-orange/10 rounded-2xl p-6 border border-border mb-8">
-            <p className="text-text-muted text-sm">Total Balance</p>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-bold">₦{balance.toLocaleString()}</span>
-              <span className="text-text-muted text-sm mb-1">= ${(balance / 1550).toFixed(2)}</span>
-            </div>
-            <div className="flex gap-2 mt-2">
-              <span className="text-xs text-green-400 bg-green-400/10 px-3 py-1 rounded-full border border-green-400/20">
-                <i className="fas fa-check-circle mr-1"></i> 0% Fees
-              </span>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <Link href="/dashboard/wallet" className="bg-bg-card p-4 rounded-xl text-center hover:border-orange transition border border-border">
-              <div className="text-2xl mb-1">💰</div>
-              <p className="text-sm font-semibold">Wallet</p>
+        <div className="bg-gradient-to-r from-purple-900/30 to-orange-900/20 rounded-2xl p-6 border border-border">
+          <p className="text-text-muted text-sm">Available Balance</p>
+          <p className="text-4xl font-bold">₦{totalBalance.toLocaleString()}</p>
+          {bonusBalance > 0 && (
+            <p className="text-sm text-green-400">
+              Includes ₦{bonusBalance.toLocaleString()} welcome bonus {hasTraded ? '(Withdrawable)' : '(Locked until first trade)'}
+            </p>
+          )}
+          <div className="flex gap-3 mt-4">
+            <Link href="/dashboard/wallet" className="bg-orange text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-orange-600 transition">
+              <i className="fa-solid fa-arrow-down mr-2"></i>Withdraw
             </Link>
-            <Link href="/dashboard/sell-gift-card" className="bg-bg-card p-4 rounded-xl text-center hover:border-orange transition border border-border">
-              <div className="text-2xl mb-1">🎁</div>
-              <p className="text-sm font-semibold">Sell Gift Card</p>
-            </Link>
-            <Link href="/dashboard/sell-crypto" className="bg-bg-card p-4 rounded-xl text-center hover:border-orange transition border border-border">
-              <div className="text-2xl mb-1">₿</div>
-              <p className="text-sm font-semibold">Sell Crypto</p>
-            </Link>
-            <Link href="/dashboard/swap" className="bg-bg-card p-4 rounded-xl text-center hover:border-orange transition border border-border">
-              <div className="text-2xl mb-1">🔄</div>
-              <p className="text-sm font-semibold">Swap</p>
-            </Link>
-          </div>
-
-          {/* Recent Orders */}
-          <div className="bg-bg-card rounded-2xl p-6 border border-border">
-            <h2 className="text-xl font-bold mb-4">Recent Orders</h2>
-            {isLoading ? (
-              <p className="text-text-muted">Loading orders...</p>
-            ) : recentOrders.length === 0 ? (
-              <p className="text-text-muted">No orders yet. Start trading today!</p>
-            ) : (
-              <div className="space-y-3">
-                {recentOrders.map((order) => (
-                  <div key={order.id} className="flex justify-between items-center border-b border-border pb-3">
-                    <div>
-                      <p className="font-semibold">
-                        {order.type === 'gift_card' ? '🎁' : '₿'} {order.asset}
-                      </p>
-                      <p className="text-text-muted text-sm">₦{order.value_ngn.toLocaleString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`text-sm font-semibold ${statusColors[order.status] || 'text-text-muted'}`}>
-                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                      </span>
-                      <p className="text-text-muted text-xs">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Link href="/dashboard/orders" className="block text-center text-orange hover:text-orange-light mt-4 text-sm">
-              View All Orders →
+            <Link href="/dashboard/wallet" className="border border-border text-text-primary px-4 py-2 rounded-full text-sm font-semibold hover:border-orange transition">
+              <i className="fa-solid fa-arrow-up mr-2"></i>Top Up
             </Link>
           </div>
         </div>
-      </Layout>
-    </>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Link href="/dashboard/sell-gift-card" className="bg-bg-card rounded-xl p-4 text-center hover:border-orange transition border border-border">
+            <i className="fa-solid fa-gift text-3xl text-orange mb-1"></i>
+            <p className="text-sm font-semibold">Sell Gift Cards</p>
+          </Link>
+          <Link href="/dashboard/sell-crypto" className="bg-bg-card rounded-xl p-4 text-center hover:border-orange transition border border-border">
+            <i className="fa-brands fa-bitcoin text-3xl text-orange mb-1"></i>
+            <p className="text-sm font-semibold">Sell Crypto</p>
+          </Link>
+          <Link href="/dashboard/wallet" className="bg-bg-card rounded-xl p-4 text-center hover:border-orange transition border border-border">
+            <i className="fa-solid fa-wallet text-3xl text-orange mb-1"></i>
+            <p className="text-sm font-semibold">Top Up</p>
+          </Link>
+          <Link href="/dashboard/orders" className="bg-bg-card rounded-xl p-4 text-center hover:border-orange transition border border-border">
+            <i className="fa-solid fa-clock-rotate-left text-3xl text-orange mb-1"></i>
+            <p className="text-sm font-semibold">History</p>
+          </Link>
+        </div>
+
+        <div className="bg-bg-card rounded-2xl p-6 border border-border">
+          <h2 className="text-lg font-bold mb-4">Recent Transactions</h2>
+          {loading ? (
+            <p className="text-text-muted">Loading...</p>
+          ) : recentOrders.length === 0 ? (
+            <p className="text-text-muted">No transactions yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {recentOrders.map((tx) => (
+                <div key={tx.id} className="flex justify-between items-center border-b border-border pb-3">
+                  <div>
+                    <p className="capitalize font-medium">{tx.type.replace('_', ' ')}</p>
+                    <p className="text-text-muted text-xs">{new Date(tx.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`font-semibold ${tx.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {tx.amount > 0 ? '+' : ''}{tx.amount.toLocaleString()}
+                    </p>
+                    <span className={`text-xs ${tx.status === 'completed' ? 'text-green-400' : 'text-yellow-400'}`}>{tx.status}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </DashboardLayout>
   );
 }
