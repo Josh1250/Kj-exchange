@@ -1,38 +1,42 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import { useAuth } from '../_app';
 import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
 export default function AdminOrders() {
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [processing, setProcessing] = useState(null);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push('/auth/login');
-        return;
-      }
-      const { data } = await supabase
+    if (loading) return;
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+    const checkAdmin = async () => {
+      const { data, error } = await supabase
         .from('users')
         .select('is_admin')
-        .eq('id', session.user.id)
+        .eq('id', user.id)
         .single();
-      if (!data?.is_admin) {
+      if (error || !data?.is_admin) {
         router.push('/dashboard');
         return;
       }
-      setLoading(false);
+      setIsAdmin(true);
+      setChecking(false);
       fetchOrders();
     };
-    checkAuth();
-  }, [router]);
+    checkAdmin();
+  }, [user, loading, router]);
 
   const fetchOrders = async () => {
     try {
@@ -114,12 +118,20 @@ export default function AdminOrders() {
     }
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
+  if (loading || checking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-text-primary">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
+          <p className="mt-3 text-text-muted">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
-  const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
+  if (!user || !isAdmin) return null;
 
+  const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
   const statusColors = {
     pending: 'bg-yellow-400/20 text-yellow-400 border-yellow-400/20',
     verifying: 'bg-blue-400/20 text-blue-400 border-blue-400/20',
