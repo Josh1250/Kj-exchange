@@ -28,27 +28,50 @@ export default function SellCrypto() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [rates, setRates] = useState({ btc: 95200, eth: 4210, usdt: 1550, sol: 185 });
+  const [rates, setRates] = useState({ btc: 0, eth: 0, usdt: 0, sol: 0 });
+  const [ngnRate, setNgnRate] = useState(1550);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const [orderId, setOrderId] = useState(null);
+  const [isLoadingRates, setIsLoadingRates] = useState(true);
 
   useEffect(() => {
     const fetchRates = async () => {
       try {
-        const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana&vs_currencies=usd');
-        const data = await res.json();
-        const ngnRate = 1550;
+        setIsLoadingRates(true);
+        // Fetch NGN/USD rate
+        const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
+        const fxData = await fxRes.json();
+        const ngn = fxData.rates?.NGN || 1550;
+        setNgnRate(ngn);
+
+        // Fetch crypto prices
+        const cryptoRes = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana&vs_currencies=usd'
+        );
+        const cryptoData = await cryptoRes.json();
+
         setRates({
-          btc: data.bitcoin?.usd * ngnRate || 95200,
-          eth: data.ethereum?.usd * ngnRate || 4210,
-          usdt: data.tether?.usd * ngnRate || 1550,
-          sol: data.solana?.usd * ngnRate || 185,
+          btc: (cryptoData.bitcoin?.usd || 0) * ngn,
+          eth: (cryptoData.ethereum?.usd || 0) * ngn,
+          usdt: (cryptoData.tether?.usd || 0) * ngn,
+          sol: (cryptoData.solana?.usd || 0) * ngn,
         });
       } catch (e) {
         console.warn('Using fallback rates');
+        // Fallback to hardcoded rates if API fails
+        setRates({
+          btc: 95200,
+          eth: 4210,
+          usdt: 1550,
+          sol: 185,
+        });
+      } finally {
+        setIsLoadingRates(false);
       }
     };
     fetchRates();
+    const interval = setInterval(fetchRates, 60000); // update every 60s
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
@@ -95,8 +118,6 @@ export default function SellCrypto() {
       const rate = getRate();
       const valueNgn = cryptoAmount * rate;
 
-      console.log('Submitting order:', { user_id: user.id, asset: selectedAsset.id, amount: cryptoAmount, rate, value_ngn: valueNgn });
-
       const { data, error } = await supabase
         .from('orders')
         .insert({
@@ -114,18 +135,14 @@ export default function SellCrypto() {
         })
         .select();
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Order created:', data);
       setOrderId(data[0].id);
       setSuccess(`Order submitted! You'll receive ₦${valueNgn.toLocaleString()} after verification.`);
       setShowWalletInfo(true);
       setAmount('');
     } catch (err) {
-      console.error('Submit error:', err);
+      console.error(err);
       setError('Failed to submit order. Please try again.');
     } finally {
       setSubmitting(false);
@@ -141,6 +158,9 @@ export default function SellCrypto() {
     }
   };
 
+  const rate = getRate();
+  const usdRate = ngnRate > 0 ? (rate / ngnRate) : 0;
+
   return (
     <>
       <Head>
@@ -153,93 +173,105 @@ export default function SellCrypto() {
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
             {!showWalletInfo ? (
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Asset Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">Crypto Asset</label>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    {CRYPTO_ASSETS.map((asset) => (
-                      <button
-                        key={asset.id}
-                        type="button"
-                        onClick={() => setSelectedAsset(asset)}
-                        className={`p-3 rounded-lg border transition text-center ${
-                          selectedAsset.id === asset.id ? 'border-orange bg-orange/10' : 'border-border bg-black/20 hover:border-orange/50'
-                        }`}
-                      >
-                        <i className={`${asset.icon} text-2xl`} style={{ color: asset.color }}></i>
-                        <p className="text-sm font-semibold mt-1">{asset.id}</p>
-                      </button>
-                    ))}
+                {isLoadingRates ? (
+                  <div className="text-center py-8">
+                    <i className="fa-solid fa-spinner fa-spin text-2xl text-orange"></i>
+                    <p className="text-text-muted mt-2">Fetching live rates...</p>
                   </div>
-                </div>
-
-                {/* Selected Asset Info */}
-                <div className="bg-black/20 rounded-lg p-3 flex items-center justify-between border border-border">
-                  <div className="flex items-center gap-3">
-                    <i className={`${selectedAsset.icon} text-2xl`} style={{ color: selectedAsset.color }}></i>
+                ) : (
+                  <>
+                    {/* Asset Selection */}
                     <div>
-                      <p className="font-semibold">{selectedAsset.name}</p>
-                      <p className="text-xs text-text-muted">{selectedAsset.network}</p>
-                      <p className="text-xs text-text-muted">Min: {selectedAsset.min} {selectedAsset.id}</p>
+                      <label className="block text-sm font-medium text-text-secondary mb-2">Crypto Asset</label>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {CRYPTO_ASSETS.map((asset) => (
+                          <button
+                            key={asset.id}
+                            type="button"
+                            onClick={() => setSelectedAsset(asset)}
+                            className={`p-3 rounded-lg border transition text-center ${
+                              selectedAsset.id === asset.id ? 'border-orange bg-orange/10' : 'border-border bg-black/20 hover:border-orange/50'
+                            }`}
+                          >
+                            <i className={`${asset.icon} text-2xl`} style={{ color: asset.color }}></i>
+                            <p className="text-sm font-semibold mt-1">{asset.id}</p>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-green-400 font-bold">₦{getRate().toLocaleString()}</p>
-                    <p className="text-xs text-text-muted">1 {selectedAsset.id} ≈ ${(getRate()/1550).toFixed(2)}</p>
-                  </div>
-                </div>
 
-                {selectedAsset.id === 'USDT' && (
-                  <div className="bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-red-400 text-sm">
-                    <i className="fa-solid fa-triangle-exclamation mr-2"></i> Send USDT only via TRC20 network.
-                  </div>
+                    {/* Selected Asset Info */}
+                    <div className="bg-black/20 rounded-lg p-3 flex items-center justify-between border border-border">
+                      <div className="flex items-center gap-3">
+                        <i className={`${selectedAsset.icon} text-2xl`} style={{ color: selectedAsset.color }}></i>
+                        <div>
+                          <p className="font-semibold">{selectedAsset.name}</p>
+                          <p className="text-xs text-text-muted">{selectedAsset.network}</p>
+                          <p className="text-xs text-text-muted">Min: {selectedAsset.min} {selectedAsset.id}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-green-400 font-bold">₦{rate.toLocaleString()}</p>
+                        <p className="text-xs text-text-muted">1 {selectedAsset.id} ≈ ${usdRate.toFixed(2)}</p>
+                        <p className="text-xs text-text-muted">1 USD = ₦{ngnRate.toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    {selectedAsset.id === 'USDT' && (
+                      <div className="bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-red-400 text-sm">
+                        <i className="fa-solid fa-triangle-exclamation mr-2"></i> Send USDT only via TRC20 network.
+                      </div>
+                    )}
+
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-text-secondary mb-2">Amount ({selectedAsset.id})</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none text-2xl font-bold"
+                          placeholder={`0.00 ${selectedAsset.id}`}
+                          required
+                          min={selectedAsset.min}
+                          step="any"
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted text-sm">{selectedAsset.id}</div>
+                      </div>
+                    </div>
+
+                    {/* Rate & Estimated */}
+                    <div className="bg-black/20 rounded-lg p-4 border border-border space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-text-muted">Rate</span>
+                        <span>1 {selectedAsset.id} = ₦{rate.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-text-muted">You'll receive</span>
+                        <span className="text-green-400 font-bold text-lg">₦{estimatedNgn().toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {error && <p className="text-red-400 text-sm"><i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}</p>}
+
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {submitting ? <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</> : <><i className="fa-solid fa-paper-plane"></i> Continue ➤</>}
+                    </button>
+
+                    <p className="text-center text-xs text-text-muted">
+                      Your order will be verified within 5-15 minutes.<br />
+                      <span className="text-green-400 font-bold">0% fees</span> — What you see is what you get.
+                    </p>
+                  </>
                 )}
-
-                {/* Amount */}
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">Amount ({selectedAsset.id})</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none text-2xl font-bold"
-                      placeholder={`0.00 ${selectedAsset.id}`}
-                      required
-                      min={selectedAsset.min}
-                      step="any"
-                    />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted text-sm">{selectedAsset.id}</div>
-                  </div>
-                </div>
-
-                <div className="bg-black/20 rounded-lg p-4 border border-border space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-muted">Rate</span>
-                    <span>1 {selectedAsset.id} = ₦{getRate().toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-muted">You'll receive</span>
-                    <span className="text-green-400 font-bold text-lg">₦{estimatedNgn().toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {error && <p className="text-red-400 text-sm"><i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}</p>}
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {submitting ? <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</> : <><i className="fa-solid fa-paper-plane"></i> Continue ➤</>}
-                </button>
-
-                <p className="text-center text-xs text-text-muted">
-                  Your order will be verified within 5-15 minutes.<br />
-                  <span className="text-green-400 font-bold">0% fees</span> — What you see is what you get.
-                </p>
               </form>
             ) : (
+              // Wallet info display (unchanged)
               <div className="space-y-6">
                 <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-4">
                   <p className="text-green-400 font-semibold text-center">
