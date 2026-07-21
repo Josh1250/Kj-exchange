@@ -20,6 +20,13 @@ export default function Wallet() {
   const [hideBalance, setHideBalance] = useState(false);
   const [activeCurrency, setActiveCurrency] = useState('ngn');
 
+  // Top-Up Modal state
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState('');
+  const [topUpCurrency, setTopUpCurrency] = useState('NGN');
+  const [topUpLoading, setTopUpLoading] = useState(false);
+  const [topUpError, setTopUpError] = useState('');
+
   // Platform wallet addresses
   const BTC_ADDRESS = '1HjJpZByFHnhSPZ37qStqCMUqVGaQvKw4i';
   const USDT_ADDRESS = 'TJpaXiQChRaGHaZzYqb3Qngf26EafH5CbH';
@@ -65,6 +72,41 @@ export default function Wallet() {
       console.error('Error fetching wallet data:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleTopUp = async (e) => {
+    e.preventDefault();
+    setTopUpLoading(true);
+    setTopUpError('');
+
+    try {
+      const amount = parseFloat(topUpAmount);
+      if (!amount || amount <= 0) {
+        setTopUpError('Enter a valid amount');
+        setTopUpLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/flutterwave/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, currency: topUpCurrency }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.payment_link) {
+        // Redirect to Flutterwave payment page
+        window.location.href = data.payment_link;
+      } else {
+        setTopUpError(data.message || 'Failed to initialize payment. Please try again.');
+      }
+    } catch (err) {
+      setTopUpError('An error occurred. Please try again.');
+      console.error(err);
+    } finally {
+      setTopUpLoading(false);
     }
   };
 
@@ -131,12 +173,12 @@ export default function Wallet() {
                 >
                   <i className="fa-solid fa-arrow-down mr-2"></i>Withdraw {currencyNames[activeCurrency]}
                 </Link>
-                <Link
-                  href="/dashboard/topup"
+                <button
+                  onClick={() => setShowTopUpModal(true)}
                   className="border border-border text-text-primary px-5 py-2 rounded-full text-sm font-semibold hover:border-orange transition"
                 >
                   <i className="fa-solid fa-arrow-up mr-2"></i>Top Up
-                </Link>
+                </button>
                 <Link
                   href="/dashboard/convert"
                   className="border border-border text-text-primary px-5 py-2 rounded-full text-sm font-semibold hover:border-orange transition"
@@ -229,6 +271,60 @@ export default function Wallet() {
           </div>
         </div>
       </DashboardLayout>
+
+      {/* Top-Up Modal */}
+      {showTopUpModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-bg-card rounded-2xl p-6 max-w-md w-full border border-border shadow-2xl">
+            <h2 className="text-xl font-bold mb-4">Top Up Wallet</h2>
+            <form onSubmit={handleTopUp} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Amount</label>
+                <input
+                  type="number"
+                  value={topUpAmount}
+                  onChange={(e) => setTopUpAmount(e.target.value)}
+                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                  placeholder="Enter amount"
+                  required
+                  min="100"
+                  step="any"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Currency</label>
+                <select
+                  value={topUpCurrency}
+                  onChange={(e) => setTopUpCurrency(e.target.value)}
+                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                >
+                  <option value="NGN">Naira (₦)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="GHS">Cedis (₵)</option>
+                </select>
+              </div>
+              {topUpError && <p className="text-red-400 text-sm">{topUpError}</p>}
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={topUpLoading}
+                  className="flex-1 bg-orange text-white font-bold py-3 rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
+                >
+                  {topUpLoading ? 'Processing...' : 'Pay with Flutterwave'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTopUpModal(false)}
+                  className="flex-1 border border-border text-text-primary py-3 rounded-xl hover:border-orange transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+            <p className="text-center text-text-muted text-xs mt-4">Powered by Flutterwave</p>
+          </div>
+        </div>
+      )}
     </>
   );
 }
