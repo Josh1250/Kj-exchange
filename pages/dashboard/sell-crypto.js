@@ -45,14 +45,14 @@ export default function SellCrypto() {
           const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
           const fxData = await fxRes.json();
           if (fxData.rates?.NGN) {
-            ngn = fxData.rates.NGN * 0.98; // 2% spread
+            ngn = fxData.rates.NGN * 0.98;
           }
         } catch (e) {
           console.warn('FX API failed, using fallback NGN rate');
         }
         setNgnRate(ngn);
 
-        // 1. Try CoinGecko for crypto prices
+        // Fetch crypto prices from CoinGecko
         let cryptoUsd = {};
         try {
           const geoRes = await fetch(
@@ -65,10 +65,9 @@ export default function SellCrypto() {
             ETH: geoData.ethereum?.usd || 0,
             SOL: geoData.solana?.usd || 0,
           };
-          console.log('CoinGecko prices:', cryptoUsd);
+          console.log('CoinGecko USD prices:', cryptoUsd);
         } catch (e) {
           console.warn('CoinGecko failed, trying Binance');
-          // 2. Fallback to Binance
           const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
           const pricePromises = symbols.map(sym =>
             fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}`)
@@ -85,25 +84,19 @@ export default function SellCrypto() {
           };
         }
 
-        // Ensure USDT is always 1
+        // Ensure USDT is 1
         cryptoUsd.USDT = 1;
 
-        setRates({
+        const newRates = {
           btc: cryptoUsd.BTC * ngn,
           eth: cryptoUsd.ETH * ngn,
           usdt: cryptoUsd.USDT * ngn,
           sol: cryptoUsd.SOL * ngn,
-        });
-
-        console.log('Final rates:', {
-          btc: cryptoUsd.BTC * ngn,
-          eth: cryptoUsd.ETH * ngn,
-          usdt: cryptoUsd.USDT * ngn,
-          sol: cryptoUsd.SOL * ngn,
-        });
+        };
+        setRates(newRates);
+        console.log('Final NGN rates:', newRates);
       } catch (err) {
         console.error('Rate fetch error:', err);
-        // Final fallback
         setRates({
           btc: 95200,
           eth: 4210,
@@ -126,6 +119,7 @@ export default function SellCrypto() {
   }
 
   const getRate = () => {
+    // Explicit mapping based on selectedAsset.id
     switch (selectedAsset.id) {
       case 'BTC': return rates.btc;
       case 'ETH': return rates.eth;
@@ -323,13 +317,16 @@ export default function SellCrypto() {
                     </button>
 
                     <p className="text-center text-xs text-text-muted">
-                      Your order will be verified within 5-15 minutes.<br />
-                      <span className="text-green-400 font-bold">0% fees</span> — What you see is what you get.
+                      Your order will be verified within 5-15 minutes.
+                    </p>
+                    <p className="text-center text-xs text-orange font-semibold">
+                      🔒 Transparent Pricing — No Hidden Fees
                     </p>
                   </>
                 )}
               </form>
             ) : (
+              // --- Wallet info display (unchanged) ---
               <div className="space-y-6">
                 <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-4">
                   <p className="text-green-400 font-semibold text-center">
