@@ -75,6 +75,7 @@ export default function Wallet() {
     }
   };
 
+  // UPDATED: Top-up handler with Authorization header
   const handleTopUp = async (e) => {
     e.preventDefault();
     setTopUpLoading(true);
@@ -88,9 +89,22 @@ export default function Wallet() {
         return;
       }
 
+      // Get user's access token
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        setTopUpError('You need to be logged in to top up.');
+        setTopUpLoading(false);
+        return;
+      }
+
       const response = await fetch('/api/flutterwave/initialize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ amount, currency: topUpCurrency }),
       });
 
@@ -124,7 +138,6 @@ export default function Wallet() {
       </Head>
       <DashboardLayout>
         <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">Wallet</h1>
             <button
@@ -136,7 +149,6 @@ export default function Wallet() {
             </button>
           </div>
 
-          {/* Currency Tabs */}
           <div className="flex gap-2 bg-bg-card rounded-xl p-1 border border-border">
             {['ngn', 'usd', 'ghs'].map((cur) => (
               <button
@@ -153,7 +165,6 @@ export default function Wallet() {
             ))}
           </div>
 
-          {/* Balance Card */}
           <div className="bg-gradient-to-br from-purple-900/40 to-orange-900/30 rounded-2xl p-6 border border-border relative overflow-hidden">
             <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl"></div>
             <div className="absolute bottom-0 left-0 w-40 h-40 bg-orange-500/20 rounded-full blur-3xl"></div>
@@ -189,7 +200,6 @@ export default function Wallet() {
             </div>
           </div>
 
-          {/* Gift Points */}
           <div className="bg-bg-card rounded-2xl p-4 border border-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg">
@@ -205,7 +215,6 @@ export default function Wallet() {
             </p>
           </div>
 
-          {/* Crypto Deposit Addresses */}
           <div className="grid md:grid-cols-2 gap-4">
             <div className="bg-bg-card rounded-2xl p-5 border border-border hover:border-orange transition">
               <div className="flex items-center gap-2 mb-2">
@@ -238,7 +247,6 @@ export default function Wallet() {
             </div>
           </div>
 
-          {/* Transaction History */}
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
             <h2 className="text-lg font-bold mb-4">Transaction History</h2>
             {isLoading ? (
