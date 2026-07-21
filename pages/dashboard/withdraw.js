@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router'; // ✅ ADD THIS
+import { useRouter } from 'next/router';
 import { useAuth } from '../_app';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
-import Link from 'next/link';
 import Head from 'next/head';
 
 export default function Withdraw() {
@@ -17,6 +16,8 @@ export default function Withdraw() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [kycLevel, setKycLevel] = useState(1);
+  const [isKycRequired, setIsKycRequired] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -25,22 +26,27 @@ export default function Withdraw() {
   }, [user]);
 
   const fetchWalletAndProfile = async () => {
-    const { data: wallet } = await supabase
-      .from('wallets')
-      .select('balance')
-      .eq('user_id', user.id)
-      .single();
-    if (wallet) setBalance(wallet.balance || 0);
+    try {
+      const { data: wallet } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', user.id)
+        .single();
+      if (wallet) setBalance(wallet.balance || 0);
 
-    const { data: profile } = await supabase
-      .from('users')
-      .select('bank_name, account_number, account_name')
-      .eq('id', user.id)
-      .single();
-    if (profile) {
-      setBankName(profile.bank_name || '');
-      setAccountNumber(profile.account_number || '');
-      setAccountName(profile.account_name || '');
+      const { data: profile } = await supabase
+        .from('users')
+        .select('bank_name, account_number, account_name, kyc_level')
+        .eq('id', user.id)
+        .single();
+      if (profile) {
+        setBankName(profile.bank_name || '');
+        setAccountNumber(profile.account_number || '');
+        setAccountName(profile.account_name || '');
+        setKycLevel(profile.kyc_level || 1);
+      }
+    } catch (err) {
+      console.error('Error fetching data:', err);
     }
   };
 
@@ -63,6 +69,12 @@ export default function Withdraw() {
     }
     if (!bankName || !accountNumber || !accountName) {
       setError('Please update your bank details in settings first.');
+      setSubmitting(false);
+      return;
+    }
+    if (amt > 50000 && kycLevel < 2) {
+      setIsKycRequired(true);
+      setError('KYC Level 2 required for withdrawals above ₦50,000. Please complete KYC in your profile.');
       setSubmitting(false);
       return;
     }
@@ -121,6 +133,13 @@ export default function Withdraw() {
               <p className="text-2xl font-bold">₦{balance.toLocaleString()}</p>
             </div>
 
+            {isKycRequired && (
+              <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-3 text-yellow-400 text-sm">
+                <i className="fa-solid fa-triangle-exclamation mr-2"></i>
+                KYC Level 2 required for withdrawals above ₦50,000. Please complete your KYC in Profile.
+              </div>
+            )}
+
             <div className="border-t border-border pt-6">
               <h3 className="font-semibold mb-4">Withdraw to Bank Account</h3>
               <form onSubmit={handleWithdraw} className="space-y-4">
@@ -167,7 +186,9 @@ export default function Withdraw() {
                     placeholder="Enter amount"
                     required
                     min="100"
+                    step="100"
                   />
+                  <p className="text-xs text-text-muted mt-1">Withdrawals above ₦50,000 require KYC Level 2.</p>
                 </div>
 
                 {error && <p className="text-red-400 text-sm"><i className="fa-solid fa-triangle-exclamation mr-1"></i>{error}</p>}
@@ -176,9 +197,9 @@ export default function Withdraw() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50"
+                  className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {submitting ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>Processing...</> : 'Withdraw Now'}
+                  {submitting ? <><i className="fa-solid fa-spinner fa-spin"></i> Processing...</> : <><i className="fa-solid fa-arrow-down mr-2"></i> Withdraw Now</>}
                 </button>
               </form>
             </div>
