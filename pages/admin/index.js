@@ -1,12 +1,15 @@
-import { getSupabaseServer } from '../../lib/supabaseClient';
-import AdminLayout from '../../components/layout/AdminLayout';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import { supabase } from '../../lib/supabaseClient';
+import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 import Link from 'next/link';
 
-export default function AdminDashboard({ user }) {
+export default function AdminDashboard() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalOrders: 0,
@@ -15,17 +18,37 @@ export default function AdminDashboard({ user }) {
     pendingTopups: 0,
     recentOrders: [],
   });
-  const [loading, setLoading] = useState(true);
+  const [fetchingStats, setFetchingStats] = useState(false);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/auth/login');
-      return;
-    }
-    fetchStats();
-  }, [user, router]);
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/login');
+        return;
+      }
+      setUser(session.user);
+
+      // Check admin status
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+
+      if (error || !data?.is_admin) {
+        router.push('/dashboard');
+        return;
+      }
+      setIsAdmin(true);
+      setLoading(false);
+      fetchStats();
+    };
+    checkAuth();
+  }, [router]);
 
   const fetchStats = async () => {
+    setFetchingStats(true);
     try {
       const { count: totalUsers } = await supabase
         .from('users')
@@ -61,11 +84,24 @@ export default function AdminDashboard({ user }) {
     } catch (err) {
       console.error('Error fetching stats:', err);
     } finally {
-      setLoading(false);
+      setFetchingStats(false);
     }
   };
 
-  if (!user) return null;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-text-primary">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
+          <p className="mt-3 text-text-muted">Loading admin panel...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || !isAdmin) {
+    return null;
+  }
 
   return (
     <>
@@ -133,7 +169,7 @@ export default function AdminDashboard({ user }) {
               <h2 className="text-lg font-bold">Recent Orders</h2>
               <Link href="/admin/orders" className="text-sm text-orange hover:underline">View All</Link>
             </div>
-            {loading ? (
+            {fetchingStats ? (
               <p className="text-text-muted">Loading...</p>
             ) : stats.recentOrders.length === 0 ? (
               <p className="text-text-muted">No orders yet.</p>
@@ -160,21 +196,4 @@ export default function AdminDashboard({ user }) {
       </AdminLayout>
     </>
   );
-}
-
-export async function getServerSideProps({ req }) {
-  const supabase = getSupabaseServer(req);
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    return { redirect: { destination: '/auth/login', permanent: false } };
-  }
-  const { data } = await supabase
-    .from('users')
-    .select('is_admin')
-    .eq('id', session.user.id)
-    .single();
-  if (!data?.is_admin) {
-    return { redirect: { destination: '/dashboard', permanent: false } };
-  }
-  return { props: { user: session.user } };
 }
