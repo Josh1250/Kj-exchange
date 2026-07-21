@@ -1,24 +1,41 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../_app';
-import AdminLayout from '../../components/layout/AdminLayout';
 import { supabase } from '../../lib/supabaseClient';
+import AdminLayout from '../../components/layout/AdminLayout';
 import Link from 'next/link';
 import Head from 'next/head';
 
 export default function AdminOrders() {
-  const { user, loading } = useAuth();
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [processing, setProcessing] = useState(null);
 
   useEffect(() => {
-    if (!loading && user) {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/login');
+        return;
+      }
+      // Check admin (optional)
+      const { data } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+
+      if (!data?.is_admin) {
+        router.push('/dashboard');
+        return;
+      }
+      setLoading(false);
       fetchOrders();
-    }
-  }, [user, loading]);
+    };
+    checkAuth();
+  }, [router]);
 
   const fetchOrders = async () => {
     try {
@@ -44,7 +61,6 @@ export default function AdminOrders() {
         .eq('id', orderId);
       if (orderError) throw orderError;
 
-      // Credit user's wallet
       const { data: wallet } = await supabase
         .from('wallets')
         .select('balance')
@@ -55,7 +71,6 @@ export default function AdminOrders() {
         .from('wallets')
         .upsert({ user_id: userId, balance: newBalance });
 
-      // Create transaction record
       await supabase
         .from('transactions')
         .insert({
@@ -92,7 +107,7 @@ export default function AdminOrders() {
         .from('notifications')
         .insert({
           user_id: userId,
-          message: `❌ Your order #${orderId.slice(0,8)} has been rejected. Contact support for details.`,
+          message: `❌ Your order #${orderId.slice(0,8)} has been rejected. Contact support.`,
         });
       await fetchOrders();
     } catch (err) {
@@ -102,9 +117,9 @@ export default function AdminOrders() {
     }
   };
 
-  const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
-
   if (loading) return <div>Loading...</div>;
+
+  const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
 
   const statusColors = {
     pending: 'bg-yellow-400/20 text-yellow-400 border-yellow-400/20',
@@ -129,7 +144,6 @@ export default function AdminOrders() {
             </button>
           </div>
 
-          {/* Filter Tabs */}
           <div className="flex flex-wrap gap-2 bg-bg-card rounded-xl p-1 border border-border">
             {['all', 'pending', 'verifying', 'verified', 'completed', 'failed'].map((status) => (
               <button
@@ -146,7 +160,6 @@ export default function AdminOrders() {
             ))}
           </div>
 
-          {/* Orders List */}
           <div className="bg-bg-card rounded-2xl border border-border overflow-hidden">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
