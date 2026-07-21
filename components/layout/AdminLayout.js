@@ -19,53 +19,40 @@ export default function AdminLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    console.log('🔵 AdminLayout mounted. user:', user, 'loading:', loading);
-    
+    // If still loading, wait
+    if (loading) return;
+
     const checkAdmin = async () => {
       if (!user) {
-        console.log('🔴 No user, redirecting to login');
-        setChecking(false);
+        // Not logged in, redirect to login
         router.push('/auth/login');
+        setChecking(false);
         return;
       }
+
       try {
-        console.log('🟢 Checking admin status for user:', user.id);
         const { data, error } = await supabase
           .from('users')
           .select('is_admin')
           .eq('id', user.id)
           .single();
         
-        console.log('📦 Admin check response:', data, error);
-        
-        if (error) {
-          console.error('❌ Supabase error:', error);
-          setError(error.message);
-          setChecking(false);
-          return;
-        }
-        
         if (data?.is_admin === true) {
-          console.log('✅ User is admin!');
           setIsAdmin(true);
         } else {
-          console.log('⛔ User is NOT admin, redirecting to dashboard');
           router.push('/dashboard');
         }
       } catch (err) {
-        console.error('❌ Unexpected error:', err);
-        setError(err.message);
+        console.error('Admin check error:', err);
+        router.push('/dashboard');
       } finally {
         setChecking(false);
       }
     };
-    
-    if (!loading) {
-      checkAdmin();
-    }
+
+    checkAdmin();
   }, [user, loading, router]);
 
   const handleLogout = async () => {
@@ -73,20 +60,17 @@ export default function AdminLayout({ children }) {
     router.push('/');
   };
 
-  // Show loading state
   if (loading || checking) {
     return (
       <div className="flex items-center justify-center min-h-screen text-text-primary">
         <div className="text-center">
           <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
           <p className="mt-3 text-text-muted">Loading admin panel...</p>
-          {error && <p className="mt-2 text-red-400 text-sm">Error: {error}</p>}
         </div>
       </div>
     );
   }
 
-  // If not admin, don't render anything (will redirect)
   if (!user || !isAdmin) {
     return null;
   }
@@ -98,7 +82,6 @@ export default function AdminLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
-      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-bg-secondary border-r border-border transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="flex flex-col h-full p-4">
           <div className="mb-6">
@@ -151,12 +134,10 @@ export default function AdminLayout({ children }) {
         </div>
       </aside>
 
-      {/* Overlay */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>
       )}
 
-      {/* Main */}
       <div className="flex-1 flex flex-col md:ml-64 overflow-y-auto">
         <header className="bg-bg-secondary/80 backdrop-blur-lg border-b border-border px-6 py-4 flex justify-between items-center sticky top-0 z-10">
           <button
