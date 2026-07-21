@@ -2,40 +2,22 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
-import Link from 'next/link';
 import Head from 'next/head';
 
-export default function AdminOrders() {
+export default function AdminOrders({ user }) {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [processing, setProcessing] = useState(null);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push('/auth/login');
-        return;
-      }
-      // Check admin (optional)
-      const { data } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', session.user.id)
-        .single();
-
-      if (!data?.is_admin) {
-        router.push('/dashboard');
-        return;
-      }
-      setLoading(false);
-      fetchOrders();
-    };
-    checkAuth();
-  }, [router]);
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+    fetchOrders();
+  }, [user, router]);
 
   const fetchOrders = async () => {
     try {
@@ -117,7 +99,7 @@ export default function AdminOrders() {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (!user) return null;
 
   const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
 
@@ -219,4 +201,20 @@ export default function AdminOrders() {
       </AdminLayout>
     </>
   );
+}
+
+export async function getServerSideProps({ req }) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return { redirect: { destination: '/auth/login', permanent: false } };
+  }
+  const { data } = await supabase
+    .from('users')
+    .select('is_admin')
+    .eq('id', session.user.id)
+    .single();
+  if (!data?.is_admin) {
+    return { redirect: { destination: '/dashboard', permanent: false } };
+  }
+  return { props: { user: session.user } };
 }
