@@ -1,21 +1,36 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../_app';
-import AdminLayout from '../../components/layout/AdminLayout';
 import { supabase } from '../../lib/supabaseClient';
+import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
 export default function AdminTopups() {
-  const { user, loading } = useAuth();
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [topups, setTopups] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && user) {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/login');
+        return;
+      }
+      const { data } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+      if (!data?.is_admin) {
+        router.push('/dashboard');
+        return;
+      }
+      setLoading(false);
       fetchTopups();
-    }
-  }, [user, loading]);
+    };
+    checkAuth();
+  }, [router]);
 
   const fetchTopups = async () => {
     try {
@@ -36,13 +51,11 @@ export default function AdminTopups() {
 
   const verifyTopup = async (txId, userId, amount) => {
     try {
-      // Update transaction status
       await supabase
         .from('transactions')
         .update({ status: 'completed' })
         .eq('id', txId);
 
-      // Credit wallet
       const { data: wallet } = await supabase
         .from('wallets')
         .select('balance')
