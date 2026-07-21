@@ -22,23 +22,35 @@ export default function AdminLayout({ children }) {
 
   useEffect(() => {
     const checkAdmin = async () => {
-      if (!user) return;
-      const { data } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single();
-      if (data?.is_admin) {
-        setIsAdmin(true);
-      } else {
-        router.push('/dashboard');
+      if (!user) {
+        setChecking(false);
+        return;
       }
-      setChecking(false);
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single();
+        
+        if (data?.is_admin === true) {
+          setIsAdmin(true);
+        } else {
+          router.push('/dashboard');
+        }
+      } catch (err) {
+        console.error('Admin check error:', err);
+        // If there's an error, redirect to dashboard
+        router.push('/dashboard');
+      } finally {
+        setChecking(false);
+      }
     };
+    
     if (!loading) {
       checkAdmin();
     }
-  }, [user, loading]);
+  }, [user, loading, router]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -46,7 +58,14 @@ export default function AdminLayout({ children }) {
   };
 
   if (loading || checking) {
-    return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen text-text-primary">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
+          <p className="mt-3 text-text-muted">Loading admin panel...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!user || !isAdmin) {
