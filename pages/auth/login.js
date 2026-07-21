@@ -3,12 +3,14 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Head from 'next/head';
+import Image from 'next/image';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e) => {
@@ -33,56 +35,161 @@ export default function Login() {
     <>
       <Head>
         <title>Login · KJ Exchange</title>
+        <meta name="description" content="Login to KJ Exchange and start trading crypto & gift cards instantly." />
       </Head>
-      <div className="min-h-screen flex items-center justify-center bg-bg-primary p-4">
-        <div className="bg-bg-card backdrop-blur-xl p-8 rounded-lg border border-border w-full max-w-md">
-          <div className="text-center mb-6">
-            <h1 className="text-3xl font-bold">
-              <span className="text-purple">KJ</span>
-              <span className="text-gray-400">Exchange</span>
-            </h1>
-            <p className="text-text-muted text-sm mt-1">Trade Smart. Trade Secure.</p>
+
+      <div className="min-h-screen flex items-center justify-center bg-bg-primary p-4 relative overflow-hidden">
+        {/* Animated background orbs */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"></div>
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/20 rounded-full blur-3xl animate-float-delayed"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl h-64 bg-purple-400/10 rounded-full blur-2xl animate-pulse-slow"></div>
+
+        <div className="relative z-10 w-full max-w-md">
+          {/* Back to Home */}
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition mb-6 group"
+          >
+            <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
+            <span className="text-sm font-medium">Back to Home</span>
+          </Link>
+
+          {/* Card */}
+          <div className="bg-bg-card/70 backdrop-blur-xl rounded-3xl border border-border/50 p-8 shadow-2xl shadow-purple/5">
+            {/* Logo */}
+            <div className="flex justify-center mb-8">
+              <Image
+                src="/logo.png"
+                alt="KJ Exchange"
+                width={60}
+                height={60}
+                className="w-16 h-auto"
+              />
+            </div>
+
+            <h1 className="text-2xl font-bold text-center">Welcome Back</h1>
+            <p className="text-text-muted text-center text-sm mt-1">
+              Login to continue trading
+            </p>
+
+            <form onSubmit={handleLogin} className="mt-8 space-y-5">
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1.5">Email Address</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
+                    <i className="fa-regular fa-envelope"></i>
+                  </span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                    placeholder="Enter your email"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-sm font-medium text-text-secondary">Password</label>
+                  <Link
+                    href="/auth/forgot-password"
+                    className="text-xs text-orange hover:underline"
+                  >
+                    Forgot Password?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
+                    <i className="fa-solid fa-lock"></i>
+                  </span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                    placeholder="Enter your password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition"
+                  >
+                    <i className={showPassword ? 'fa-regular fa-eye' : 'fa-regular fa-eye-slash'}></i>
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-center gap-2">
+                  <i className="fa-solid fa-circle-exclamation"></i>
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <><i className="fa-solid fa-spinner fa-spin"></i> Logging in...</>
+                ) : (
+                  <><i className="fa-solid fa-arrow-right-to-bracket"></i> Login</>
+                )}
+              </button>
+            </form>
+
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-bg-card/70 px-4 text-text-muted">or continue with</span>
+              </div>
+            </div>
+
+            {/* Social Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button className="flex items-center justify-center gap-2 bg-black/40 border border-border rounded-xl py-3 hover:bg-white/5 transition text-text-primary text-sm font-medium">
+                <i className="fab fa-google text-xl text-[#ea4335]"></i>
+                Google
+              </button>
+              <button className="flex items-center justify-center gap-2 bg-black/40 border border-border rounded-xl py-3 hover:bg-white/5 transition text-text-primary text-sm font-medium">
+                <i className="fab fa-apple text-xl"></i>
+                Apple
+              </button>
+            </div>
+
+            <p className="text-center text-text-muted text-sm mt-6">
+              Don't have an account?{' '}
+              <Link href="/auth/signup" className="text-orange hover:underline font-medium">
+                Sign Up
+              </Link>
+            </p>
           </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange-glow/30"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange-glow/30"
-                required
-              />
-            </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-light transition disabled:opacity-50"
-            >
-              {loading ? 'Logging in...' : 'Login'}
-            </button>
-          </form>
-
-          <p className="text-center text-text-muted mt-4 text-sm">
-            Don't have an account?{' '}
-            <Link href="/auth/signup" className="text-orange hover:underline">
-              Sign Up
-            </Link>
-          </p>
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-20px) scale(1.05); }
+        }
+        .animate-float { animation: float 8s ease-in-out infinite; }
+        .animate-float-delayed { animation: float 10s ease-in-out infinite 2s; }
+
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.7; }
+        }
+        .animate-pulse-slow { animation: pulse-slow 6s ease-in-out infinite; }
+      `}</style>
     </>
   );
 }
