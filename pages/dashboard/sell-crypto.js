@@ -1,58 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../_app';
-import Layout from '../../components/layout/Layout';
+import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
 
-// ============================================================
-// CRYPTO ASSETS WITH YOUR WALLET ADDRESSES
-// ============================================================
 const CRYPTO_ASSETS = [
-  { 
-    id: 'BTC', 
-    name: 'Bitcoin', 
-    icon: '₿', 
-    color: '#f7931a',
-    wallet: '1HjJpZByFHnhSPZ37qStqCMUqVGaQvKw4i',
-    network: 'Bitcoin Network',
-    min: 0.001,
-  },
-  { 
-    id: 'USDT', 
-    name: 'Tether', 
-    icon: '₮', 
-    color: '#26a17b',
-    wallet: 'TJpaXiQChRaGHaZzYqb3Qngf26EafH5CbH',
-    network: 'TRC20 (Tron Network)',
-    min: 10,
-    warning: '⚠️ Send USDT only via TRC20 network. Sending via any other network will result in permanent loss of funds.'
-  },
-  { 
-    id: 'ETH', 
-    name: 'Ethereum', 
-    icon: '⟠', 
-    color: '#627eea',
-    wallet: '0x61175C09a683755AE00069b20D3CF233Cd02E536',
-    network: 'Ethereum Network (ERC20)',
-    min: 0.01,
-  },
-  { 
-    id: 'SOL', 
-    name: 'Solana', 
-    icon: '◎', 
-    color: '#9945FF',
-    wallet: 'HBpjJDV6mh5jSMbmm4ujFYv7q7YzgJZwnt4pJwP6s7qh',
-    network: 'Solana Network',
-    min: 0.1,
-  },
+  { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', wallet: '1HjJpZByFHnhSPZ37qStqCMUqVGaQvKw4i', network: 'Bitcoin Network', min: 0.001 },
+  { id: 'USDT', name: 'Tether', icon: 'fa-solid fa-coins', color: '#26a17b', wallet: 'TJpaXiQChRaGHaZzYqb3Qngf26EafH5CbH', network: 'TRC20', min: 10 },
+  { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea', wallet: '0x61175C09a683755AE00069b20D3CF233Cd02E536', network: 'ERC20', min: 0.01 },
+  { id: 'SOL', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF', wallet: 'HBpjJDV6mh5jSMbmm4ujFYv7q7YzgJZwnt4pJwP6s7qh', network: 'Solana', min: 0.1 },
 ];
 
 export default function SellCrypto() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  
-  // State
   const [selectedAsset, setSelectedAsset] = useState(CRYPTO_ASSETS[0]);
   const [amount, setAmount] = useState('');
   const [userWallet, setUserWallet] = useState('');
@@ -63,15 +25,12 @@ export default function SellCrypto() {
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const [orderId, setOrderId] = useState(null);
 
-  // ============================================================
-  // FETCH LIVE RATES
-  // ============================================================
   useEffect(() => {
     const fetchRates = async () => {
       try {
         const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana&vs_currencies=usd');
         const data = await res.json();
-        const ngnRate = 1550; // You can fetch live NGN rate here too
+        const ngnRate = 1550;
         setRates({
           btc: data.bitcoin?.usd * ngnRate || 95200,
           eth: data.ethereum?.usd * ngnRate || 4210,
@@ -85,18 +44,12 @@ export default function SellCrypto() {
     fetchRates();
   }, []);
 
-  // ============================================================
-  // AUTH CHECK
-  // ============================================================
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   if (!user) {
     router.push('/auth/login');
     return null;
   }
 
-  // ============================================================
-  // GET RATE FOR SELECTED ASSET
-  // ============================================================
   const getRate = () => {
     switch (selectedAsset.id) {
       case 'BTC': return rates.btc;
@@ -107,31 +60,25 @@ export default function SellCrypto() {
     }
   };
 
-  // ============================================================
-  // HANDLE SUBMIT
-  // ============================================================
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     setSubmitting(true);
 
-    // Validation
     const cryptoAmount = parseFloat(amount);
     if (isNaN(cryptoAmount) || cryptoAmount <= 0) {
       setError('Please enter a valid amount');
       setSubmitting(false);
       return;
     }
-
     if (cryptoAmount < selectedAsset.min) {
       setError(`Minimum amount is ${selectedAsset.min} ${selectedAsset.id}`);
       setSubmitting(false);
       return;
     }
-
     if (!userWallet || userWallet.length < 10) {
-      setError('Please enter a valid wallet address');
+      setError('Please enter your wallet address');
       setSubmitting(false);
       return;
     }
@@ -139,7 +86,6 @@ export default function SellCrypto() {
     const rate = getRate();
     const valueNgn = cryptoAmount * rate;
 
-    // Create order in Supabase
     const { data, error } = await supabase
       .from('orders')
       .insert({
@@ -161,22 +107,18 @@ export default function SellCrypto() {
     if (error) {
       setError('Failed to submit order. Please try again.');
       console.error(error);
-      setSubmitting(false);
     } else {
       setOrderId(data[0].id);
-      setSuccess(`✅ Order submitted! You'll receive ₦${valueNgn.toLocaleString()} after verification.`);
+      setSuccess(`Order submitted! You'll receive ₦${valueNgn.toLocaleString()} after verification.`);
       setShowWalletInfo(true);
       setAmount('');
       setUserWallet('');
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
 
-  // ============================================================
-  // COPY WALLET ADDRESS TO CLIPBOARD
-  // ============================================================
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(selectedAsset.wallet);
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
     alert('✅ Wallet address copied to clipboard!');
   };
 
@@ -185,22 +127,16 @@ export default function SellCrypto() {
       <Head>
         <title>Sell Crypto · KJ Exchange</title>
       </Head>
-      <Layout>
-        <div className="max-w-3xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold mb-6">₿ Sell Crypto</h1>
+      <DashboardLayout>
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-2xl font-bold mb-6">Sell Crypto</h1>
 
-          {/* ============================================
-              FORM
-          ============================================ */}
-          <div className="bg-bg-card rounded-2xl p-6 md:p-8 border border-border">
+          <div className="bg-bg-card rounded-2xl p-6 border border-border">
             {!showWalletInfo ? (
-              // Step 1: Order Form
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Asset Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Crypto Asset
-                  </label>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">Crypto Asset</label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {CRYPTO_ASSETS.map((asset) => (
                       <button
@@ -208,14 +144,10 @@ export default function SellCrypto() {
                         type="button"
                         onClick={() => setSelectedAsset(asset)}
                         className={`p-3 rounded-lg border transition text-center ${
-                          selectedAsset.id === asset.id
-                            ? 'border-orange bg-orange/10'
-                            : 'border-border bg-black/20 hover:border-orange/50'
+                          selectedAsset.id === asset.id ? 'border-orange bg-orange/10' : 'border-border bg-black/20 hover:border-orange/50'
                         }`}
                       >
-                        <span className="text-2xl block" style={{ color: asset.color }}>
-                          {asset.icon}
-                        </span>
+                        <i className={`${asset.icon} text-2xl`} style={{ color: asset.color }}></i>
                         <p className="text-sm font-semibold mt-1">{asset.id}</p>
                       </button>
                     ))}
@@ -225,9 +157,7 @@ export default function SellCrypto() {
                 {/* Selected Asset Info */}
                 <div className="bg-black/20 rounded-lg p-3 flex items-center justify-between border border-border">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl" style={{ color: selectedAsset.color }}>
-                      {selectedAsset.icon}
-                    </span>
+                    <i className={`${selectedAsset.icon} text-2xl`} style={{ color: selectedAsset.color }}></i>
                     <div>
                       <p className="font-semibold">{selectedAsset.name} ({selectedAsset.id})</p>
                       <p className="text-xs text-text-muted">{selectedAsset.network}</p>
@@ -241,9 +171,7 @@ export default function SellCrypto() {
 
                 {/* Amount */}
                 <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Amount ({selectedAsset.id})
-                  </label>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">Amount ({selectedAsset.id})</label>
                   <input
                     type="number"
                     value={amount}
@@ -256,17 +184,13 @@ export default function SellCrypto() {
                   />
                   {amount && (
                     <p className="text-text-muted text-sm mt-1">
-                      You'll receive: <span className="text-green-400 font-bold">
-                        ₦{(parseFloat(amount) * getRate()).toLocaleString()}
-                      </span>
+                      You'll receive: <span className="text-green-400 font-bold">₦{(parseFloat(amount) * getRate()).toLocaleString()}</span>
                     </p>
                   )}
-                  <p className="text-xs text-text-muted mt-1">
-                    Min: {selectedAsset.min} {selectedAsset.id}
-                  </p>
+                  <p className="text-xs text-text-muted mt-1">Min: {selectedAsset.min} {selectedAsset.id}</p>
                 </div>
 
-                {/* User's Wallet Address */}
+                {/* User Wallet Address */}
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">
                     Your Wallet Address
@@ -276,7 +200,7 @@ export default function SellCrypto() {
                     value={userWallet}
                     onChange={(e) => setUserWallet(e.target.value)}
                     className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                    placeholder="Enter your wallet address where you'll receive payment"
+                    placeholder="Enter your wallet address where you'll receive Naira"
                     required
                   />
                   <p className="text-xs text-text-muted mt-1">
@@ -284,35 +208,21 @@ export default function SellCrypto() {
                   </p>
                 </div>
 
-                {/* USDT Warning */}
-                {selectedAsset.id === 'USDT' && (
-                  <div className="bg-red-400/10 border border-red-400/20 rounded-lg p-3">
-                    <p className="text-red-400 text-sm font-semibold">⚠️ Important</p>
-                    <p className="text-red-400/80 text-sm">
-                      {selectedAsset.warning}
-                    </p>
-                  </div>
-                )}
-
                 {error && (
                   <div className="bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-red-400 text-sm">
-                    ⚠️ {error}
+                    <i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}
                   </div>
                 )}
 
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-light transition disabled:opacity-50 shadow-orange shadow-lg flex items-center justify-center gap-2"
+                  className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 shadow-orange shadow-lg flex items-center justify-center gap-2"
                 >
                   {submitting ? (
-                    <>
-                      <span className="animate-spin">⏳</span> Submitting...
-                    </>
+                    <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</>
                   ) : (
-                    <>
-                      <span>🚀</span> Submit Order
-                    </>
+                    <><i className="fa-solid fa-paper-plane"></i> Submit Order</>
                   )}
                 </button>
 
@@ -323,15 +233,13 @@ export default function SellCrypto() {
                 </p>
               </form>
             ) : (
-              // ============================================
-              // Step 2: Display Wallet Address For Payment
-              // ============================================
+              // Step 2: Show Platform Wallet Address
               <div className="space-y-6">
                 <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-4">
-                  <p className="text-green-400 font-semibold text-center">✅ Order Submitted Successfully!</p>
-                  <p className="text-text-muted text-center text-sm mt-1">
-                    Order ID: <span className="text-text-primary font-mono">{orderId}</span>
+                  <p className="text-green-400 font-semibold text-center">
+                    <i className="fa-regular fa-circle-check mr-2"></i>Order Submitted Successfully!
                   </p>
+                  <p className="text-text-muted text-center text-sm mt-1">Order ID: <span className="text-text-primary font-mono">{orderId}</span></p>
                 </div>
 
                 <div className="border border-border rounded-lg p-6">
@@ -341,64 +249,42 @@ export default function SellCrypto() {
                   </p>
 
                   <div className="bg-black/40 rounded-lg p-4 border border-border">
-                    <p className="text-xs text-text-muted mb-1">Wallet Address</p>
+                    <p className="text-xs text-text-muted mb-1">Send to this address</p>
                     <div className="flex items-center gap-2">
-                      <p className="font-mono text-sm break-all flex-1 text-orange">
-                        {selectedAsset.wallet}
-                      </p>
+                      <p className="font-mono text-sm break-all flex-1 text-orange">{selectedAsset.wallet}</p>
                       <button
-                        onClick={copyToClipboard}
+                        type="button"
+                        onClick={() => copyToClipboard(selectedAsset.wallet)}
                         className="bg-orange/20 hover:bg-orange/30 text-orange px-3 py-1 rounded-lg text-sm transition whitespace-nowrap"
                       >
-                        📋 Copy
+                        <i className="fa-regular fa-copy mr-1"></i>Copy
                       </button>
                     </div>
                   </div>
 
-                  {selectedAsset.id === 'USDT' && (
-                    <div className="mt-3 bg-red-400/10 border border-red-400/20 rounded-lg p-3">
-                      <p className="text-red-400 text-sm font-semibold">⚠️ Important</p>
-                      <p className="text-red-400/80 text-sm">
-                        {selectedAsset.warning}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="mt-4 bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-3">
-                    <p className="text-yellow-400 text-sm font-semibold">⏳ Important</p>
+                  <div className="mt-3 bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-3">
+                    <p className="text-yellow-400 text-sm font-semibold">
+                      <i className="fa-solid fa-clock mr-1"></i>Important
+                    </p>
                     <p className="text-yellow-400/80 text-sm">
                       Once you've sent the crypto, we'll verify and credit your wallet within 5-15 minutes.
-                      <br />
-                      <span className="text-text-muted text-xs">
-                        Order ID: {orderId} · Amount: {amount} {selectedAsset.id}
-                      </span>
                     </p>
                   </div>
                 </div>
 
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowWalletInfo(false)}
-                    className="flex-1 border border-border text-text-primary px-4 py-2 rounded-full hover:border-orange transition"
-                  >
-                    ↩️ Back
+                  <button type="button" onClick={() => setShowWalletInfo(false)} className="flex-1 border border-border text-text-primary px-4 py-2 rounded-full hover:border-orange transition">
+                    <i className="fa-solid fa-arrow-left mr-2"></i>Back
                   </button>
-                  <a
-                    href="/dashboard/orders"
-                    className="flex-1 bg-orange text-white font-bold py-2 rounded-full hover:bg-orange-light transition text-center"
-                  >
-                    📋 View My Orders
-                  </a>
+                  <Link href="/dashboard/orders" className="flex-1 bg-orange text-white font-bold py-2 rounded-full hover:bg-orange-600 transition text-center">
+                    <i className="fa-solid fa-list mr-2"></i>View Orders
+                  </Link>
                 </div>
-
-                <p className="text-center text-xs text-text-muted">
-                  Need help? Contact us on WhatsApp: <a href="https://wa.me/2348160678317" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline">081 606 78317</a>
-                </p>
               </div>
             )}
           </div>
         </div>
-      </Layout>
+      </DashboardLayout>
     </>
   );
 }
