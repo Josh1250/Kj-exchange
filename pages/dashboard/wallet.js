@@ -20,6 +20,10 @@ export default function Wallet() {
   const [hideBalance, setHideBalance] = useState(false);
   const [activeCurrency, setActiveCurrency] = useState('ngn');
 
+  // Platform wallet addresses
+  const BTC_ADDRESS = '1HjJpZByFHnhSPZ37qStqCMUqVGaQvKw4i';
+  const USDT_ADDRESS = 'TJpaXiQChRaGHaZzYqb3Qngf26EafH5CbH';
+
   useEffect(() => {
     if (!loading && !user) {
       router.push('/auth/login');
@@ -55,6 +59,7 @@ export default function Wallet() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20);
+
       if (txs) setTransactions(txs);
     } catch (err) {
       console.error('Error fetching wallet data:', err);
@@ -68,6 +73,7 @@ export default function Wallet() {
 
   const currencySymbols = { ngn: '₦', usd: '$', ghs: '₵' };
   const currencyLabels = { ngn: 'Naira', usd: 'USD', ghs: 'Cedis' };
+  const currencyNames = { ngn: 'NGN', usd: 'USD', ghs: 'GHS' };
 
   return (
     <>
@@ -76,11 +82,12 @@ export default function Wallet() {
       </Head>
       <DashboardLayout>
         <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">Wallet</h1>
             <button
               onClick={() => setHideBalance(!hideBalance)}
-              className="flex items-center gap-2 text-text-muted hover:text-text-primary transition"
+              className="flex items-center gap-2 text-text-muted hover:text-text-primary transition text-sm px-4 py-2 rounded-full border border-border hover:border-orange"
             >
               <i className={`fa-regular ${hideBalance ? 'fa-eye' : 'fa-eye-slash'}`}></i>
               {hideBalance ? 'Show' : 'Hide'}
@@ -93,50 +100,99 @@ export default function Wallet() {
               <button
                 key={cur}
                 onClick={() => setActiveCurrency(cur)}
-                className={`flex-1 py-2 rounded-lg font-semibold transition ${activeCurrency === cur ? 'bg-orange text-white' : 'text-text-muted hover:text-text-primary'}`}
+                className={`flex-1 py-2 rounded-lg font-semibold transition ${
+                  activeCurrency === cur
+                    ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange/20'
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
               >
                 {currencyLabels[cur]} ({currencySymbols[cur]})
               </button>
             ))}
           </div>
 
-          {/* Balance Display */}
-          <div className="bg-gradient-to-r from-purple-900/30 to-orange-900/20 rounded-2xl p-6 border border-border">
-            <p className="text-text-muted text-sm">{currencyLabels[activeCurrency]} Balance</p>
-            <p className="text-4xl font-bold">
-              {hideBalance ? '••••••' : `${currencySymbols[activeCurrency]}${balances[activeCurrency].toLocaleString()}`}
-            </p>
-            <div className="flex gap-3 mt-4">
-              <Link href="/dashboard/withdraw" className="bg-orange text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-orange-600 transition">
-                <i className="fa-solid fa-arrow-down mr-2"></i>Withdraw
-              </Link>
-              <Link href="/dashboard/topup" className="border border-border text-text-primary px-4 py-2 rounded-full text-sm font-semibold hover:border-orange transition">
-                <i className="fa-solid fa-arrow-up mr-2"></i>Top Up
-              </Link>
+          {/* Balance Card */}
+          <div className="bg-gradient-to-br from-purple-900/40 to-orange-900/30 rounded-2xl p-6 border border-border relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-orange-500/20 rounded-full blur-3xl"></div>
+
+            <div className="relative z-10">
+              <p className="text-text-muted text-sm">{currencyLabels[activeCurrency]} Balance</p>
+              <p className="text-4xl font-bold">
+                {hideBalance
+                  ? '••••••'
+                  : `${currencySymbols[activeCurrency]}${balances[activeCurrency].toLocaleString()}`}
+              </p>
+
+              <div className="flex flex-wrap gap-3 mt-4">
+                <Link
+                  href={`/dashboard/withdraw?currency=${currencyNames[activeCurrency]}`}
+                  className="bg-orange text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-orange-600 transition shadow-lg shadow-orange/30"
+                >
+                  <i className="fa-solid fa-arrow-down mr-2"></i>Withdraw {currencyNames[activeCurrency]}
+                </Link>
+                <Link
+                  href="/dashboard/topup"
+                  className="border border-border text-text-primary px-5 py-2 rounded-full text-sm font-semibold hover:border-orange transition"
+                >
+                  <i className="fa-solid fa-arrow-up mr-2"></i>Top Up
+                </Link>
+                <Link
+                  href="/dashboard/convert"
+                  className="border border-border text-text-primary px-5 py-2 rounded-full text-sm font-semibold hover:border-orange transition"
+                >
+                  <i className="fa-solid fa-arrow-right-arrow-left mr-2"></i>Convert
+                </Link>
+              </div>
             </div>
           </div>
 
-          {/* Gift Points Section */}
-          <div className="bg-bg-card rounded-2xl p-6 border border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <i className="fa-solid fa-gift text-2xl text-orange"></i>
-                <div>
-                  <p className="font-bold">Gift Points</p>
-                  <p className="text-text-muted text-sm">10 points = ₦1</p>
-                </div>
+          {/* Gift Points */}
+          <div className="bg-bg-card rounded-2xl p-4 border border-border flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg">
+                <i className="fa-solid fa-gift"></i>
               </div>
-              <p className="text-2xl font-bold text-orange">
-                {hideBalance ? '••••' : balances.gift_points.toLocaleString()}
-              </p>
+              <div>
+                <p className="font-semibold">Gift Points</p>
+                <p className="text-text-muted text-xs">10 points = ₦1</p>
+              </div>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button className="bg-orange/20 text-orange px-4 py-1.5 rounded-full text-sm font-semibold hover:bg-orange/30 transition">
-                Redeem Points
-              </button>
-              <button className="border border-border text-text-muted px-4 py-1.5 rounded-full text-sm hover:border-orange transition">
-                View History
-              </button>
+            <p className="text-2xl font-bold text-orange">
+              {hideBalance ? '••••' : balances.gift_points.toLocaleString()}
+            </p>
+          </div>
+
+          {/* Crypto Deposit Addresses */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="bg-bg-card rounded-2xl p-5 border border-border hover:border-orange transition">
+              <div className="flex items-center gap-2 mb-2">
+                <i className="fa-brands fa-bitcoin text-2xl text-[#f7931a]"></i>
+                <h3 className="font-bold">Bitcoin (BTC)</h3>
+              </div>
+              <p className="text-text-muted text-xs mb-2">Send BTC to this address. Auto-converted to Naira.</p>
+              <div className="bg-black/40 rounded-xl p-3 border border-border">
+                <p className="text-xs text-text-muted mb-1">Address</p>
+                <p className="font-mono text-xs break-all text-orange">{BTC_ADDRESS}</p>
+              </div>
+              <div className="mt-2 text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-2">
+                <i className="fa-solid fa-triangle-exclamation mr-1"></i>Min: 0.00001 BTC
+              </div>
+            </div>
+
+            <div className="bg-bg-card rounded-2xl p-5 border border-border hover:border-orange transition">
+              <div className="flex items-center gap-2 mb-2">
+                <i className="fa-solid fa-coins text-2xl text-[#26a17b]"></i>
+                <h3 className="font-bold">USDT (TRC20)</h3>
+              </div>
+              <p className="text-text-muted text-xs mb-2">Send USDT (TRC20). Auto-converted to Naira.</p>
+              <div className="bg-black/40 rounded-xl p-3 border border-border">
+                <p className="text-xs text-text-muted mb-1">Address</p>
+                <p className="font-mono text-xs break-all text-orange">{USDT_ADDRESS}</p>
+              </div>
+              <div className="mt-2 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg p-2">
+                <i className="fa-solid fa-triangle-exclamation mr-1"></i>Send only on TRC20. Min: 10 USDT
+              </div>
             </div>
           </div>
 
@@ -146,7 +202,10 @@ export default function Wallet() {
             {isLoading ? (
               <p className="text-text-muted">Loading...</p>
             ) : transactions.length === 0 ? (
-              <p className="text-text-muted">No transactions yet.</p>
+              <div className="text-center py-6">
+                <i className="fa-regular fa-clock text-4xl text-text-muted mb-2 block"></i>
+                <p className="text-text-muted">No transactions yet.</p>
+              </div>
             ) : (
               <div className="space-y-3">
                 {transactions.map((tx) => (
