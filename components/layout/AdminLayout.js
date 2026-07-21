@@ -17,61 +17,25 @@ export default function AdminLayout({ children }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    // If still loading, wait
-    if (loading) return;
-
-    const checkAdmin = async () => {
-      if (!user) {
-        // Not logged in, redirect to login
-        router.push('/auth/login');
-        setChecking(false);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('is_admin')
-          .eq('id', user.id)
-          .single();
-        
-        if (data?.is_admin === true) {
-          setIsAdmin(true);
-        } else {
-          router.push('/dashboard');
-        }
-      } catch (err) {
-        console.error('Admin check error:', err);
-        router.push('/dashboard');
-      } finally {
-        setChecking(false);
-      }
-    };
-
-    checkAdmin();
-  }, [user, loading, router]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/');
   };
 
-  if (loading || checking) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen text-text-primary">
         <div className="text-center">
           <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
-          <p className="mt-3 text-text-muted">Loading admin panel...</p>
+          <p className="mt-3 text-text-muted">Loading...</p>
         </div>
       </div>
     );
   }
 
-  if (!user || !isAdmin) {
+  if (!user) {
+    router.push('/auth/login');
     return null;
   }
 
@@ -90,7 +54,6 @@ export default function AdminLayout({ children }) {
             </Link>
             <p className="text-xs text-orange font-semibold mt-1">Admin Panel</p>
           </div>
-
           <nav className="flex-1 space-y-1">
             {navItems.map((item) => {
               const active = isActive(item.href);
@@ -114,7 +77,6 @@ export default function AdminLayout({ children }) {
               );
             })}
           </nav>
-
           <div className="border-t border-border pt-4 space-y-2">
             <Link
               href="/dashboard"
