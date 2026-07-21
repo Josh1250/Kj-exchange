@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router'; // ✅ REQUIRED
 import { useAuth } from '../_app';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
@@ -6,6 +7,7 @@ import Head from 'next/head';
 
 export default function Notifications() {
   const { user, loading } = useAuth();
+  const router = useRouter();
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
@@ -15,25 +17,36 @@ export default function Notifications() {
   }, [user]);
 
   const fetchNotifications = async () => {
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    setNotifications(data || []);
+    try {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
   };
 
   const markAllAsRead = async () => {
-    await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('user_id', user.id)
-      .eq('read', false);
-    fetchNotifications();
+    try {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .eq('read', false);
+      fetchNotifications();
+    } catch (err) {
+      console.error('Error marking as read:', err);
+    }
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  if (!user) return null;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
+  if (!user) {
+    router.push('/auth/login');
+    return null;
+  }
 
   return (
     <>
@@ -44,7 +57,10 @@ export default function Notifications() {
         <div className="max-w-3xl mx-auto">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">Notifications</h1>
-            <button onClick={markAllAsRead} className="text-sm text-orange hover:underline">
+            <button
+              onClick={markAllAsRead}
+              className="text-sm text-orange hover:underline"
+            >
               Mark all as read
             </button>
           </div>
@@ -58,7 +74,9 @@ export default function Notifications() {
             ) : (
               notifications.map((notif) => (
                 <div key={notif.id} className={`p-4 ${notif.read ? 'opacity-60' : ''}`}>
-                  <p className="text-sm text-text-muted">{new Date(notif.created_at).toLocaleString()}</p>
+                  <p className="text-sm text-text-muted">
+                    {new Date(notif.created_at).toLocaleString()}
+                  </p>
                   <p className="text-text-primary">{notif.message}</p>
                 </div>
               ))
