@@ -10,7 +10,7 @@ const navItems = [
   { name: 'Products', href: '/dashboard/products', icon: 'fa-solid fa-box' },
   { name: 'Transactions', href: '/dashboard/orders', icon: 'fa-solid fa-credit-card' },
   { name: 'Wallet', href: '/dashboard/wallet', icon: 'fa-solid fa-wallet' },
-  { name: 'Referral', href: '/dashboard/referral', icon: 'fa-solid fa-user-group' }, // ✅ ADDED
+  { name: 'Referral', href: '/dashboard/referral', icon: 'fa-solid fa-user-group' },
   { name: 'Profile', href: '/dashboard/profile', icon: 'fa-solid fa-user' },
   { name: 'Settings', href: '/dashboard/settings', icon: 'fa-solid fa-gear' },
 ];
