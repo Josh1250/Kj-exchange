@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import { useAuth } from '../_app';
 import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 import Link from 'next/link';
 
 export default function AdminDashboard() {
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalOrders: 0,
@@ -20,27 +22,27 @@ export default function AdminDashboard() {
   const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push('/auth/login');
-        return;
-      }
+    if (loading) return;
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+    const checkAdmin = async () => {
       const { data, error } = await supabase
         .from('users')
         .select('is_admin')
-        .eq('id', session.user.id)
+        .eq('id', user.id)
         .single();
       if (error || !data?.is_admin) {
         router.push('/dashboard');
         return;
       }
       setIsAdmin(true);
-      setLoading(false);
+      setChecking(false);
       fetchStats();
     };
-    checkAuth();
-  }, [router]);
+    checkAdmin();
+  }, [user, loading, router]);
 
   const fetchStats = async () => {
     setFetching(true);
@@ -83,7 +85,7 @@ export default function AdminDashboard() {
     }
   };
 
-  if (loading) {
+  if (loading || checking) {
     return (
       <div className="flex items-center justify-center min-h-screen text-text-primary">
         <div className="text-center">
@@ -94,7 +96,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!isAdmin) {
+  if (!user || !isAdmin) {
     return null;
   }
 
