@@ -5,11 +5,19 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
 
+// Platform wallet addresses (your addresses)
+const PLATFORM_WALLETS = {
+  BTC: '1HjJpZByFHnhSPZ37qStqCMUqVGaQvKw4i',
+  USDT: 'TJpaXiQChRaGHaZzYqb3Qngf26EafH5CbH',
+  ETH: '0x61175C09a683755AE00069b20D3CF233Cd02E536',
+  SOL: 'HBpjJDV6mh5jSMbmm4ujFYv7q7YzgJZwnt4pJwP6s7qh',
+};
+
 const CRYPTO_ASSETS = [
-  { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', wallet: '1HjJpZByFHnhSPZ37qStqCMUqVGaQvKw4i', network: 'Bitcoin Network', min: 0.001 },
-  { id: 'USDT', name: 'Tether', icon: 'fa-solid fa-coins', color: '#26a17b', wallet: 'TJpaXiQChRaGHaZzYqb3Qngf26EafH5CbH', network: 'TRC20', min: 10 },
-  { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea', wallet: '0x61175C09a683755AE00069b20D3CF233Cd02E536', network: 'ERC20', min: 0.01 },
-  { id: 'SOL', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF', wallet: 'HBpjJDV6mh5jSMbmm4ujFYv7q7YzgJZwnt4pJwP6s7qh', network: 'Solana', min: 0.1 },
+  { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', network: 'Bitcoin Network', min: 0.001, rateKey: 'btc' },
+  { id: 'USDT', name: 'Tether', icon: 'fa-solid fa-coins', color: '#26a17b', network: 'TRC20', min: 10, rateKey: 'usdt', warning: '⚠️ Send USDT only via TRC20 network.' },
+  { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea', network: 'ERC20', min: 0.01, rateKey: 'eth' },
+  { id: 'SOL', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF', network: 'Solana', min: 0.1, rateKey: 'sol' },
 ];
 
 export default function SellCrypto() {
@@ -17,7 +25,6 @@ export default function SellCrypto() {
   const router = useRouter();
   const [selectedAsset, setSelectedAsset] = useState(CRYPTO_ASSETS[0]);
   const [amount, setAmount] = useState('');
-  const [userWallet, setUserWallet] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -60,6 +67,17 @@ export default function SellCrypto() {
     }
   };
 
+  const getUsdRate = () => {
+    const ngnRate = 1550;
+    return getRate() / ngnRate;
+  };
+
+  const estimatedNgn = () => {
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) return 0;
+    return amt * getRate();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -74,11 +92,6 @@ export default function SellCrypto() {
     }
     if (cryptoAmount < selectedAsset.min) {
       setError(`Minimum amount is ${selectedAsset.min} ${selectedAsset.id}`);
-      setSubmitting(false);
-      return;
-    }
-    if (!userWallet || userWallet.length < 10) {
-      setError('Please enter your wallet address');
       setSubmitting(false);
       return;
     }
@@ -97,7 +110,6 @@ export default function SellCrypto() {
         value_ngn: valueNgn,
         status: 'pending',
         details: {
-          user_wallet: userWallet,
           asset_name: selectedAsset.name,
           network: selectedAsset.network,
         },
@@ -112,7 +124,6 @@ export default function SellCrypto() {
       setSuccess(`Order submitted! You'll receive ₦${valueNgn.toLocaleString()} after verification.`);
       setShowWalletInfo(true);
       setAmount('');
-      setUserWallet('');
     }
     setSubmitting(false);
   };
@@ -134,6 +145,7 @@ export default function SellCrypto() {
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
             {!showWalletInfo ? (
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Asset Selection */}
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Crypto Asset</label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -153,51 +165,81 @@ export default function SellCrypto() {
                   </div>
                 </div>
 
+                {/* Selected Asset Info */}
                 <div className="bg-black/20 rounded-lg p-3 flex items-center justify-between border border-border">
                   <div className="flex items-center gap-3">
                     <i className={`${selectedAsset.icon} text-2xl`} style={{ color: selectedAsset.color }}></i>
                     <div>
-                      <p className="font-semibold">{selectedAsset.name} ({selectedAsset.id})</p>
+                      <p className="font-semibold">{selectedAsset.name}</p>
                       <p className="text-xs text-text-muted">{selectedAsset.network}</p>
+                      <p className="text-xs text-text-muted">Min: {selectedAsset.min} {selectedAsset.id}</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-green-400 font-bold">₦{getRate().toLocaleString()}</p>
-                    <p className="text-xs text-text-muted">per {selectedAsset.id}</p>
+                    <p className="text-xs text-text-muted">1 {selectedAsset.id} ≈ ${getUsdRate().toFixed(2)}</p>
                   </div>
                 </div>
 
+                {/* USDT Warning */}
+                {selectedAsset.id === 'USDT' && (
+                  <div className="bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-red-400 text-sm">
+                    <i className="fa-solid fa-triangle-exclamation mr-2"></i>
+                    {selectedAsset.warning}
+                  </div>
+                )}
+
+                {/* Amount Input */}
                 <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">Amount ({selectedAsset.id})</label>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                    placeholder={`Enter amount (min ${selectedAsset.min})`}
-                    required
-                    min={selectedAsset.min}
-                    step="any"
-                  />
-                  {amount && (
-                    <p className="text-text-muted text-sm mt-1">
-                      You'll receive: <span className="text-green-400 font-bold">₦{(parseFloat(amount) * getRate()).toLocaleString()}</span>
-                    </p>
-                  )}
-                  <p className="text-xs text-text-muted mt-1">Min: {selectedAsset.min} {selectedAsset.id}</p>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
+                    Amount ({selectedAsset.id})
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none text-2xl font-bold"
+                      placeholder={`0.00 ${selectedAsset.id}`}
+                      required
+                      min={selectedAsset.min}
+                      step="any"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted text-sm">
+                      {selectedAsset.id}
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">Your Wallet Address</label>
-                  <input
-                    type="text"
-                    value={userWallet}
-                    onChange={(e) => setUserWallet(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                    placeholder="Enter your wallet address where you'll receive Naira"
-                    required
-                  />
-                  <p className="text-xs text-text-muted mt-1">We'll send your Naira payment to this address after verification.</p>
+                {/* Rate Display & Estimated Naira */}
+                <div className="bg-black/20 rounded-lg p-4 border border-border space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-muted">Rate</span>
+                    <span>1 {selectedAsset.id} = ₦{getRate().toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-muted">You'll receive</span>
+                    <span className="text-green-400 font-bold text-lg">
+                      ₦{estimatedNgn().toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quick Amount Buttons (Optional) */}
+                <div className="flex gap-2">
+                  {['25%', '50%', '75%', '100%'].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => {
+                        // We don't have user balance, so just placeholder
+                        // Could be implemented if we fetch user balance
+                      }}
+                      className="flex-1 py-1.5 border border-border rounded-lg text-xs text-text-muted hover:border-orange hover:text-orange transition"
+                    >
+                      {pct}
+                    </button>
+                  ))}
                 </div>
 
                 {error && <p className="text-red-400 text-sm"><i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}</p>}
@@ -207,14 +249,17 @@ export default function SellCrypto() {
                   disabled={submitting}
                   className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {submitting ? <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</> : <><i className="fa-solid fa-paper-plane"></i> Submit Order</>}
+                  {submitting ? <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</> : <><i className="fa-solid fa-paper-plane"></i> Continue ➤</>}
                 </button>
+
                 <p className="text-center text-xs text-text-muted">
-                  Your order will be verified within 5-15 minutes.<br />
+                  Your order will be verified within 5-15 minutes.
+                  <br />
                   <span className="text-green-400 font-bold">0% fees</span> — What you see is what you get.
                 </p>
               </form>
             ) : (
+              // Step 2: Show Platform Wallet Address
               <div className="space-y-6">
                 <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-4">
                   <p className="text-green-400 font-semibold text-center">
@@ -232,16 +277,25 @@ export default function SellCrypto() {
                   <div className="bg-black/40 rounded-lg p-4 border border-border">
                     <p className="text-xs text-text-muted mb-1">Send to this address</p>
                     <div className="flex items-center gap-2">
-                      <p className="font-mono text-sm break-all flex-1 text-orange">{selectedAsset.wallet}</p>
+                      <p className="font-mono text-sm break-all flex-1 text-orange">
+                        {PLATFORM_WALLETS[selectedAsset.id]}
+                      </p>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(selectedAsset.wallet)}
+                        onClick={() => copyToClipboard(PLATFORM_WALLETS[selectedAsset.id])}
                         className="bg-orange/20 hover:bg-orange/30 text-orange px-3 py-1 rounded-lg text-sm transition whitespace-nowrap"
                       >
                         <i className="fa-regular fa-copy mr-1"></i>Copy
                       </button>
                     </div>
                   </div>
+
+                  {selectedAsset.id === 'USDT' && (
+                    <div className="mt-3 bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-red-400 text-sm">
+                      <i className="fa-solid fa-triangle-exclamation mr-2"></i>
+                      Send USDT only via TRC20 network. Sending via any other network will result in permanent loss of funds.
+                    </div>
+                  )}
 
                   <div className="mt-3 bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-3">
                     <p className="text-yellow-400 text-sm font-semibold">
