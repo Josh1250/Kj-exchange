@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router'; // ✅ REQUIRED
+import { useRouter } from 'next/router';
 import { useAuth } from '../_app';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
@@ -7,15 +7,19 @@ import Head from 'next/head';
 
 export default function Profile() {
   const { user, loading } = useAuth();
-  const router = useRouter(); // ✅ Now this works
+  const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
+  const [kycLevel, setKycLevel] = useState(1);
+  const [kycStatus, setKycStatus] = useState('Not Submitted');
+  const [bvn, setBvn] = useState('');
+  const [idFile, setIdFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState(''); // 'success' or 'error'
+  const [messageType, setMessageType] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -27,7 +31,7 @@ export default function Profile() {
     try {
       const { data } = await supabase
         .from('users')
-        .select('full_name, phone, bank_name, account_number, account_name')
+        .select('full_name, phone, bank_name, account_number, account_name, kyc_level, kyc_status, bvn')
         .eq('id', user.id)
         .single();
       if (data) {
@@ -36,6 +40,9 @@ export default function Profile() {
         setBankName(data.bank_name || '');
         setAccountNumber(data.account_number || '');
         setAccountName(data.account_name || '');
+        setKycLevel(data.kyc_level || 1);
+        setKycStatus(data.kyc_status || 'Not Submitted');
+        setBvn(data.bvn || '');
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -72,6 +79,47 @@ export default function Profile() {
     setSaving(false);
   };
 
+  const handleKycSubmit = async (e) => {
+    e.preventDefault();
+    if (!bvn || bvn.length !== 11) {
+      setMessage('Please enter a valid 11-digit BVN.');
+      setMessageType('error');
+      return;
+    }
+    if (!idFile) {
+      setMessage('Please upload a valid ID document.');
+      setMessageType('error');
+      return;
+    }
+
+    setSaving(true);
+    setMessage('');
+    setMessageType('');
+
+    try {
+      // In production, upload file to Supabase Storage first
+      // For now, we'll just update the database with BVN and pending status
+      const { error } = await supabase
+        .from('users')
+        .update({
+          bvn: bvn,
+          kyc_status: 'Pending',
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setKycStatus('Pending');
+      setMessage('KYC submitted! Our team will review it shortly.');
+      setMessageType('success');
+    } catch (err) {
+      setMessage('Error submitting KYC. Please try again.');
+      setMessageType('error');
+      console.error(err);
+    }
+    setSaving(false);
+  };
+
   if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   if (!user) {
     router.push('/auth/login');
@@ -84,8 +132,8 @@ export default function Profile() {
         <title>Profile · KJ Exchange</title>
       </Head>
       <DashboardLayout>
-        <div className="max-w-2xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Profile</h1>
+        <div className="max-w-2xl mx-auto space-y-6">
+          <h1 className="text-2xl font-bold">Profile</h1>
 
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
             <div className="flex items-center gap-4 mb-6">
@@ -95,6 +143,7 @@ export default function Profile() {
               <div>
                 <p className="text-xl font-bold">{fullName || user?.email?.split('@')[0]}</p>
                 <p className="text-text-muted text-sm">{user?.email}</p>
+                <p className="text-xs text-orange">KYC Level: {kycLevel} — {kycStatus}</p>
               </div>
             </div>
 
@@ -167,12 +216,46 @@ export default function Profile() {
                 disabled={saving}
                 className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {saving ? (
-                  <><i className="fa-solid fa-spinner fa-spin"></i> Saving...</>
-                ) : (
-                  <><i className="fa-regular fa-floppy-disk mr-2"></i> Save Changes</>
-                )}
+                {saving ? <><i className="fa-solid fa-spinner fa-spin"></i> Saving...</> : <><i className="fa-regular fa-floppy-disk mr-2"></i> Save Changes</>}
               </button>
+            </form>
+          </div>
+
+          {/* KYC Section */}
+          <div className="bg-bg-card rounded-2xl p-6 border border-border">
+            <h2 className="text-lg font-bold mb-4">KYC Verification</h2>
+            <p className="text-text-muted text-sm mb-4">Level 2 required for withdrawals above ₦50,000.</p>
+            <form onSubmit={handleKycSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">BVN (11 digits)</label>
+                <input
+                  type="text"
+                  value={bvn}
+                  onChange={(e) => setBvn(e.target.value)}
+                  className="w-full bg-black/40 border border-border rounded-lg px-4 py-2 text-text-primary focus:border-orange focus:outline-none"
+                  placeholder="Enter your BVN"
+                  maxLength="11"
+                  pattern="[0-9]{11}"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Upload ID (Passport, Driver's License, or NIN)</label>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setIdFile(e.target.files[0])}
+                  className="w-full bg-black/40 border border-border rounded-lg px-4 py-2 text-text-primary focus:border-orange focus:outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={saving || kycStatus === 'Pending' || kycStatus === 'Approved'}
+                className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving ? <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</> : <><i className="fa-solid fa-upload mr-2"></i> Submit KYC</>}
+              </button>
+              {kycStatus === 'Pending' && <p className="text-yellow-400 text-sm">⏳ Your KYC is pending review.</p>}
+              {kycStatus === 'Approved' && <p className="text-green-400 text-sm">✅ Your KYC is approved! You can now withdraw larger amounts.</p>}
             </form>
           </div>
         </div>
