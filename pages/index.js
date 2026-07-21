@@ -4,10 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
   const [isDark, setIsDark] = useState(true);
-  const [prices, setPrices] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
-  const [changes, setChanges] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
-  const [isLoading, setIsLoading] = useState(true);
   const [openFaq, setOpenFaq] = useState(null);
+  const sectionRefs = useRef([]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('kj-theme');
@@ -32,47 +30,32 @@ export default function Home() {
     }
   };
 
+  // Scroll-triggered animations
   useEffect(() => {
-    const fetchPrices = async () => {
-      try {
-        setIsLoading(true);
-        const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
-        const fxData = await fxRes.json();
-        const ngn = fxData.rates?.NGN || 1550;
-
-        const cryptoRes = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,tether,ethereum,solana&vs_currencies=usd'
-        );
-        const cryptoData = await cryptoRes.json();
-
-        const btcUsd = cryptoData.bitcoin?.usd || 0;
-        const usdtUsd = cryptoData.tether?.usd || 1;
-        const ethUsd = cryptoData.ethereum?.usd || 0;
-        const solUsd = cryptoData.solana?.usd || 0;
-
-        setPrices({
-          BTC: btcUsd,
-          ETH: ethUsd,
-          USDT: usdtUsd,
-          SOL: solUsd,
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
         });
+      },
+      { threshold: 0.1 }
+    );
 
-        setChanges({
-          BTC: (Math.random() * 6 - 2).toFixed(2),
-          ETH: (Math.random() * 6 - 2).toFixed(2),
-          USDT: (Math.random() * 0.5 - 0.25).toFixed(2),
-          SOL: (Math.random() * 8 - 3).toFixed(2),
-        });
-      } catch (error) {
-        console.warn('Price fetch failed', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchPrices();
-    const interval = setInterval(fetchPrices, 60000);
-    return () => clearInterval(interval);
+    sectionRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
   }, []);
+
+  // Helper to add refs
+  const addRef = (el) => {
+    if (el && !sectionRefs.current.includes(el)) {
+      sectionRefs.current.push(el);
+    }
+  };
 
   return (
     <Layout>
@@ -98,7 +81,6 @@ export default function Home() {
 
       {/* ====== HERO ====== */}
       <section className="relative overflow-hidden pt-8 pb-16 md:py-20">
-        {/* Animated background orbs */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"></div>
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/20 rounded-full blur-3xl animate-float-delayed"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-64 bg-purple-400/10 rounded-full blur-2xl animate-pulse-slow"></div>
@@ -109,7 +91,6 @@ export default function Home() {
               🔒 Transparent Pricing — No Hidden Fees
             </span>
 
-            {/* NEW HERO HEADLINE */}
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight animate-fade-up">
               Buy &amp; Sell your{' '}
               <span className="bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
@@ -144,7 +125,6 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Stats */}
             <div className="flex flex-wrap justify-center gap-8 md:gap-16 border-t border-border mt-10 pt-10 max-w-2xl mx-auto animate-fade-up animation-delay-400">
               <div className="text-center">
                 <p className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">500+</p>
@@ -163,30 +143,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ====== LIVE PRICE TICKER ====== */}
-      <div className="bg-bg-card/40 backdrop-blur-sm border-y border-border py-2 overflow-hidden">
-        <div className="flex animate-marquee whitespace-nowrap gap-8 text-sm">
-          {isLoading ? (
-            <span className="text-text-muted">Loading prices...</span>
-          ) : (
-            <>
-              {['BTC', 'ETH', 'USDT', 'SOL'].map((asset) => (
-                <span key={asset} className="flex items-center gap-2">
-                  <span className="font-semibold">{asset}</span>
-                  <span className="text-text-primary">${prices[asset].toFixed(asset === 'USDT' ? 4 : 2)}</span>
-                  <span className={parseFloat(changes[asset]) >= 0 ? 'text-green-400' : 'text-red-400'}>
-                    {parseFloat(changes[asset]) >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(changes[asset]))}%
-                  </span>
-                </span>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-
       {/* ====== SERVICES ====== */}
-      <section id="services" className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14 animate-fade-up">
+      <section
+        id="services"
+        ref={addRef}
+        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+      >
+        <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Services</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Everything You Need</h2>
           <p className="text-text-muted mt-2 max-w-2xl mx-auto">Buy, sell, and manage your assets all in one place</p>
@@ -225,7 +188,7 @@ export default function Home() {
           ].map((service, idx) => (
             <div
               key={idx}
-              className="group bg-bg-card/60 backdrop-blur-md rounded-2xl p-7 border border-border hover:border-orange transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-orange/10 animate-fade-up"
+              className="group bg-bg-card/60 backdrop-blur-md rounded-2xl p-7 border border-border hover:border-orange transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-orange/10"
               style={{ animationDelay: `${idx * 100}ms` }}
             >
               <div className="w-14 h-14 bg-orange/10 rounded-2xl flex items-center justify-center text-3xl mb-5 group-hover:scale-110 transition-transform duration-300">
@@ -245,8 +208,11 @@ export default function Home() {
       </section>
 
       {/* ====== HOW IT WORKS ====== */}
-      <section className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14 animate-fade-up">
+      <section
+        ref={addRef}
+        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+      >
+        <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">How It Works</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Simple Steps to Start</h2>
           <p className="text-text-muted mt-2 max-w-2xl mx-auto">Get started in minutes with our streamlined process</p>
@@ -260,7 +226,7 @@ export default function Home() {
           ].map((item, idx) => (
             <div
               key={idx}
-              className="text-center group animate-fade-up"
+              className="text-center group"
               style={{ animationDelay: `${idx * 150}ms` }}
             >
               <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-r from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-xl mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-purple/20">
@@ -274,9 +240,12 @@ export default function Home() {
       </section>
 
       {/* ====== WHY CHOOSE ====== */}
-      <section className="container mx-auto px-4 py-20 border-t border-border">
+      <section
+        ref={addRef}
+        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+      >
         <div className="grid md:grid-cols-2 gap-16 items-center">
-          <div className="animate-fade-up">
+          <div>
             <span className="text-orange text-sm font-semibold uppercase tracking-widest">Why Choose Us</span>
             <h2 className="text-3xl md:text-4xl font-bold mt-2">
               Built for <span className="bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">Trust &amp; Speed</span>
@@ -288,7 +257,7 @@ export default function Home() {
                 { icon: 'fa-solid fa-puzzle-piece', title: 'Easy to Use', desc: 'Simple steps from signup to payout' },
                 { icon: 'fa-solid fa-arrows-rotate', title: 'Flexible Options', desc: 'Sell gift cards, crypto, pay bills & buy airtime' }
               ].map((item, i) => (
-                <li key={i} className="flex items-start gap-4 group animate-fade-up" style={{ animationDelay: `${i * 100}ms` }}>
+                <li key={i} className="flex items-start gap-4 group" style={{ animationDelay: `${i * 100}ms` }}>
                   <span className="text-2xl text-orange group-hover:scale-110 transition-transform duration-300">
                     <i className={item.icon}></i>
                   </span>
@@ -301,7 +270,7 @@ export default function Home() {
             </ul>
           </div>
 
-          <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-8 border border-border backdrop-blur-sm text-center shadow-2xl animate-fade-up animation-delay-200">
+          <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-8 border border-border backdrop-blur-sm text-center shadow-2xl">
             <div className="text-6xl font-bold text-orange mb-2">🔒</div>
             <p className="text-text-muted text-sm">Transparent Pricing</p>
             <div className="w-16 h-1 bg-orange mx-auto my-4 rounded-full"></div>
@@ -317,8 +286,12 @@ export default function Home() {
       </section>
 
       {/* ====== SUPPORTED ASSETS ====== */}
-      <section id="assets" className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14 animate-fade-up">
+      <section
+        ref={addRef}
+        id="assets"
+        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+      >
+        <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Assets</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">What We Accept</h2>
           <p className="text-text-muted mt-2">Over 50+ gift cards and crypto assets supported</p>
@@ -341,7 +314,7 @@ export default function Home() {
           ].map((asset, i) => (
             <div
               key={i}
-              className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10 animate-fade-up"
+              className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10"
               style={{ animationDelay: `${i * 50}ms` }}
             >
               <i className={`${asset.icon} text-3xl block mb-1`} style={{ color: asset.color }}></i>
@@ -353,8 +326,11 @@ export default function Home() {
       </section>
 
       {/* ====== TESTIMONIALS ====== */}
-      <section className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14 animate-fade-up">
+      <section
+        ref={addRef}
+        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+      >
+        <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Testimonials</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Hear From Our Happy Customers</h2>
         </div>
@@ -382,7 +358,7 @@ export default function Home() {
           ].map((t, i) => (
             <div
               key={i}
-              className="bg-bg-card/60 backdrop-blur-sm rounded-2xl p-6 border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-orange/5 animate-fade-up"
+              className="bg-bg-card/60 backdrop-blur-sm rounded-2xl p-6 border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-orange/5"
               style={{ animationDelay: `${i * 150}ms` }}
             >
               <div className="text-orange text-lg mb-3"><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i></div>
@@ -402,8 +378,12 @@ export default function Home() {
       </section>
 
       {/* ====== FAQ ====== */}
-      <section id="faq" className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="text-center mb-14 animate-fade-up">
+      <section
+        ref={addRef}
+        id="faq"
+        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+      >
+        <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">FAQ</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Frequently Asked Questions</h2>
           <p className="text-text-muted mt-2">Click a question to reveal the answer</p>
@@ -432,7 +412,7 @@ export default function Home() {
             return (
               <div
                 key={i}
-                className="bg-bg-card/60 backdrop-blur-sm rounded-xl border border-border overflow-hidden transition-all duration-300 hover:border-orange/40 animate-fade-up"
+                className="bg-bg-card/60 backdrop-blur-sm rounded-xl border border-border overflow-hidden transition-all duration-300 hover:border-orange/40"
                 style={{ animationDelay: `${i * 100}ms` }}
               >
                 <button
@@ -458,8 +438,11 @@ export default function Home() {
       </section>
 
       {/* ====== FINAL CTA ====== */}
-      <section className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-12 text-center border border-border max-w-4xl mx-auto backdrop-blur-sm shadow-2xl animate-fade-up">
+      <section
+        ref={addRef}
+        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+      >
+        <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-12 text-center border border-border max-w-4xl mx-auto backdrop-blur-sm shadow-2xl">
           <h2 className="text-3xl md:text-4xl font-bold">Join 500+ Customers</h2>
           <p className="text-text-muted mt-3 max-w-xl mx-auto leading-relaxed">
             You're in good company. Hundreds already use KJ Exchange to trade safely and get paid fast.
@@ -488,7 +471,6 @@ export default function Home() {
 
       {/* ====== ANIMATIONS & STYLES ====== */}
       <style jsx global>{`
-        /* Light mode */
         .light-mode {
           --bg-primary: #FAF8FC;
           --bg-secondary: #F0ECF5;
@@ -523,7 +505,7 @@ export default function Home() {
 
         /* Fade animations */
         @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
+          from { opacity: 0; transform: translateY(30px); }
           to { opacity: 1; transform: translateY(0); }
         }
         .animate-fade-up {
@@ -540,7 +522,32 @@ export default function Home() {
           animation: fadeDown 0.8s ease forwards;
         }
 
-        /* Float animations for background orbs */
+        /* Scroll-triggered animations */
+        .scroll-section {
+          opacity: 0;
+          transform: translateY(40px);
+          transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        .scroll-section.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .scroll-section .group,
+        .scroll-section > div,
+        .scroll-section .grid > div {
+          opacity: 0;
+          transform: translateY(30px);
+          transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .scroll-section.visible .group,
+        .scroll-section.visible > div,
+        .scroll-section.visible .grid > div {
+          opacity: 1;
+          transform: translateY(0);
+          transition-delay: calc(var(--index, 0) * 0.1s);
+        }
+
+        /* Float animations */
         @keyframes float {
           0%, 100% { transform: translateY(0) scale(1); }
           50% { transform: translateY(-20px) scale(1.05); }
@@ -560,7 +567,6 @@ export default function Home() {
           animation: pulse-slow 6s ease-in-out infinite;
         }
 
-        /* Pulse for CTA */
         @keyframes pulse-cta {
           0% { box-shadow: 0 0 0 0 rgba(255, 115, 0, 0.4); }
           70% { box-shadow: 0 0 0 15px rgba(255, 115, 0, 0); }
@@ -570,13 +576,11 @@ export default function Home() {
           animation: pulse-cta 2.4s infinite;
         }
 
-        /* Animation delays */
         .animation-delay-200 { animation-delay: 0.2s; }
         .animation-delay-300 { animation-delay: 0.3s; }
         .animation-delay-400 { animation-delay: 0.4s; }
         .animation-delay-500 { animation-delay: 0.5s; }
 
-        /* Ensure animations run on page load */
         .animate-fade-up, .animate-fade-down {
           animation-fill-mode: both;
         }
