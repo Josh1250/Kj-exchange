@@ -36,46 +36,42 @@ export default function SellCrypto() {
   const [ngnRate, setNgnRate] = useState(1550);
   const [isLoadingRates, setIsLoadingRates] = useState(true);
 
-  // Exactly the same fetch logic as your Rate Calculator
   useEffect(() => {
     const fetchRates = async () => {
       try {
         setIsLoadingRates(true);
 
-        // 1. Get NGN rate from ExchangeRate.fun
+        // 1. Get raw NGN rate (no spread)
         const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
         const fxData = await fxRes.json();
-        const ngn = fxData.rates?.NGN || 1550;
-        // Apply a 2% spread to be competitive
-        const ngnWithSpread = ngn * 0.98;
-        setNgnRate(ngnWithSpread);
+        const ngnRaw = fxData.rates?.NGN || 1550;
+        setNgnRate(ngnRaw);
 
-        // 2. Get crypto prices from CoinGecko
+        // 2. Get crypto USD prices
         const cryptoRes = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,tether,ethereum,solana&vs_currencies=usd'
         );
         const cryptoData = await cryptoRes.json();
 
-        // Extract prices
         const btcUsd = cryptoData.bitcoin?.usd || 0;
         const usdtUsd = cryptoData.tether?.usd || 1;
         const ethUsd = cryptoData.ethereum?.usd || 0;
         const solUsd = cryptoData.solana?.usd || 0;
 
-        // Compute NGN rates
-        const btcNgn = btcUsd * ngnWithSpread;
-        const usdtNgn = usdtUsd * ngnWithSpread;
-        const ethNgn = ethUsd * ngnWithSpread;
-        const solNgn = solUsd * ngnWithSpread;
+        // Compute NGN rates (raw market rates)
+        const btcNgn = btcUsd * ngnRaw;
+        const usdtNgn = usdtUsd * ngnRaw;
+        const ethNgn = ethUsd * ngnRaw;
+        const solNgn = solUsd * ngnRaw;
 
         setRates({
-          btc: btcNgn || 95200, // fallback if 0
+          btc: btcNgn || 95200,
           eth: ethNgn || 4210,
           usdt: usdtNgn || 1550,
           sol: solNgn || 185,
         });
 
-        console.log('✅ Rates loaded:', { btc: btcNgn, eth: ethNgn, usdt: usdtNgn, sol: solNgn });
+        console.log('✅ Raw market rates:', { btc: btcNgn, eth: ethNgn, usdt: usdtNgn, sol: solNgn });
       } catch (error) {
         console.warn('⚠️ Rate fetch failed, using fallback', error);
         setRates({
@@ -100,7 +96,6 @@ export default function SellCrypto() {
     return null;
   }
 
-  // Helper to get rate for selected asset
   const getAssetRate = () => {
     switch (selectedAsset.id) {
       case 'BTC': return rates.btc;
@@ -192,9 +187,9 @@ export default function SellCrypto() {
         <div className="max-w-3xl mx-auto">
           <h1 className="text-2xl font-bold mb-6">Sell Crypto</h1>
 
-          {/* Debug info */}
+          {/* Debug info (remove after testing) */}
           <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-2 mb-4 text-xs text-yellow-400">
-            Debug: BTC Rate = ₦{rates.btc.toLocaleString()} | ETH = ₦{rates.eth.toLocaleString()} | USDT = ₦{rates.usdt.toLocaleString()} | SOL = ₦{rates.sol.toLocaleString()}
+            🔍 BTC = ₦{rates.btc.toLocaleString()} | ETH = ₦{rates.eth.toLocaleString()} | USDT = ₦{rates.usdt.toLocaleString()} | SOL = ₦{rates.sol.toLocaleString()}
           </div>
 
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
@@ -207,7 +202,6 @@ export default function SellCrypto() {
                   </div>
                 ) : (
                   <>
-                    {/* Asset Selection */}
                     <div>
                       <label className="block text-sm font-medium text-text-secondary mb-2">Crypto Asset</label>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -227,7 +221,6 @@ export default function SellCrypto() {
                       </div>
                     </div>
 
-                    {/* Selected Asset Info */}
                     <div className="bg-black/20 rounded-lg p-3 flex items-center justify-between border border-border">
                       <div className="flex items-center gap-3">
                         <i className={`${selectedAsset.icon} text-2xl`} style={{ color: selectedAsset.color }}></i>
@@ -249,7 +242,6 @@ export default function SellCrypto() {
                       </div>
                     )}
 
-                    {/* USD Amount Input */}
                     <div>
                       <label className="block text-sm font-medium text-text-secondary mb-2">Amount (USD)</label>
                       <div className="relative">
@@ -272,7 +264,6 @@ export default function SellCrypto() {
                       )}
                     </div>
 
-                    {/* Rate & Fee Display */}
                     <div className="bg-black/20 rounded-lg p-4 border border-border space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-text-muted">Rate</span>
