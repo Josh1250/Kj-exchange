@@ -134,7 +134,6 @@ export default function SellCrypto() {
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
             {!showWalletInfo ? (
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Asset Selection */}
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Crypto Asset</label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -154,7 +153,6 @@ export default function SellCrypto() {
                   </div>
                 </div>
 
-                {/* Selected Asset Info */}
                 <div className="bg-black/20 rounded-lg p-3 flex items-center justify-between border border-border">
                   <div className="flex items-center gap-3">
                     <i className={`${selectedAsset.icon} text-2xl`} style={{ color: selectedAsset.color }}></i>
@@ -169,7 +167,6 @@ export default function SellCrypto() {
                   </div>
                 </div>
 
-                {/* Amount */}
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Amount ({selectedAsset.id})</label>
                   <input
@@ -190,11 +187,8 @@ export default function SellCrypto() {
                   <p className="text-xs text-text-muted mt-1">Min: {selectedAsset.min} {selectedAsset.id}</p>
                 </div>
 
-                {/* User Wallet Address */}
                 <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Your Wallet Address
-                  </label>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">Your Wallet Address</label>
                   <input
                     type="text"
                     value={userWallet}
@@ -203,37 +197,24 @@ export default function SellCrypto() {
                     placeholder="Enter your wallet address where you'll receive Naira"
                     required
                   />
-                  <p className="text-xs text-text-muted mt-1">
-                    We'll send your Naira payment to this address after verification.
-                  </p>
+                  <p className="text-xs text-text-muted mt-1">We'll send your Naira payment to this address after verification.</p>
                 </div>
 
-                {error && (
-                  <div className="bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-red-400 text-sm">
-                    <i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}
-                  </div>
-                )}
+                {error && <p className="text-red-400 text-sm"><i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}</p>}
 
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 shadow-orange shadow-lg flex items-center justify-center gap-2"
+                  className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {submitting ? (
-                    <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</>
-                  ) : (
-                    <><i className="fa-solid fa-paper-plane"></i> Submit Order</>
-                  )}
+                  {submitting ? <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</> : <><i className="fa-solid fa-paper-plane"></i> Submit Order</>}
                 </button>
-
                 <p className="text-center text-xs text-text-muted">
-                  Your order will be verified within 5-15 minutes.
-                  <br />
+                  Your order will be verified within 5-15 minutes.<br />
                   <span className="text-green-400 font-bold">0% fees</span> — What you see is what you get.
                 </p>
               </form>
             ) : (
-              // Step 2: Show Platform Wallet Address
               <div className="space-y-6">
                 <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-4">
                   <p className="text-green-400 font-semibold text-center">
