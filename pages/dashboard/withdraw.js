@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router'; // ✅ ADD THIS
 import { useAuth } from '../_app';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
@@ -66,7 +67,6 @@ export default function Withdraw() {
       return;
     }
 
-    // Create withdrawal transaction
     const { error: txError } = await supabase
       .from('transactions')
       .insert({
@@ -85,7 +85,6 @@ export default function Withdraw() {
       setError('Failed to process withdrawal.');
       console.error(txError);
     } else {
-      // Deduct balance immediately (or after admin approval - we'll do immediate)
       const { error: updateError } = await supabase
         .from('wallets')
         .update({ balance: balance - amt })
@@ -101,7 +100,7 @@ export default function Withdraw() {
     setSubmitting(false);
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   if (!user) {
     router.push('/auth/login');
     return null;
