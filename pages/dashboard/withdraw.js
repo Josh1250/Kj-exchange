@@ -8,39 +8,47 @@ import Head from 'next/head';
 export default function Withdraw() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const { currency } = router.query; // Get currency from URL
+  const { currency = 'NGN' } = router.query;
 
   const [balance, setBalance] = useState(0);
   const [amount, setAmount] = useState('');
+  const [bankCode, setBankCode] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [banks, setBanks] = useState([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Dynamic fields based on currency
-  const [bankName, setBankName] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [accountName, setAccountName] = useState('');
-  const [routingNumber, setRoutingNumber] = useState('');
-  const [walletAddress, setWalletAddress] = useState('');
-  const [mobileMoney, setMobileMoney] = useState('');
-
-  const isNGN = currency === 'NGN' || !currency;
-  const isUSD = currency === 'USD';
-  const isGHS = currency === 'GHS';
+  const currencySymbol = { NGN: '₦', USD: '$', GHS: '₵' }[currency] || '₦';
 
   useEffect(() => {
     if (user) {
       fetchWallet();
+      fetchBanks();
     }
-  }, [user]);
+  }, [user, currency]);
 
   const fetchWallet = async () => {
+    const field = currency === 'USD' ? 'usd_balance' : currency === 'GHS' ? 'ghs_balance' : 'balance';
     const { data } = await supabase
       .from('wallets')
-      .select('balance')
+      .select(field)
       .eq('user_id', user.id)
       .single();
-    if (data) setBalance(data.balance || 0);
+    if (data) setBalance(data[field] || 0);
+  };
+
+  const fetchBanks = async () => {
+    try {
+      const response = await fetch('/api/flutterwave/banks');
+      const data = await response.json();
+      if (data.status === 'success') {
+        setBanks(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching banks:', err);
+    }
   };
 
   const handleWithdraw = async (e) => {
@@ -61,45 +69,39 @@ export default function Withdraw() {
       return;
     }
 
-    // Build metadata based on currency
-    const metadata = {
-      currency,
-      bank_name: bankName,
-      account_number: accountNumber,
-      account_name: accountName,
-      routing_number: routingNumber,
-      wallet_address: walletAddress,
-      mobile_money: mobileMoney,
-    };
-
-    // Create withdrawal transaction (pending)
-    const { error: txError } = await supabase
-      .from('transactions')
-      .insert({
-        user_id: user.id,
-        type: 'withdrawal',
-        amount: -amt,
-        status: 'pending',
-        metadata,
+    try {
+      const response = await fetch('/api/flutterwave/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amt,
+          currency: currency,
+          bank_code: bankCode,
+          account_number: accountNumber,
+          account_name: accountName,
+        }),
       });
 
-    if (txError) {
-      setError('Failed to process withdrawal');
-      console.error(txError);
-    } else {
-      // Deduct balance immediately (or after admin approval)
-      await supabase
-        .from('wallets')
-        .update({ balance: balance - amt })
-        .eq('user_id', user.id);
-      setSuccess(`Withdrawal of ${currency} ${amt.toLocaleString()} initiated!`);
-      setAmount('');
-      setBalance(balance - amt);
+      const data = await response.json();
+
+      if (data.success) {
+        setSuccess(`Withdrawal of ${currencySymbol}${amt.toLocaleString()} initiated!`);
+        setAmount('');
+        setBalance(balance - amt);
+        // Refresh balance after a delay
+        setTimeout(fetchWallet, 3000);
+      } else {
+        setError(data.message || 'Withdrawal failed. Please try again.');
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+      console.error(err);
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   if (!user) {
     router.push('/auth/login');
     return null;
@@ -110,11 +112,11 @@ export default function Withdraw() {
       <Head><title>Withdraw · KJ Exchange</title></Head>
       <DashboardLayout>
         <div className="max-w-2xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Withdraw {currency || 'NGN'}</h1>
+          <h1 className="text-2xl font-bold mb-6">Withdraw {currency}</h1>
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
             <div className="flex justify-between items-center mb-4">
               <p className="text-text-muted">Available Balance</p>
-              <p className="text-xl font-bold">{currency || '₦'}{balance.toLocaleString()}</p>
+              <p className="text-xl font-bold">{currencySymbol}{balance.toLocaleString()}</p>
             </div>
 
             <form onSubmit={handleWithdraw} className="space-y-4">
@@ -132,119 +134,46 @@ export default function Withdraw() {
                 />
               </div>
 
-              {/* NGN Fields */}
-              {isNGN && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Bank Name</label>
-                    <input
-                      type="text"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                      placeholder="e.g., GTBank"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Account Number</label>
-                    <input
-                      type="text"
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                      placeholder="10-digit account number"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Account Name</label>
-                    <input
-                      type="text"
-                      value={accountName}
-                      onChange={(e) => setAccountName(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                      placeholder="Account holder name"
-                      required
-                    />
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Bank</label>
+                <select
+                  value={bankCode}
+                  onChange={(e) => setBankCode(e.target.value)}
+                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                  required
+                >
+                  <option value="">Select a bank</option>
+                  {banks.map((bank) => (
+                    <option key={bank.code} value={bank.code}>
+                      {bank.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              {/* USD Fields */}
-              {isUSD && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Bank Name (US)</label>
-                    <input
-                      type="text"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                      placeholder="e.g., Chase Bank"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Account Number</label>
-                    <input
-                      type="text"
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                      placeholder="US account number"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Routing Number</label>
-                    <input
-                      type="text"
-                      value={routingNumber}
-                      onChange={(e) => setRoutingNumber(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                      placeholder="9-digit routing number"
-                      required
-                    />
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Account Number</label>
+                <input
+                  type="text"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                  placeholder="Enter account number"
+                  required
+                />
+              </div>
 
-              {/* GHS Fields */}
-              {isGHS && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Bank Name (Ghana)</label>
-                    <input
-                      type="text"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                      placeholder="e.g., Ecobank Ghana"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Account Number</label>
-                    <input
-                      type="text"
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                      placeholder="Ghana account number"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Mobile Money (Optional)</label>
-                    <input
-                      type="text"
-                      value={mobileMoney}
-                      onChange={(e) => setMobileMoney(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                      placeholder="e.g., 0241234567 (MTN MoMo)"
-                    />
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Account Name</label>
+                <input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                  placeholder="Account holder name"
+                  required
+                />
+              </div>
 
               {error && <p className="text-red-400 text-sm">{error}</p>}
               {success && <p className="text-green-400 text-sm">{success}</p>}
