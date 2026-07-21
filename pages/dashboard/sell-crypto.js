@@ -14,13 +14,12 @@ const PLATFORM_WALLETS = {
 };
 
 const CRYPTO_ASSETS = [
-  { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', network: 'Bitcoin Network', min: 0.001 },
+  { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', network: 'Bitcoin Network', min: 0.000015 },
   { id: 'USDT', name: 'Tether', icon: 'fa-solid fa-coins', color: '#26a17b', network: 'TRC20', min: 10 },
   { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea', network: 'ERC20', min: 0.01 },
   { id: 'SOL', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF', network: 'Solana', min: 0.1 },
 ];
 
-// Fee percentage (1%)
 const FEE_PERCENTAGE = 0.01; // 1%
 
 export default function SellCrypto() {
@@ -53,7 +52,8 @@ export default function SellCrypto() {
         }
         setNgnRate(ngn);
 
-        const symbols = ['BTCUSDT', 'ETHUSDT', 'USDTUSDT', 'SOLUSDT'];
+        // Fetch all prices including USDTUSDT
+        const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'USDTUSDT'];
         const pricePromises = symbols.map(sym =>
           fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}`)
             .then(res => res.json())
@@ -65,11 +65,18 @@ export default function SellCrypto() {
         const priceMap = {
           BTC: prices.find(p => p.symbol === 'BTCUSDT')?.price || 0,
           ETH: prices.find(p => p.symbol === 'ETHUSDT')?.price || 0,
-          USDT: prices.find(p => p.symbol === 'USDTUSDT')?.price || 1,
           SOL: prices.find(p => p.symbol === 'SOLUSDT')?.price || 0,
+          USDT: prices.find(p => p.symbol === 'USDTUSDT')?.price || 1, // fallback to 1
         };
 
         setRates({
+          btc: priceMap.BTC * ngn,
+          eth: priceMap.ETH * ngn,
+          usdt: priceMap.USDT * ngn,
+          sol: priceMap.SOL * ngn,
+        });
+
+        console.log('Rates fetched:', {
           btc: priceMap.BTC * ngn,
           eth: priceMap.ETH * ngn,
           usdt: priceMap.USDT * ngn,
@@ -212,7 +219,6 @@ export default function SellCrypto() {
                   </div>
                 ) : (
                   <>
-                    {/* Asset Selection */}
                     <div>
                       <label className="block text-sm font-medium text-text-secondary mb-2">Crypto Asset</label>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -232,7 +238,6 @@ export default function SellCrypto() {
                       </div>
                     </div>
 
-                    {/* Selected Asset Info */}
                     <div className="bg-black/20 rounded-lg p-3 flex items-center justify-between border border-border">
                       <div className="flex items-center gap-3">
                         <i className={`${selectedAsset.icon} text-2xl`} style={{ color: selectedAsset.color }}></i>
@@ -255,7 +260,6 @@ export default function SellCrypto() {
                       </div>
                     )}
 
-                    {/* Amount */}
                     <div>
                       <label className="block text-sm font-medium text-text-secondary mb-2">Amount ({selectedAsset.id})</label>
                       <div className="relative">
@@ -273,13 +277,11 @@ export default function SellCrypto() {
                       </div>
                     </div>
 
-                    {/* Rate & Estimated */}
                     <div className="bg-black/20 rounded-lg p-4 border border-border space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-text-muted">Rate</span>
                         <span>1 {selectedAsset.id} = ₦{rate.toLocaleString()}</span>
                       </div>
-                      {/* Transaction Fee displayed clearly */}
                       <div className="flex justify-between text-sm text-text-muted">
                         <span>Transaction Fee ({FEE_PERCENTAGE * 100}%)</span>
                         <span className="text-orange">- ₦{fee.toLocaleString()}</span>
