@@ -26,10 +26,49 @@ export default function Wallet() {
   const [topUpCurrency, setTopUpCurrency] = useState('NGN');
   const [topUpLoading, setTopUpLoading] = useState(false);
   const [topUpError, setTopUpError] = useState('');
+  const [verifying, setVerifying] = useState(false);
 
-  // Platform wallet addresses
-  const BTC_ADDRESS = '1HjJpZByFHnhSPZ37qStqCMUqVGaQvKw4i';
-  const USDT_ADDRESS = 'TJpaXiQChRaGHaZzYqb3Qngf26EafH5CbH';
+  // Check if we just returned from Flutterwave
+  useEffect(() => {
+    const { transaction_id, status } = router.query;
+    if (transaction_id && status) {
+      verifyPayment(transaction_id, status);
+    }
+  }, [router.query]);
+
+  const verifyPayment = async (transactionId, status) => {
+    if (status === 'successful') {
+      setVerifying(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const response = await fetch('/api/flutterwave/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ transaction_id: transactionId }),
+        });
+        const data = await response.json();
+        if (data.success) {
+          fetchWalletData();
+          alert('Your wallet has been credited successfully.');
+          router.replace('/dashboard/wallet', undefined, { shallow: true });
+        } else {
+          alert('Payment verification failed. Please contact support.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Error verifying payment.');
+      } finally {
+        setVerifying(false);
+      }
+    } else if (status === 'cancelled') {
+      alert('You cancelled the payment.');
+      router.replace('/dashboard/wallet', undefined, { shallow: true });
+    }
+  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -75,7 +114,6 @@ export default function Wallet() {
     }
   };
 
-  // UPDATED: Top-up handler with Authorization header
   const handleTopUp = async (e) => {
     e.preventDefault();
     setTopUpLoading(true);
@@ -89,12 +127,11 @@ export default function Wallet() {
         return;
       }
 
-      // Get user's access token
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
       if (!token) {
-        setTopUpError('You need to be logged in to top up.');
+        setTopUpError('You need to be logged in.');
         setTopUpLoading(false);
         return;
       }
@@ -111,13 +148,12 @@ export default function Wallet() {
       const data = await response.json();
 
       if (data.success && data.payment_link) {
-        // Redirect to Flutterwave payment page
         window.location.href = data.payment_link;
       } else {
-        setTopUpError(data.message || 'Failed to initialize payment. Please try again.');
+        setTopUpError(data.message || 'Failed to initialize payment.');
       }
     } catch (err) {
-      setTopUpError('An error occurred. Please try again.');
+      setTopUpError('An error occurred.');
       console.error(err);
     } finally {
       setTopUpLoading(false);
@@ -137,6 +173,14 @@ export default function Wallet() {
         <title>Wallet · KJ Exchange</title>
       </Head>
       <DashboardLayout>
+        {verifying && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="text-white text-center">
+              <i className="fa-solid fa-spinner fa-spin text-4xl"></i>
+              <p className="mt-2">Verifying your payment...</p>
+            </div>
+          </div>
+        )}
         <div className="max-w-4xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">Wallet</h1>
@@ -215,38 +259,6 @@ export default function Wallet() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-bg-card rounded-2xl p-5 border border-border hover:border-orange transition">
-              <div className="flex items-center gap-2 mb-2">
-                <i className="fa-brands fa-bitcoin text-2xl text-[#f7931a]"></i>
-                <h3 className="font-bold">Bitcoin (BTC)</h3>
-              </div>
-              <p className="text-text-muted text-xs mb-2">Send BTC to this address. Auto-converted to Naira.</p>
-              <div className="bg-black/40 rounded-xl p-3 border border-border">
-                <p className="text-xs text-text-muted mb-1">Address</p>
-                <p className="font-mono text-xs break-all text-orange">{BTC_ADDRESS}</p>
-              </div>
-              <div className="mt-2 text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-2">
-                <i className="fa-solid fa-triangle-exclamation mr-1"></i>Min: 0.00001 BTC
-              </div>
-            </div>
-
-            <div className="bg-bg-card rounded-2xl p-5 border border-border hover:border-orange transition">
-              <div className="flex items-center gap-2 mb-2">
-                <i className="fa-solid fa-coins text-2xl text-[#26a17b]"></i>
-                <h3 className="font-bold">USDT (TRC20)</h3>
-              </div>
-              <p className="text-text-muted text-xs mb-2">Send USDT (TRC20). Auto-converted to Naira.</p>
-              <div className="bg-black/40 rounded-xl p-3 border border-border">
-                <p className="text-xs text-text-muted mb-1">Address</p>
-                <p className="font-mono text-xs break-all text-orange">{USDT_ADDRESS}</p>
-              </div>
-              <div className="mt-2 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg p-2">
-                <i className="fa-solid fa-triangle-exclamation mr-1"></i>Send only on TRC20. Min: 10 USDT
-              </div>
-            </div>
-          </div>
-
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
             <h2 className="text-lg font-bold mb-4">Transaction History</h2>
             {isLoading ? (
@@ -280,56 +292,83 @@ export default function Wallet() {
         </div>
       </DashboardLayout>
 
-      {/* Top-Up Modal */}
+      {/* Premium Top-Up Modal */}
       {showTopUpModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-bg-card rounded-2xl p-6 max-w-md w-full border border-border shadow-2xl">
-            <h2 className="text-xl font-bold mb-4">Top Up Wallet</h2>
-            <form onSubmit={handleTopUp} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Amount</label>
-                <input
-                  type="number"
-                  value={topUpAmount}
-                  onChange={(e) => setTopUpAmount(e.target.value)}
-                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                  placeholder="Enter amount"
-                  required
-                  min="100"
-                  step="any"
-                />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-bg-card rounded-2xl p-6 max-w-md w-full border border-border shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-2xl"></div>
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl"></div>
+
+            <div className="relative z-10">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl">
+                  <i className="fa-solid fa-wallet"></i>
+                </div>
+                <h2 className="text-xl font-bold">Top Up Wallet</h2>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Currency</label>
-                <select
-                  value={topUpCurrency}
-                  onChange={(e) => setTopUpCurrency(e.target.value)}
-                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                >
-                  <option value="NGN">Naira (₦)</option>
-                  <option value="USD">USD ($)</option>
-                  <option value="GHS">Cedis (₵)</option>
-                </select>
+
+              <form onSubmit={handleTopUp} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    <i className="fa-solid fa-naira-sign mr-1 text-orange"></i> Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={topUpAmount}
+                    onChange={(e) => setTopUpAmount(e.target.value)}
+                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                    placeholder="Enter amount"
+                    required
+                    min="100"
+                    step="any"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    <i className="fa-solid fa-globe mr-1 text-orange"></i> Currency
+                  </label>
+                  <select
+                    value={topUpCurrency}
+                    onChange={(e) => setTopUpCurrency(e.target.value)}
+                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                  >
+                    <option value="NGN">Naira (₦)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="GHS">Cedis (₵)</option>
+                  </select>
+                </div>
+                {topUpError && (
+                  <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-center gap-2">
+                    <i className="fa-solid fa-circle-exclamation"></i>
+                    <span>{topUpError}</span>
+                  </div>
+                )}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={topUpLoading}
+                    className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
+                  >
+                    {topUpLoading ? (
+                      <><i className="fa-solid fa-spinner fa-spin"></i> Processing...</>
+                    ) : (
+                      <><i className="fa-solid fa-credit-card"></i> Pay with Flutterwave</>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowTopUpModal(false)}
+                    className="flex-1 border border-border text-text-primary py-3 rounded-xl hover:border-orange transition flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-xmark"></i> Cancel
+                  </button>
+                </div>
+              </form>
+              <div className="mt-4 text-center text-text-muted text-xs flex items-center justify-center gap-2">
+                <i className="fa-brands fa-gg text-orange"></i>
+                <span>Powered by Flutterwave</span>
               </div>
-              {topUpError && <p className="text-red-400 text-sm">{topUpError}</p>}
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={topUpLoading}
-                  className="flex-1 bg-orange text-white font-bold py-3 rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
-                >
-                  {topUpLoading ? 'Processing...' : 'Pay with Flutterwave'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowTopUpModal(false)}
-                  className="flex-1 border border-border text-text-primary py-3 rounded-xl hover:border-orange transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-            <p className="text-center text-text-muted text-xs mt-4">Powered by Flutterwave</p>
+            </div>
           </div>
         </div>
       )}
