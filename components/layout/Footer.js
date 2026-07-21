@@ -8,7 +8,6 @@ export default function Footer() {
   const [changes, setChanges] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch live prices for footer ticker
   useEffect(() => {
     const fetchPrices = async () => {
       try {
@@ -53,10 +52,8 @@ export default function Footer() {
 
   return (
     <footer className="relative border-t border-border bg-bg-secondary/80 backdrop-blur-sm">
-      {/* Animated gradient line */}
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 via-orange-500 to-purple-500 bg-[length:200%_100%] animate-shimmer opacity-60"></div>
 
-      {/* Live Price Ticker in Footer */}
       <div className="border-b border-border bg-bg-card/30 backdrop-blur-sm py-2 overflow-hidden">
         <div className="flex animate-marquee whitespace-nowrap gap-8 text-xs">
           {isLoading ? (
@@ -77,7 +74,6 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Main Footer */}
       <div className="container mx-auto px-4 py-12 md:py-16">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Column 1: Brand */}
@@ -103,7 +99,7 @@ export default function Footer() {
                 Secure
               </span>
               <span className="inline-flex items-center gap-1.5 text-xs bg-orange/10 text-orange border border-orange/20 px-3 py-1 rounded-full">
-                ⚡ 0% Fees
+                🔒 No Hidden Fees
               </span>
               <span className="inline-flex items-center gap-1.5 text-xs bg-purple/10 text-purple-light border border-purple/20 px-3 py-1 rounded-full">
                 24/7 Support
@@ -240,7 +236,7 @@ export default function Footer() {
               Secure &amp; Trusted
             </span>
             <span className="text-border">|</span>
-            <span>0% Fees</span>
+            <span>🔒 No Hidden Fees</span>
             <span className="text-border">|</span>
             <a href="#" className="hover:text-orange transition">Privacy Policy</a>
             <span className="text-border">|</span>
@@ -256,7 +252,6 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* ====== ANIMATIONS ====== */}
       <style jsx global>{`
         @keyframes marquee {
           0% { transform: translateX(0); }
