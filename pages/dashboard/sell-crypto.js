@@ -4,8 +4,8 @@ import { useAuth } from '../_app';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
+import Link from 'next/link';
 
-// Platform wallet addresses
 const PLATFORM_WALLETS = {
   BTC: '1HjJpZByFHnhSPZ37qStqCMUqVGaQvKw4i',
   USDT: 'TJpaXiQChRaGHaZzYqb3Qngf26EafH5CbH',
@@ -14,10 +14,10 @@ const PLATFORM_WALLETS = {
 };
 
 const CRYPTO_ASSETS = [
-  { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', network: 'Bitcoin Network', min: 0.001, rateKey: 'btc' },
-  { id: 'USDT', name: 'Tether', icon: 'fa-solid fa-coins', color: '#26a17b', network: 'TRC20', min: 10, rateKey: 'usdt', warning: '⚠️ Send USDT only via TRC20 network.' },
-  { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea', network: 'ERC20', min: 0.01, rateKey: 'eth' },
-  { id: 'SOL', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF', network: 'Solana', min: 0.1, rateKey: 'sol' },
+  { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', network: 'Bitcoin Network', min: 0.001 },
+  { id: 'USDT', name: 'Tether', icon: 'fa-solid fa-coins', color: '#26a17b', network: 'TRC20', min: 10 },
+  { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea', network: 'ERC20', min: 0.01 },
+  { id: 'SOL', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF', network: 'Solana', min: 0.1 },
 ];
 
 export default function SellCrypto() {
@@ -67,11 +67,6 @@ export default function SellCrypto() {
     }
   };
 
-  const getUsdRate = () => {
-    const ngnRate = 1550;
-    return getRate() / ngnRate;
-  };
-
   const estimatedNgn = () => {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) return 0;
@@ -100,6 +95,8 @@ export default function SellCrypto() {
       const rate = getRate();
       const valueNgn = cryptoAmount * rate;
 
+      console.log('Submitting order:', { user_id: user.id, asset: selectedAsset.id, amount: cryptoAmount, rate, value_ngn: valueNgn });
+
       const { data, error } = await supabase
         .from('orders')
         .insert({
@@ -117,15 +114,19 @@ export default function SellCrypto() {
         })
         .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
+      console.log('Order created:', data);
       setOrderId(data[0].id);
       setSuccess(`Order submitted! You'll receive ₦${valueNgn.toLocaleString()} after verification.`);
       setShowWalletInfo(true);
       setAmount('');
     } catch (err) {
+      console.error('Submit error:', err);
       setError('Failed to submit order. Please try again.');
-      console.error(err);
     } finally {
       setSubmitting(false);
     }
@@ -134,7 +135,7 @@ export default function SellCrypto() {
   const copyToClipboard = (text) => {
     try {
       navigator.clipboard.writeText(text);
-      alert('✅ Wallet address copied to clipboard!');
+      alert('✅ Wallet address copied!');
     } catch (err) {
       alert('Please copy the address manually.');
     }
@@ -184,23 +185,19 @@ export default function SellCrypto() {
                   </div>
                   <div className="text-right">
                     <p className="text-green-400 font-bold">₦{getRate().toLocaleString()}</p>
-                    <p className="text-xs text-text-muted">1 {selectedAsset.id} ≈ ${getUsdRate().toFixed(2)}</p>
+                    <p className="text-xs text-text-muted">1 {selectedAsset.id} ≈ ${(getRate()/1550).toFixed(2)}</p>
                   </div>
                 </div>
 
-                {/* USDT Warning */}
                 {selectedAsset.id === 'USDT' && (
                   <div className="bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-red-400 text-sm">
-                    <i className="fa-solid fa-triangle-exclamation mr-2"></i>
-                    {selectedAsset.warning}
+                    <i className="fa-solid fa-triangle-exclamation mr-2"></i> Send USDT only via TRC20 network.
                   </div>
                 )}
 
-                {/* Amount Input */}
+                {/* Amount */}
                 <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Amount ({selectedAsset.id})
-                  </label>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">Amount ({selectedAsset.id})</label>
                   <div className="relative">
                     <input
                       type="number"
@@ -212,13 +209,10 @@ export default function SellCrypto() {
                       min={selectedAsset.min}
                       step="any"
                     />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted text-sm">
-                      {selectedAsset.id}
-                    </div>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted text-sm">{selectedAsset.id}</div>
                   </div>
                 </div>
 
-                {/* Rate Display & Estimated Naira */}
                 <div className="bg-black/20 rounded-lg p-4 border border-border space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-text-muted">Rate</span>
@@ -226,9 +220,7 @@ export default function SellCrypto() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-text-muted">You'll receive</span>
-                    <span className="text-green-400 font-bold text-lg">
-                      ₦{estimatedNgn().toLocaleString()}
-                    </span>
+                    <span className="text-green-400 font-bold text-lg">₦{estimatedNgn().toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -243,37 +235,31 @@ export default function SellCrypto() {
                 </button>
 
                 <p className="text-center text-xs text-text-muted">
-                  Your order will be verified within 5-15 minutes.
-                  <br />
+                  Your order will be verified within 5-15 minutes.<br />
                   <span className="text-green-400 font-bold">0% fees</span> — What you see is what you get.
                 </p>
               </form>
             ) : (
-              // Step 2: Show Platform Wallet Address
               <div className="space-y-6">
                 <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-4">
                   <p className="text-green-400 font-semibold text-center">
-                    <i className="fa-regular fa-circle-check mr-2"></i>Order Submitted Successfully!
+                    <i className="fa-regular fa-circle-check mr-2"></i>Order Submitted!
                   </p>
                   <p className="text-text-muted text-center text-sm mt-1">Order ID: <span className="text-text-primary font-mono">{orderId}</span></p>
                 </div>
 
                 <div className="border border-border rounded-lg p-6">
                   <h3 className="font-bold text-lg mb-2">Send Your {selectedAsset.name}</h3>
-                  <p className="text-text-muted text-sm mb-4">
-                    Send exactly <strong className="text-white">{amount} {selectedAsset.id}</strong> to the address below:
-                  </p>
+                  <p className="text-text-muted text-sm mb-4">Send exactly <strong className="text-white">{amount} {selectedAsset.id}</strong> to:</p>
 
                   <div className="bg-black/40 rounded-lg p-4 border border-border">
                     <p className="text-xs text-text-muted mb-1">Send to this address</p>
                     <div className="flex items-center gap-2">
-                      <p className="font-mono text-sm break-all flex-1 text-orange">
-                        {PLATFORM_WALLETS[selectedAsset.id]}
-                      </p>
+                      <p className="font-mono text-sm break-all flex-1 text-orange">{PLATFORM_WALLETS[selectedAsset.id]}</p>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(PLATFORM_WALLETS[selectedAsset.id])}
-                        className="bg-orange/20 hover:bg-orange/30 text-orange px-3 py-1 rounded-lg text-sm transition whitespace-nowrap"
+                        className="bg-orange/20 hover:bg-orange/30 text-orange px-3 py-1 rounded-lg text-sm transition"
                       >
                         <i className="fa-regular fa-copy mr-1"></i>Copy
                       </button>
@@ -282,8 +268,7 @@ export default function SellCrypto() {
 
                   {selectedAsset.id === 'USDT' && (
                     <div className="mt-3 bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-red-400 text-sm">
-                      <i className="fa-solid fa-triangle-exclamation mr-2"></i>
-                      Send USDT only via TRC20 network. Sending via any other network will result in permanent loss of funds.
+                      <i className="fa-solid fa-triangle-exclamation mr-2"></i> Send USDT only via TRC20 network.
                     </div>
                   )}
 
@@ -291,14 +276,12 @@ export default function SellCrypto() {
                     <p className="text-yellow-400 text-sm font-semibold">
                       <i className="fa-solid fa-clock mr-1"></i>Important
                     </p>
-                    <p className="text-yellow-400/80 text-sm">
-                      Once you've sent the crypto, we'll verify and credit your wallet within 5-15 minutes.
-                    </p>
+                    <p className="text-yellow-400/80 text-sm">Once sent, we'll verify and credit your wallet within 5-15 min.</p>
                   </div>
                 </div>
 
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => setShowWalletInfo(false)} className="flex-1 border border-border text-text-primary px-4 py-2 rounded-full hover:border-orange transition">
+                  <button onClick={() => setShowWalletInfo(false)} className="flex-1 border border-border text-text-primary px-4 py-2 rounded-full hover:border-orange transition">
                     <i className="fa-solid fa-arrow-left mr-2"></i>Back
                   </button>
                   <Link href="/dashboard/orders" className="flex-1 bg-orange text-white font-bold py-2 rounded-full hover:bg-orange-600 transition text-center">
