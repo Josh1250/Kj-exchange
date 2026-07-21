@@ -1,21 +1,36 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { supabase, getSupabaseServer } from '../../lib/supabaseClient';
+import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
-export default function AdminTopups({ user }) {
+export default function AdminTopups() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [topups, setTopups] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/auth/login');
-      return;
-    }
-    fetchTopups();
-  }, [user, router]);
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/login');
+        return;
+      }
+      const { data } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+      if (!data?.is_admin) {
+        router.push('/dashboard');
+        return;
+      }
+      setLoading(false);
+      fetchTopups();
+    };
+    checkAuth();
+  }, [router]);
 
   const fetchTopups = async () => {
     try {
@@ -82,7 +97,9 @@ export default function AdminTopups({ user }) {
     }
   };
 
-  if (!user) return null;
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
+  }
 
   return (
     <>
@@ -146,21 +163,4 @@ export default function AdminTopups({ user }) {
       </AdminLayout>
     </>
   );
-}
-
-export async function getServerSideProps({ req }) {
-  const supabase = getSupabaseServer(req);
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    return { redirect: { destination: '/auth/login', permanent: false } };
-  }
-  const { data } = await supabase
-    .from('users')
-    .select('is_admin')
-    .eq('id', session.user.id)
-    .single();
-  if (!data?.is_admin) {
-    return { redirect: { destination: '/dashboard', permanent: false } };
-  }
-  return { props: { user: session.user } };
 }
