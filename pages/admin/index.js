@@ -1,15 +1,12 @@
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import Head from 'next/head';
+import Link from 'next/link';
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ user }) {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalOrders: 0,
@@ -18,43 +15,22 @@ export default function AdminDashboard() {
     pendingTopups: 0,
     recentOrders: [],
   });
-  const [fetchingStats, setFetchingStats] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push('/auth/login');
-        return;
-      }
-      setUser(session.user);
-
-      // Check admin
-      const { data, error } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', session.user.id)
-        .single();
-
-      if (data?.is_admin) {
-        setIsAdmin(true);
-        fetchStats();
-      } else {
-        router.push('/dashboard');
-      }
-      setLoading(false);
-    };
-    checkAuth();
-  }, [router]);
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+    fetchStats();
+  }, [user, router]);
 
   const fetchStats = async () => {
     try {
-      // Total users
       const { count: totalUsers } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true });
 
-      // Orders stats
       const { data: orders, count: totalOrders } = await supabase
         .from('orders')
         .select('*', { count: 'exact' });
@@ -62,14 +38,12 @@ export default function AdminDashboard() {
       const pendingOrders = orders?.filter(o => o.status === 'pending').length || 0;
       const totalVolume = orders?.reduce((sum, o) => sum + (o.value_ngn || 0), 0) || 0;
 
-      // Pending top-ups
       const { count: pendingTopups } = await supabase
         .from('transactions')
         .select('*', { count: 'exact', head: true })
         .eq('type', 'deposit')
         .eq('status', 'pending');
 
-      // Recent orders
       const { data: recentOrders } = await supabase
         .from('orders')
         .select('*, users(email)')
@@ -87,17 +61,11 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error('Error fetching stats:', err);
     } finally {
-      setFetchingStats(false);
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
-  }
-
-  if (!user || !isAdmin) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <>
@@ -165,7 +133,7 @@ export default function AdminDashboard() {
               <h2 className="text-lg font-bold">Recent Orders</h2>
               <Link href="/admin/orders" className="text-sm text-orange hover:underline">View All</Link>
             </div>
-            {fetchingStats ? (
+            {loading ? (
               <p className="text-text-muted">Loading...</p>
             ) : stats.recentOrders.length === 0 ? (
               <p className="text-text-muted">No orders yet.</p>
@@ -192,4 +160,20 @@ export default function AdminDashboard() {
       </AdminLayout>
     </>
   );
+}
+
+export async function getServerSideProps({ req }) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return { redirect: { destination: '/auth/login', permanent: false } };
+  }
+  const { data } = await supabase
+    .from('users')
+    .select('is_admin')
+    .eq('id', session.user.id)
+    .single();
+  if (!data?.is_admin) {
+    return { redirect: { destination: '/dashboard', permanent: false } };
+  }
+  return { props: { user: session.user } };
 }
