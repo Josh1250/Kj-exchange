@@ -1,86 +1,46 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../_app';
 import { supabase } from '../../lib/supabaseClient';
+import AdminLayout from '../../components/layout/AdminLayout';
 
-export default function AdminDebug() {
-  const { user, loading } = useAuth();
+export default function AdminIndex() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (loading) return;
-
-    if (!user) {
-      setError('Not logged in');
-      setChecking(false);
-      return;
-    }
-
-    const checkAdmin = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('is_admin')
-          .eq('id', user.id)
-          .single();
-        
-        if (error) throw error;
-        setIsAdmin(data?.is_admin === true);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setChecking(false);
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/login');
+        return;
       }
+      setUser(session.user);
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+
+      if (data?.is_admin) {
+        setIsAdmin(true);
+      } else {
+        router.push('/dashboard');
+      }
+      setLoading(false);
     };
+    checkAuth();
+  }, [router]);
 
-    checkAdmin();
-  }, [user, loading]);
-
-  if (loading || checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-white">
-        <div>Loading... (user: {user?.email || 'none'})</div>
-      </div>
-    );
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   }
 
-  return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <h1 className="text-2xl font-bold mb-4">Admin Debug</h1>
-      <div className="space-y-2">
-        <p><strong>Logged in:</strong> {user ? 'Yes' : 'No'}</p>
-        <p><strong>Email:</strong> {user?.email || 'N/A'}</p>
-        <p><strong>User ID:</strong> {user?.id || 'N/A'}</p>
-        <p><strong>Is Admin:</strong> {isAdmin ? 'Yes' : 'No'}</p>
-        {error && <p className="text-red-400"><strong>Error:</strong> {error}</p>}
-      </div>
-      <div className="mt-6 flex gap-4">
-        {user && isAdmin && (
-          <button
-            onClick={() => router.push('/admin/dashboard')}
-            className="bg-orange text-white px-4 py-2 rounded"
-          >
-            Go to Admin Dashboard
-          </button>
-        )}
-        {!isAdmin && user && (
-          <button
-            onClick={async () => {
-              await supabase
-                .from('users')
-                .update({ is_admin: true })
-                .eq('id', user.id);
-              alert('Updated! Refresh the page.');
-            }}
-            className="bg-blue-500 text-white px-4 py-2 rounded"
-          >
-            Make Me Admin
-          </button>
-        )}
-      </div>
-    </div>
-  );
+  if (!user || !isAdmin) {
+    return null;
+  }
+
+  return <AdminLayout>Admin Dashboard Content</AdminLayout>;
 }
