@@ -2,17 +2,38 @@ import { initializePayment } from '../../../lib/flutterwave';
 import { supabase } from '../../../lib/supabaseClient';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  console.log('🔵 API called: /api/flutterwave/initialize');
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   try {
     const { amount, currency = 'NGN' } = req.body;
-    // Get user from auth (you'll need to implement auth middleware)
-    // For now, let's assume you pass user via req.user (you can use Supabase auth)
-    // We'll simplify: get user from session or token
-    const { data: { user }, error } = await supabase.auth.getUser(req.headers.authorization);
-    if (error || !user) return res.status(401).json({ error: 'Unauthorized' });
+    console.log('📦 Request body:', { amount, currency });
+
+    // Get user from session using Supabase's built-in helper
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError) {
+      console.error('❌ Auth error:', authError);
+      return res.status(401).json({ error: 'Unauthorized', details: authError.message });
+    }
+
+    if (!user) {
+      console.error('❌ No user found');
+      return res.status(401).json({ error: 'Unauthorized: No user' });
+    }
+
+    console.log('✅ User authenticated:', user.email);
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
 
     const txRef = `topup_${user.id}_${Date.now()}`;
-    // Create transaction record in database
+
+    // Create transaction record
     const { data: txRecord, error: dbError } = await supabase
       .from('transactions')
       .insert({
@@ -27,16 +48,38 @@ export default async function handler(req, res) {
       .select()
       .single();
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      console.error('❌ DB error:', dbError);
+      return res.status(500).json({ error: 'Database error: ' + dbError.message });
+    }
 
+    console.log('✅ Transaction record created:', txRecord.id);
+
+    // Initialize Flutterwave
     const result = await initializePayment(amount, user.email, txRef, currency);
+    console.log('✅ Flutterwave response:', JSON.stringify(result, null, 2));
+
     if (result.status === 'success') {
-      res.status(200).json({ success: true, payment_link: result.data.link, reference: txRef, transaction_id: txRecord.id });
+      res.status(200).json({
+        success: true,
+        payment_link: result.data.link,
+        reference: txRef,
+        transaction_id: txRecord.id,
+      });
     } else {
-      res.status(400).json({ success: false, message: result.message });
+      console.error('❌ Flutterwave error:', result);
+      res.status(400).json({
+        success: false,
+        message: result.message || 'Flutterwave initialization failed',
+        details: result,
+      });
     }
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Server error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message,
+      stack: error.stack,
+    });
   }
 }
