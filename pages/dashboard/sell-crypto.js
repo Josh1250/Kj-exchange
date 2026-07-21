@@ -20,6 +20,9 @@ const CRYPTO_ASSETS = [
   { id: 'SOL', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF', network: 'Solana', min: 0.1 },
 ];
 
+// Fee percentage (1%)
+const FEE_PERCENTAGE = 0.01; // 1%
+
 export default function SellCrypto() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -38,27 +41,42 @@ export default function SellCrypto() {
     const fetchRates = async () => {
       try {
         setIsLoadingRates(true);
-        // Fetch NGN/USD rate
-        const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
-        const fxData = await fxRes.json();
-        const ngn = fxData.rates?.NGN || 1550;
+        let ngn = 1550;
+        try {
+          const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
+          const fxData = await fxRes.json();
+          if (fxData.rates?.NGN) {
+            ngn = fxData.rates.NGN * 0.98; // 2% spread
+          }
+        } catch (e) {
+          console.warn('FX API failed, using fallback NGN rate');
+        }
         setNgnRate(ngn);
 
-        // Fetch crypto prices
-        const cryptoRes = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana&vs_currencies=usd'
+        const symbols = ['BTCUSDT', 'ETHUSDT', 'USDTUSDT', 'SOLUSDT'];
+        const pricePromises = symbols.map(sym =>
+          fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}`)
+            .then(res => res.json())
+            .then(data => ({ symbol: sym, price: parseFloat(data.price) || 0 }))
+            .catch(() => ({ symbol: sym, price: 0 }))
         );
-        const cryptoData = await cryptoRes.json();
+        const prices = await Promise.all(pricePromises);
+
+        const priceMap = {
+          BTC: prices.find(p => p.symbol === 'BTCUSDT')?.price || 0,
+          ETH: prices.find(p => p.symbol === 'ETHUSDT')?.price || 0,
+          USDT: prices.find(p => p.symbol === 'USDTUSDT')?.price || 1,
+          SOL: prices.find(p => p.symbol === 'SOLUSDT')?.price || 0,
+        };
 
         setRates({
-          btc: (cryptoData.bitcoin?.usd || 0) * ngn,
-          eth: (cryptoData.ethereum?.usd || 0) * ngn,
-          usdt: (cryptoData.tether?.usd || 0) * ngn,
-          sol: (cryptoData.solana?.usd || 0) * ngn,
+          btc: priceMap.BTC * ngn,
+          eth: priceMap.ETH * ngn,
+          usdt: priceMap.USDT * ngn,
+          sol: priceMap.SOL * ngn,
         });
-      } catch (e) {
-        console.warn('Using fallback rates');
-        // Fallback to hardcoded rates if API fails
+      } catch (err) {
+        console.error('Rate fetch error:', err);
         setRates({
           btc: 95200,
           eth: 4210,
@@ -70,7 +88,7 @@ export default function SellCrypto() {
       }
     };
     fetchRates();
-    const interval = setInterval(fetchRates, 60000); // update every 60s
+    const interval = setInterval(fetchRates, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -93,7 +111,15 @@ export default function SellCrypto() {
   const estimatedNgn = () => {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) return 0;
-    return amt * getRate();
+    const beforeFee = amt * getRate();
+    const fee = beforeFee * FEE_PERCENTAGE;
+    return beforeFee - fee;
+  };
+
+  const getFeeAmount = () => {
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) return 0;
+    return (amt * getRate()) * FEE_PERCENTAGE;
   };
 
   const handleSubmit = async (e) => {
@@ -116,7 +142,9 @@ export default function SellCrypto() {
       }
 
       const rate = getRate();
-      const valueNgn = cryptoAmount * rate;
+      const beforeFee = cryptoAmount * rate;
+      const fee = beforeFee * FEE_PERCENTAGE;
+      const valueNgn = beforeFee - fee;
 
       const { data, error } = await supabase
         .from('orders')
@@ -131,6 +159,8 @@ export default function SellCrypto() {
           details: {
             asset_name: selectedAsset.name,
             network: selectedAsset.network,
+            fee: fee,
+            fee_percentage: FEE_PERCENTAGE * 100,
           },
         })
         .select();
@@ -160,6 +190,8 @@ export default function SellCrypto() {
 
   const rate = getRate();
   const usdRate = ngnRate > 0 ? (rate / ngnRate) : 0;
+  const fee = getFeeAmount();
+  const afterFee = estimatedNgn();
 
   return (
     <>
@@ -247,9 +279,14 @@ export default function SellCrypto() {
                         <span className="text-text-muted">Rate</span>
                         <span>1 {selectedAsset.id} = ₦{rate.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between text-sm">
+                      {/* Transaction Fee displayed clearly */}
+                      <div className="flex justify-between text-sm text-text-muted">
+                        <span>Transaction Fee ({FEE_PERCENTAGE * 100}%)</span>
+                        <span className="text-orange">- ₦{fee.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-sm border-t border-border pt-2">
                         <span className="text-text-muted">You'll receive</span>
-                        <span className="text-green-400 font-bold text-lg">₦{estimatedNgn().toLocaleString()}</span>
+                        <span className="text-green-400 font-bold text-lg">₦{afterFee.toLocaleString()}</span>
                       </div>
                     </div>
 
@@ -271,7 +308,6 @@ export default function SellCrypto() {
                 )}
               </form>
             ) : (
-              // Wallet info display (unchanged)
               <div className="space-y-6">
                 <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-4">
                   <p className="text-green-400 font-semibold text-center">
