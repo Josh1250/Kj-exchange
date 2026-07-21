@@ -2,83 +2,46 @@ import Link from 'next/link';
 import Layout from '../components/layout/Layout';
 import { useState, useEffect, useRef } from 'react';
 
-export default function Home() {
-  const [isDark, setIsDark] = useState(true);
-  const [openFaq, setOpenFaq] = useState(null);
-  const sectionRefs = useRef([]);
+// Custom hook using native IntersectionObserver
+function useInView(options) {
+  const ref = useRef(null);
+  const [inView, setInView] = useState(false);
 
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('kj-theme');
-    if (savedTheme === 'light') {
-      setIsDark(false);
-      document.documentElement.classList.add('light-mode');
-    } else {
-      setIsDark(true);
-      document.documentElement.classList.remove('light-mode');
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = !isDark;
-    setIsDark(newTheme);
-    if (newTheme) {
-      document.documentElement.classList.remove('light-mode');
-      localStorage.setItem('kj-theme', 'dark');
-    } else {
-      document.documentElement.classList.add('light-mode');
-      localStorage.setItem('kj-theme', 'light');
-    }
-  };
-
-  // Scroll-triggered animations
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-          }
-        });
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          observer.disconnect(); // Only trigger once
+        }
       },
-      { threshold: 0.1 }
+      { threshold: options?.threshold || 0.1 }
     );
 
-    sectionRefs.current.forEach((el) => {
-      if (el) observer.observe(el);
-    });
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
 
     return () => observer.disconnect();
-  }, []);
+  }, [options]);
 
-  // Helper to add refs
-  const addRef = (el) => {
-    if (el && !sectionRefs.current.includes(el)) {
-      sectionRefs.current.push(el);
-    }
-  };
+  return { ref, inView };
+}
+
+export default function Home() {
+  const [openFaq, setOpenFaq] = useState(null);
+
+  // Each section gets its own observer
+  const services = useInView({ threshold: 0.1 });
+  const how = useInView({ threshold: 0.1 });
+  const why = useInView({ threshold: 0.1 });
+  const assets = useInView({ threshold: 0.1 });
+  const testimonials = useInView({ threshold: 0.1 });
+  const faq = useInView({ threshold: 0.1 });
+  const cta = useInView({ threshold: 0.1 });
 
   return (
     <Layout>
-      {/* Theme Toggle */}
-      <div className="container mx-auto px-4 pt-4 flex justify-end z-20 relative">
-        <button
-          onClick={toggleTheme}
-          className="flex items-center gap-2 bg-bg-card/60 backdrop-blur-sm border border-border rounded-full px-4 py-2 text-sm hover:border-orange transition-all duration-300 shadow-lg"
-        >
-          {isDark ? (
-            <>
-              <span className="text-yellow-400">☀️</span>
-              <span className="text-text-muted">Light</span>
-            </>
-          ) : (
-            <>
-              <span className="text-indigo-400">🌙</span>
-              <span className="text-text-muted">Dark</span>
-            </>
-          )}
-        </button>
-      </div>
-
       {/* ====== HERO ====== */}
       <section className="relative overflow-hidden pt-8 pb-16 md:py-20">
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"></div>
@@ -145,9 +108,11 @@ export default function Home() {
 
       {/* ====== SERVICES ====== */}
       <section
+        ref={services.ref}
         id="services"
-        ref={addRef}
-        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+        className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
+          services.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
       >
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Services</span>
@@ -189,7 +154,7 @@ export default function Home() {
             <div
               key={idx}
               className="group bg-bg-card/60 backdrop-blur-md rounded-2xl p-7 border border-border hover:border-orange transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-orange/10"
-              style={{ animationDelay: `${idx * 100}ms` }}
+              style={{ transitionDelay: `${idx * 100}ms` }}
             >
               <div className="w-14 h-14 bg-orange/10 rounded-2xl flex items-center justify-center text-3xl mb-5 group-hover:scale-110 transition-transform duration-300">
                 <i className={service.icon}></i>
@@ -209,8 +174,10 @@ export default function Home() {
 
       {/* ====== HOW IT WORKS ====== */}
       <section
-        ref={addRef}
-        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+        ref={how.ref}
+        className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
+          how.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
       >
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">How It Works</span>
@@ -227,7 +194,7 @@ export default function Home() {
             <div
               key={idx}
               className="text-center group"
-              style={{ animationDelay: `${idx * 150}ms` }}
+              style={{ transitionDelay: `${idx * 150}ms` }}
             >
               <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-r from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-xl mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-purple/20">
                 {item.step}
@@ -241,8 +208,10 @@ export default function Home() {
 
       {/* ====== WHY CHOOSE ====== */}
       <section
-        ref={addRef}
-        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+        ref={why.ref}
+        className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
+          why.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
       >
         <div className="grid md:grid-cols-2 gap-16 items-center">
           <div>
@@ -257,7 +226,7 @@ export default function Home() {
                 { icon: 'fa-solid fa-puzzle-piece', title: 'Easy to Use', desc: 'Simple steps from signup to payout' },
                 { icon: 'fa-solid fa-arrows-rotate', title: 'Flexible Options', desc: 'Sell gift cards, crypto, pay bills & buy airtime' }
               ].map((item, i) => (
-                <li key={i} className="flex items-start gap-4 group" style={{ animationDelay: `${i * 100}ms` }}>
+                <li key={i} className="flex items-start gap-4 group" style={{ transitionDelay: `${i * 100}ms` }}>
                   <span className="text-2xl text-orange group-hover:scale-110 transition-transform duration-300">
                     <i className={item.icon}></i>
                   </span>
@@ -287,9 +256,11 @@ export default function Home() {
 
       {/* ====== SUPPORTED ASSETS ====== */}
       <section
-        ref={addRef}
+        ref={assets.ref}
         id="assets"
-        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+        className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
+          assets.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
       >
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Assets</span>
@@ -315,7 +286,7 @@ export default function Home() {
             <div
               key={i}
               className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10"
-              style={{ animationDelay: `${i * 50}ms` }}
+              style={{ transitionDelay: `${i * 50}ms` }}
             >
               <i className={`${asset.icon} text-3xl block mb-1`} style={{ color: asset.color }}></i>
               <p className="font-semibold text-sm">{asset.label}</p>
@@ -327,8 +298,10 @@ export default function Home() {
 
       {/* ====== TESTIMONIALS ====== */}
       <section
-        ref={addRef}
-        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+        ref={testimonials.ref}
+        className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
+          testimonials.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
       >
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Testimonials</span>
@@ -359,7 +332,7 @@ export default function Home() {
             <div
               key={i}
               className="bg-bg-card/60 backdrop-blur-sm rounded-2xl p-6 border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-orange/5"
-              style={{ animationDelay: `${i * 150}ms` }}
+              style={{ transitionDelay: `${i * 150}ms` }}
             >
               <div className="text-orange text-lg mb-3"><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i></div>
               <blockquote className="text-text-secondary text-sm italic leading-relaxed">{t.text}</blockquote>
@@ -379,9 +352,11 @@ export default function Home() {
 
       {/* ====== FAQ ====== */}
       <section
-        ref={addRef}
+        ref={faq.ref}
         id="faq"
-        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+        className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
+          faq.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
       >
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">FAQ</span>
@@ -413,7 +388,7 @@ export default function Home() {
               <div
                 key={i}
                 className="bg-bg-card/60 backdrop-blur-sm rounded-xl border border-border overflow-hidden transition-all duration-300 hover:border-orange/40"
-                style={{ animationDelay: `${i * 100}ms` }}
+                style={{ transitionDelay: `${i * 100}ms` }}
               >
                 <button
                   onClick={() => setOpenFaq(isOpen ? null : i)}
@@ -439,8 +414,10 @@ export default function Home() {
 
       {/* ====== FINAL CTA ====== */}
       <section
-        ref={addRef}
-        className="container mx-auto px-4 py-20 border-t border-border scroll-section"
+        ref={cta.ref}
+        className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
+          cta.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
       >
         <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-12 text-center border border-border max-w-4xl mx-auto backdrop-blur-sm shadow-2xl">
           <h2 className="text-3xl md:text-4xl font-bold">Join 500+ Customers</h2>
@@ -459,7 +436,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ====== TAGLINE TICKER (Your Ultimate Exchange Hub) ====== */}
+      {/* ====== TAGLINE TICKER ====== */}
       <div className="border-t border-border bg-bg-card/40 backdrop-blur-sm py-3 overflow-hidden">
         <div className="flex animate-marquee whitespace-nowrap gap-12 text-sm font-medium tracking-wide text-text-secondary">
           <span>✦ Your Ultimate Exchange Hub ✦</span>
@@ -469,7 +446,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ====== ANIMATIONS & STYLES ====== */}
+      {/* ====== GLOBAL STYLES ====== */}
       <style jsx global>{`
         .light-mode {
           --bg-primary: #FAF8FC;
@@ -492,7 +469,6 @@ export default function Home() {
         .light-mode .bg-white\\/5 { background: rgba(78,31,145,0.04); }
         .light-mode .bg-bg-card\\/60 { background: rgba(255,255,255,0.7); }
 
-        /* Marquee */
         @keyframes marquee {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
@@ -503,7 +479,6 @@ export default function Home() {
           width: max-content;
         }
 
-        /* Fade animations */
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(30px); }
           to { opacity: 1; transform: translateY(0); }
@@ -522,68 +497,37 @@ export default function Home() {
           animation: fadeDown 0.8s ease forwards;
         }
 
-        /* Scroll-triggered animations */
-        .scroll-section {
-          opacity: 0;
-          transform: translateY(40px);
-          transition: opacity 0.8s ease, transform 0.8s ease;
-        }
-        .scroll-section.visible {
-          opacity: 1;
-          transform: translateY(0);
-        }
-        .scroll-section .group,
-        .scroll-section > div,
-        .scroll-section .grid > div {
-          opacity: 0;
-          transform: translateY(30px);
-          transition: opacity 0.6s ease, transform 0.6s ease;
-        }
-        .scroll-section.visible .group,
-        .scroll-section.visible > div,
-        .scroll-section.visible .grid > div {
-          opacity: 1;
-          transform: translateY(0);
-          transition-delay: calc(var(--index, 0) * 0.1s);
-        }
-
-        /* Float animations */
         @keyframes float {
           0%, 100% { transform: translateY(0) scale(1); }
           50% { transform: translateY(-20px) scale(1.05); }
         }
-        .animate-float {
-          animation: float 8s ease-in-out infinite;
-        }
-        .animate-float-delayed {
-          animation: float 10s ease-in-out infinite 2s;
-        }
+        .animate-float { animation: float 8s ease-in-out infinite; }
+        .animate-float-delayed { animation: float 10s ease-in-out infinite 2s; }
 
         @keyframes pulse-slow {
           0%, 100% { opacity: 0.3; }
           50% { opacity: 0.7; }
         }
-        .animate-pulse-slow {
-          animation: pulse-slow 6s ease-in-out infinite;
-        }
+        .animate-pulse-slow { animation: pulse-slow 6s ease-in-out infinite; }
 
         @keyframes pulse-cta {
-          0% { box-shadow: 0 0 0 0 rgba(255, 115, 0, 0.4); }
-          70% { box-shadow: 0 0 0 15px rgba(255, 115, 0, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(255, 115, 0, 0); }
+          0% { box-shadow: 0 0 0 0 rgba(255,115,0,0.4); }
+          70% { box-shadow: 0 0 0 15px rgba(255,115,0,0); }
+          100% { box-shadow: 0 0 0 0 rgba(255,115,0,0); }
         }
-        .btn-pulse {
-          animation: pulse-cta 2.4s infinite;
-        }
+        .btn-pulse { animation: pulse-cta 2.4s infinite; }
 
         .animation-delay-200 { animation-delay: 0.2s; }
         .animation-delay-300 { animation-delay: 0.3s; }
         .animation-delay-400 { animation-delay: 0.4s; }
-        .animation-delay-500 { animation-delay: 0.5s; }
 
-        .animate-fade-up, .animate-fade-down {
-          animation-fill-mode: both;
-        }
+        .animate-fade-up, .animate-fade-down { animation-fill-mode: both; }
+
+        /* These are handled via inline classes for scroll sections */
+        .opacity-0 { opacity: 0; }
+        .translate-y-10 { transform: translateY(10px); }
+        .opacity-100 { opacity: 1; }
+        .translate-y-0 { transform: translateY(0); }
       `}</style>
     </Layout>
   );
