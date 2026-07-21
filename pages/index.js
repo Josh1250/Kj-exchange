@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import Layout from '../components/layout/Layout';
 import RateCalculator from '../components/calculator/RateCalculator';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
   const [isDark, setIsDark] = useState(true);
-  const [tradeType, setTradeType] = useState('sell');
+  const [prices, setPrices] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
+  const [changes, setChanges] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('kj-theme');
@@ -30,6 +32,50 @@ export default function Home() {
     }
   };
 
+  // Fetch live prices for ticker
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        setIsLoading(true);
+        const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
+        const fxData = await fxRes.json();
+        const ngn = fxData.rates?.NGN || 1550;
+
+        const cryptoRes = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,tether,ethereum,solana&vs_currencies=usd'
+        );
+        const cryptoData = await cryptoRes.json();
+
+        const btcUsd = cryptoData.bitcoin?.usd || 0;
+        const usdtUsd = cryptoData.tether?.usd || 1;
+        const ethUsd = cryptoData.ethereum?.usd || 0;
+        const solUsd = cryptoData.solana?.usd || 0;
+
+        setPrices({
+          BTC: btcUsd,
+          ETH: ethUsd,
+          USDT: usdtUsd,
+          SOL: solUsd,
+        });
+
+        // Simulate 24h changes (random for demo — could be fetched from another API)
+        setChanges({
+          BTC: (Math.random() * 6 - 2).toFixed(2),
+          ETH: (Math.random() * 6 - 2).toFixed(2),
+          USDT: (Math.random() * 0.5 - 0.25).toFixed(2),
+          SOL: (Math.random() * 8 - 3).toFixed(2),
+        });
+      } catch (error) {
+        console.warn('Price fetch failed', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <Layout>
       {/* Theme Toggle */}
@@ -52,55 +98,51 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Hero */}
-      <section className="container mx-auto px-4 pt-8 pb-16">
-        <div className="text-center max-w-5xl mx-auto">
+      {/* ====== LIVE PRICE TICKER ====== */}
+      <div className="bg-bg-card/40 backdrop-blur-sm border-y border-border py-2 overflow-hidden">
+        <div className="flex animate-marquee whitespace-nowrap gap-8 text-sm">
+          {isLoading ? (
+            <span className="text-text-muted">Loading prices...</span>
+          ) : (
+            <>
+              {['BTC', 'ETH', 'USDT', 'SOL'].map((asset) => (
+                <span key={asset} className="flex items-center gap-2">
+                  <span className="font-semibold">{asset}</span>
+                  <span className="text-text-primary">${prices[asset].toFixed(asset === 'USDT' ? 4 : 2)}</span>
+                  <span className={parseFloat(changes[asset]) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                    {parseFloat(changes[asset]) >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(changes[asset]))}%
+                  </span>
+                </span>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ====== HERO ====== */}
+      <section className="container mx-auto px-4 py-12 md:py-20">
+        <div className="max-w-5xl mx-auto text-center">
+          {/* Tagline */}
           <span className="inline-block bg-orange/10 text-orange border border-orange/20 px-5 py-1.5 rounded-full text-sm font-semibold mb-6 backdrop-blur-sm">
-            ⚡ 0% Fees — No Hidden Charges
+            🔒 Transparent Pricing — No Hidden Fees
           </span>
 
-          <div className="flex bg-black/20 dark:bg-white/5 rounded-xl p-1 max-w-xs mx-auto mb-8 backdrop-blur-sm border border-border">
-            <button
-              className={`flex-1 py-2.5 px-6 rounded-lg text-center font-semibold transition-all duration-300 ${
-                tradeType === 'sell'
-                  ? 'bg-orange text-white shadow-lg shadow-orange/30'
-                  : 'text-text-muted hover:text-text-primary'
-              }`}
-              onClick={() => setTradeType('sell')}
-            >
-              <i className="fa-solid fa-coins mr-2"></i>Sell
-            </button>
-            <button
-              className={`flex-1 py-2.5 px-6 rounded-lg text-center font-semibold transition-all duration-300 ${
-                tradeType === 'buy'
-                  ? 'bg-orange text-white shadow-lg shadow-orange/30'
-                  : 'text-text-muted hover:text-text-primary'
-              }`}
-              onClick={() => setTradeType('buy')}
-            >
-              <i className="fa-solid fa-cart-shopping mr-2"></i>Buy
-            </button>
-          </div>
-
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight">
-            {tradeType === 'sell' ? 'Sell' : 'Buy'} Crypto &amp;{' '}
+            Your{' '}
             <span className="bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
-              Gift Cards
-            </span>
-            <br />
-            With{' '}
+              Ultimate
+            </span>{' '}
+            <br className="hidden sm:block" />
             <span className="bg-gradient-to-r from-orange-400 to-orange-500 bg-clip-text text-transparent">
-              Confidence
+              Exchange Hub
             </span>
           </h1>
 
           <p className="text-text-muted text-lg md:text-xl mt-6 max-w-2xl mx-auto leading-relaxed">
-            {tradeType === 'sell'
-              ? 'Sell your crypto & gift cards instantly. 0% fees. No delays. Just the best rate.'
-              : 'Buy gift cards at the best rates. 0% fees. Instant delivery.'}
+            Buy, sell, and swap crypto & gift cards with live rates, instant payouts, and zero hidden fees.
           </p>
 
-          <div className="flex flex-wrap gap-4 justify-center mt-8">
+          <div className="mt-8 flex flex-wrap gap-4 justify-center">
             <Link
               href="/auth/signup"
               className="group relative bg-orange text-white px-10 py-3.5 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-xl shadow-orange/30 hover:shadow-orange/50 flex items-center gap-2 overflow-hidden"
@@ -118,29 +160,30 @@ export default function Home() {
             </Link>
           </div>
 
+          {/* Stats */}
           <div className="flex flex-wrap justify-center gap-8 md:gap-16 border-t border-border mt-10 pt-10 max-w-2xl mx-auto">
             <div className="text-center">
               <p className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">500+</p>
               <p className="text-text-muted text-sm mt-1">Satisfied Customers</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-bold text-green-400">0%</p>
-              <p className="text-text-muted text-sm mt-1">Fees</p>
-            </div>
-            <div className="text-center">
               <p className="text-3xl font-bold text-white dark:text-black">⭐ 4.9</p>
               <p className="text-text-muted text-sm mt-1">Average Rating</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-green-400">🔒</p>
+              <p className="text-text-muted text-sm mt-1">No Hidden Fees</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Services */}
+      {/* ====== SERVICES ====== */}
       <section id="services" className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Services</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Everything You Need</h2>
-          <p className="text-text-muted mt-2 max-w-2xl mx-auto">Buy, sell, and pay all in one place</p>
+          <p className="text-text-muted mt-2 max-w-2xl mx-auto">Buy, sell, and manage your assets all in one place</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -176,7 +219,8 @@ export default function Home() {
           ].map((service, idx) => (
             <div
               key={idx}
-              className="group bg-bg-card/60 backdrop-blur-md rounded-2xl p-7 border border-border hover:border-orange transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-orange/10"
+              className="group bg-bg-card/60 backdrop-blur-md rounded-2xl p-7 border border-border hover:border-orange transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-orange/10 animate-fade-up"
+              style={{ animationDelay: `${idx * 100}ms` }}
             >
               <div className="w-14 h-14 bg-orange/10 rounded-2xl flex items-center justify-center text-3xl mb-5 group-hover:scale-110 transition-transform duration-300">
                 <i className={service.icon}></i>
@@ -194,16 +238,42 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Why Choose */}
+      {/* ====== HOW IT WORKS ====== */}
+      <section className="container mx-auto px-4 py-20 border-t border-border">
+        <div className="text-center mb-14">
+          <span className="text-orange text-sm font-semibold uppercase tracking-widest">How It Works</span>
+          <h2 className="text-3xl md:text-4xl font-bold mt-2">Simple Steps to Start</h2>
+          <p className="text-text-muted mt-2 max-w-2xl mx-auto">Get started in minutes with our streamlined process</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+          {[
+            { step: '01', title: 'Create Account', desc: 'Sign up for free and verify your identity quickly.' },
+            { step: '02', title: 'Choose Asset', desc: 'Select crypto or gift cards and check live rates.' },
+            { step: '03', title: 'Trade & Get Paid', desc: 'Complete your trade and receive instant payout.' },
+          ].map((item, idx) => (
+            <div
+              key={idx}
+              className="text-center group animate-fade-up"
+              style={{ animationDelay: `${idx * 150}ms` }}
+            >
+              <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-r from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-xl mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-purple/20">
+                {item.step}
+              </div>
+              <h3 className="font-bold text-xl">{item.title}</h3>
+              <p className="text-text-muted text-sm mt-2 leading-relaxed">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ====== WHY CHOOSE ====== */}
       <section className="container mx-auto px-4 py-20 border-t border-border">
         <div className="grid md:grid-cols-2 gap-16 items-center">
           <div>
             <span className="text-orange text-sm font-semibold uppercase tracking-widest">Why Choose Us</span>
             <h2 className="text-3xl md:text-4xl font-bold mt-2">
-              Why People Choose{' '}
-              <span className="bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">
-                KJ Exchange
-              </span>
+              Built for <span className="bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">Trust &amp; Speed</span>
             </h2>
             <ul className="mt-8 space-y-6">
               {[
@@ -212,7 +282,7 @@ export default function Home() {
                 { icon: 'fa-solid fa-puzzle-piece', title: 'Easy to Use', desc: 'Simple steps from signup to payout' },
                 { icon: 'fa-solid fa-arrows-rotate', title: 'Flexible Options', desc: 'Sell gift cards, crypto, pay bills & buy airtime' }
               ].map((item, i) => (
-                <li key={i} className="flex items-start gap-4 group">
+                <li key={i} className="flex items-start gap-4 group animate-fade-up" style={{ animationDelay: `${i * 100}ms` }}>
                   <span className="text-2xl text-orange group-hover:scale-110 transition-transform duration-300">
                     <i className={item.icon}></i>
                   </span>
@@ -225,9 +295,9 @@ export default function Home() {
             </ul>
           </div>
 
-          <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-8 border border-border backdrop-blur-sm text-center shadow-2xl">
-            <div className="text-6xl font-bold text-orange mb-2">0%</div>
-            <p className="text-text-muted text-sm">Fees on all trades</p>
+          <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-8 border border-border backdrop-blur-sm text-center shadow-2xl animate-fade-up">
+            <div className="text-6xl font-bold text-orange mb-2">🔒</div>
+            <p className="text-text-muted text-sm">Transparent Pricing</p>
             <div className="w-16 h-1 bg-orange mx-auto my-4 rounded-full"></div>
             <p className="text-text-muted text-sm">Join 500+ satisfied customers</p>
             <Link
@@ -240,7 +310,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Rate Calculator */}
+      {/* ====== RATE CALCULATOR ====== */}
       <section id="calculator" className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Calculator</span>
@@ -250,7 +320,7 @@ export default function Home() {
         <RateCalculator />
       </section>
 
-      {/* Supported Assets (with real icons) */}
+      {/* ====== SUPPORTED ASSETS ====== */}
       <section id="assets" className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Assets</span>
@@ -275,7 +345,8 @@ export default function Home() {
           ].map((asset, i) => (
             <div
               key={i}
-              className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10"
+              className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10 animate-fade-up"
+              style={{ animationDelay: `${i * 50}ms` }}
             >
               <i className={`${asset.icon} text-3xl block mb-1`} style={{ color: asset.color }}></i>
               <p className="font-semibold text-sm">{asset.label}</p>
@@ -285,7 +356,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* ====== TESTIMONIALS ====== */}
       <section className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Testimonials</span>
@@ -315,7 +386,8 @@ export default function Home() {
           ].map((t, i) => (
             <div
               key={i}
-              className="bg-bg-card/60 backdrop-blur-sm rounded-2xl p-6 border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-orange/5"
+              className="bg-bg-card/60 backdrop-blur-sm rounded-2xl p-6 border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-orange/5 animate-fade-up"
+              style={{ animationDelay: `${i * 150}ms` }}
             >
               <div className="text-orange text-lg mb-3"><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i><i className="fa-solid fa-star"></i></div>
               <blockquote className="text-text-secondary text-sm italic leading-relaxed">{t.text}</blockquote>
@@ -333,7 +405,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FAQ */}
+      {/* ====== FAQ ====== */}
       <section id="faq" className="container mx-auto px-4 py-20 border-t border-border">
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">FAQ</span>
@@ -357,12 +429,13 @@ export default function Home() {
             },
             {
               q: 'Do you charge hidden fees?',
-              a: 'Never. We offer a <strong>0% fee structure</strong>. What you see is exactly what you get — no hidden charges or surprises.'
+              a: 'Never. We offer a <strong>transparent fee structure</strong>. What you see is exactly what you get — no hidden charges or surprises.'
             }
           ].map((faq, i) => (
             <div
               key={i}
-              className="group bg-bg-card/60 backdrop-blur-sm rounded-xl p-5 border border-border hover:border-orange transition-all duration-300 hover:shadow-lg hover:shadow-orange/5"
+              className="group bg-bg-card/60 backdrop-blur-sm rounded-xl p-5 border border-border hover:border-orange transition-all duration-300 hover:shadow-lg hover:shadow-orange/5 animate-fade-up"
+              style={{ animationDelay: `${i * 100}ms` }}
             >
               <h4 className="font-semibold group-hover:text-orange transition-colors duration-300">{faq.q}</h4>
               <p className="text-text-muted text-sm mt-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: faq.a }} />
@@ -371,18 +444,18 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Final CTA */}
+      {/* ====== FINAL CTA ====== */}
       <section className="container mx-auto px-4 py-20 border-t border-border">
-        <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-12 text-center border border-border max-w-4xl mx-auto backdrop-blur-sm shadow-2xl">
+        <div className="bg-gradient-to-br from-purple-900/30 to-orange-900/20 rounded-3xl p-12 text-center border border-border max-w-4xl mx-auto backdrop-blur-sm shadow-2xl animate-fade-up">
           <h2 className="text-3xl md:text-4xl font-bold">Join 500+ Customers</h2>
           <p className="text-text-muted mt-3 max-w-xl mx-auto leading-relaxed">
             You're in good company. Hundreds already use KJ Exchange to trade safely and get paid fast.
             <br />
-            <span className="text-green-400 font-bold">0% fees</span> — No hidden charges.
+            <span className="text-green-400 font-bold">Transparent pricing</span> — No hidden charges.
           </p>
           <Link
             href="/auth/signup"
-            className="inline-block bg-orange text-white px-10 py-3.5 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-xl shadow-orange/30 hover:shadow-orange/50 mt-6"
+            className="inline-block bg-orange text-white px-10 py-3.5 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-xl shadow-orange/30 hover:shadow-orange/50 mt-6 btn-pulse"
           >
             Sign Up for Free →
           </Link>
@@ -390,8 +463,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Light Mode Styles */}
+      {/* ====== ANIMATIONS & STYLES ====== */}
       <style jsx global>{`
+        /* Light mode */
         .light-mode {
           --bg-primary: #FAF8FC;
           --bg-secondary: #F0ECF5;
@@ -412,6 +486,40 @@ export default function Home() {
         .light-mode .bg-black\\/40 { background: rgba(78,31,145,0.03); }
         .light-mode .bg-white\\/5 { background: rgba(78,31,145,0.04); }
         .light-mode .bg-bg-card\\/60 { background: rgba(255,255,255,0.7); }
+
+        /* Animations */
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          display: flex;
+          animation: marquee 30s linear infinite;
+          width: max-content;
+        }
+
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-up {
+          opacity: 0;
+          animation: fadeUp 0.6s ease forwards;
+        }
+
+        @keyframes pulse-cta {
+          0% { box-shadow: 0 0 0 0 rgba(255, 115, 0, 0.4); }
+          70% { box-shadow: 0 0 0 15px rgba(255, 115, 0, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(255, 115, 0, 0); }
+        }
+        .btn-pulse {
+          animation: pulse-cta 2.4s infinite;
+        }
+
+        /* Ensures animations run on page load */
+        .animate-fade-up {
+          animation-fill-mode: both;
+        }
       `}</style>
     </Layout>
   );
