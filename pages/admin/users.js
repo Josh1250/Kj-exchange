@@ -1,40 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../_app';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase, getSupabaseServer } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
-export default function AdminUsers() {
-  const { user, loading } = useAuth();
+export default function AdminUsers({ user }) {
   const router = useRouter();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checking, setChecking] = useState(true);
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (loading) return;
     if (!user) {
       router.push('/auth/login');
       return;
     }
-    const checkAdmin = async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single();
-      if (error || !data?.is_admin) {
-        router.push('/dashboard');
-        return;
-      }
-      setIsAdmin(true);
-      setChecking(false);
-      fetchUsers();
-    };
-    checkAdmin();
-  }, [user, loading, router]);
+    fetchUsers();
+  }, [user, router]);
 
   const fetchUsers = async () => {
     try {
@@ -87,18 +68,7 @@ export default function AdminUsers() {
     }
   };
 
-  if (loading || checking) {
-    return (
-      <div className="flex items-center justify-center min-h-screen text-text-primary">
-        <div className="text-center">
-          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
-          <p className="mt-3 text-text-muted">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user || !isAdmin) return null;
+  if (!user) return null;
 
   return (
     <>
@@ -197,4 +167,21 @@ export default function AdminUsers() {
       </AdminLayout>
     </>
   );
+}
+
+export async function getServerSideProps({ req }) {
+  const supabase = getSupabaseServer(req);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return { redirect: { destination: '/auth/login', permanent: false } };
+  }
+  const { data } = await supabase
+    .from('users')
+    .select('is_admin')
+    .eq('id', session.user.id)
+    .single();
+  if (!data?.is_admin) {
+    return { redirect: { destination: '/dashboard', permanent: false } };
+  }
+  return { props: { user: session.user } };
 }
