@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase, getSupabaseServer } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
@@ -102,7 +102,6 @@ export default function AdminOrders({ user }) {
   if (!user) return null;
 
   const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
-
   const statusColors = {
     pending: 'bg-yellow-400/20 text-yellow-400 border-yellow-400/20',
     verifying: 'bg-blue-400/20 text-blue-400 border-blue-400/20',
@@ -204,6 +203,7 @@ export default function AdminOrders({ user }) {
 }
 
 export async function getServerSideProps({ req }) {
+  const supabase = getSupabaseServer(req);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
     return { redirect: { destination: '/auth/login', permanent: false } };
