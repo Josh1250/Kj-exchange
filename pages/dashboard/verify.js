@@ -1,138 +1,89 @@
-import { useRouter } from 'next/router';
+// pages/dashboard/verify.js
 import { useEffect, useState } from 'react';
-import { useAuth } from '../_app';
-import DashboardLayout from '../../components/layout/DashboardLayout';
+import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import Link from 'next/link';
+import DashboardLayout from '../../components/layout/DashboardLayout';
 import Head from 'next/head';
 
-export default function Verify() {
+export default function VerifyPayment() {
   const router = useRouter();
-  const { user, loading } = useAuth();
-  const [status, setStatus] = useState('loading');
-  const [message, setMessage] = useState('Verifying your payment...');
-  const [amount, setAmount] = useState(0);
-  const [currency, setCurrency] = useState('NGN');
+  const { transaction_id, status } = router.query;
+  const [loading, setLoading] = useState(true);
+  const [result, setResult] = useState(null);
 
   useEffect(() => {
-    const { transaction_id, status: queryStatus } = router.query;
-    if (!transaction_id) return;
-
-    if (queryStatus === 'cancelled') {
-      setStatus('cancelled');
-      setMessage('You cancelled the payment.');
-      return;
-    }
+    if (!transaction_id || !status) return;
 
     const verify = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-
+        // Call your verify API
         const response = await fetch('/api/flutterwave/verify', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ transaction_id }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transaction_id, status }),
         });
-
         const data = await response.json();
+        setResult(data);
+        setLoading(false);
 
+        // If successful, redirect to wallet after 3 seconds
         if (data.success) {
-          setStatus('success');
-          setMessage(data.message || 'Wallet credited successfully!');
-          setAmount(data.amount || 0);
-          setCurrency(data.currency || 'NGN');
-        } else {
-          setStatus('failed');
-          setMessage(data.message || 'Verification failed. Please contact support.');
+          setTimeout(() => router.push('/dashboard/wallet'), 3000);
         }
       } catch (err) {
-        setStatus('error');
-        setMessage('An error occurred during verification.');
-        console.error(err);
+        setResult({ success: false, error: err.message });
+        setLoading(false);
       }
     };
 
     verify();
-  }, [router.query]);
+  }, [transaction_id, status, router]);
 
-  if (loading) return <div>Loading...</div>;
-  if (!user) {
-    router.push('/auth/login');
-    return null;
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <i className="fa-solid fa-spinner fa-spin text-4xl text-orange"></i>
+            <p className="text-text-primary mt-4">Verifying your payment...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
   }
-
-  const currencySymbol = { NGN: '₦', USD: '$', GHS: '₵' }[currency] || '₦';
 
   return (
     <>
       <Head><title>Payment Verification · KJ Exchange</title></Head>
       <DashboardLayout>
-        <div className="max-w-lg mx-auto text-center space-y-6">
-          <div className="bg-bg-card rounded-2xl p-8 border border-border shadow-2xl">
-            {status === 'loading' && (
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center max-w-md mx-auto">
+            {result?.success ? (
               <>
-                <i className="fa-solid fa-spinner fa-spin text-4xl text-orange"></i>
-                <h2 className="text-xl font-bold mt-4">Verifying Payment</h2>
-                <p className="text-text-muted text-sm">Please wait while we confirm your transaction.</p>
-              </>
-            )}
-
-            {status === 'success' && (
-              <>
-                <div className="w-16 h-16 mx-auto rounded-full bg-green-400/20 flex items-center justify-center text-green-400 text-4xl">
+                <div className="w-20 h-20 rounded-full bg-green-400/20 flex items-center justify-center text-green-400 text-4xl mx-auto">
                   <i className="fa-regular fa-circle-check"></i>
                 </div>
-                <h2 className="text-2xl font-bold mt-4 text-green-400">Payment Successful</h2>
-                <p className="text-text-muted text-sm mt-2">{message}</p>
-                <div className="mt-4 p-4 bg-black/20 rounded-xl border border-border">
-                  <p className="text-text-muted text-sm">Amount Credited</p>
-                  <p className="text-3xl font-bold text-white">{currencySymbol}{amount.toLocaleString()}</p>
+                <h2 className="text-2xl font-bold text-text-primary mt-4">Payment Successful! 🎉</h2>
+                <p className="text-text-muted">Your wallet has been credited.</p>
+                <p className="text-text-muted text-sm mt-1">Redirecting to wallet...</p>
+                <Link href="/dashboard/wallet" className="mt-6 inline-block bg-orange text-white px-6 py-2 rounded-full hover:bg-orange-600 transition">
+                  Go to Wallet Now
+                </Link>
+              </>
+            ) : (
+              <>
+                <div className="w-20 h-20 rounded-full bg-red-400/20 flex items-center justify-center text-red-400 text-4xl mx-auto">
+                  <i className="fa-regular fa-circle-xmark"></i>
                 </div>
-                <Link
-                  href="/dashboard/wallet"
-                  className="inline-block mt-6 bg-orange text-white px-6 py-3 rounded-full font-semibold hover:bg-orange-600 transition shadow-lg shadow-orange/30"
-                >
-                  <i className="fa-solid fa-wallet mr-2"></i> Go to Wallet
+                <h2 className="text-2xl font-bold text-text-primary mt-4">Verification Failed</h2>
+                <p className="text-text-muted">{result?.error || 'Verification failed. Please contact support.'}</p>
+                <Link href="/dashboard/wallet" className="mt-6 inline-block border border-border text-text-primary px-6 py-2 rounded-full hover:border-orange transition">
+                  ← Back to Wallet
                 </Link>
               </>
             )}
-
-            {(status === 'cancelled' || status === 'failed' || status === 'error') && (
-              <>
-                <div className="w-16 h-16 mx-auto rounded-full bg-red-400/20 flex items-center justify-center text-red-400 text-4xl">
-                  <i className="fa-regular fa-circle-xmark"></i>
-                </div>
-                <h2 className="text-2xl font-bold mt-4 text-red-400">
-                  {status === 'cancelled' ? 'Payment Cancelled' : 'Verification Failed'}
-                </h2>
-                <p className="text-text-muted text-sm mt-2">{message}</p>
-                <div className="flex flex-wrap gap-3 justify-center mt-6">
-                  <Link
-                    href="/dashboard/wallet"
-                    className="bg-orange text-white px-6 py-3 rounded-full font-semibold hover:bg-orange-600 transition"
-                  >
-                    <i className="fa-solid fa-arrow-left mr-2"></i> Back to Wallet
-                  </Link>
-                  {status === 'cancelled' && (
-                    <button
-                      onClick={() => window.location.href = '/dashboard/wallet'}
-                      className="border border-border text-text-primary px-6 py-3 rounded-full font-semibold hover:border-orange transition"
-                    >
-                      <i className="fa-solid fa-rotate mr-2"></i> Try Again
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
           </div>
-
-          <p className="text-text-muted text-xs">
-            <i className="fa-regular fa-circle-question mr-1"></i> If you have any issues, contact support via WhatsApp.
-          </p>
         </div>
       </DashboardLayout>
     </>
