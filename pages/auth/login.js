@@ -27,11 +27,12 @@ export default function Login() {
       setError(error.message);
       setLoading(false);
     } else {
-      // ✅ Store session tokens in localStorage for admin pages
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      // ✅ Store session tokens and user email in localStorage
+      const { data: { session, user } } = await supabase.auth.getSession();
+      if (session && user) {
         localStorage.setItem('sb-access-token', session.access_token);
         localStorage.setItem('sb-refresh-token', session.refresh_token);
+        localStorage.setItem('sb-user-email', user.email);
       }
       router.push('/dashboard');
     }
