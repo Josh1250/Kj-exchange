@@ -9,6 +9,7 @@ const navItems = [
   { name: 'Orders', href: '/admin/orders', icon: 'fa-solid fa-list' },
   { name: 'Users', href: '/admin/users', icon: 'fa-solid fa-users' },
   { name: 'Top-Ups', href: '/admin/topups', icon: 'fa-solid fa-arrow-up' },
+  { name: 'Withdrawals', href: '/admin/withdrawals', icon: 'fa-solid fa-arrow-down' },
   { name: 'Settings', href: '/admin/settings', icon: 'fa-solid fa-gear' },
 ];
 
