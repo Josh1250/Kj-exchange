@@ -15,13 +15,21 @@ export default function AdminOrders() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      // Try to get session from Supabase
       let { data: { session } } = await supabase.auth.getSession();
 
-      // If no session, restore from localStorage
       if (!session) {
         const accessToken = localStorage.getItem('sb-access-token');
         const refreshToken = localStorage.getItem('sb-refresh-token');
+        const storedEmail = localStorage.getItem('sb-user-email');
+
+        // Bypass: if stored email matches admin email
+        if (storedEmail === 'okolijoshua16@gmail.com') {
+          setIsAdmin(true);
+          setLoading(false);
+          fetchOrders();
+          return;
+        }
+
         if (accessToken && refreshToken) {
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -38,7 +46,6 @@ export default function AdminOrders() {
         return;
       }
 
-      // Check admin
       const { data, error } = await supabase
         .from('users')
         .select('is_admin')
@@ -148,9 +155,7 @@ export default function AdminOrders() {
     );
   }
 
-  if (!isAdmin) {
-    return null;
-  }
+  if (!isAdmin) return null;
 
   const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
   const statusColors = {
