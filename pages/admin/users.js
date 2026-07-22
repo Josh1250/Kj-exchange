@@ -15,6 +15,7 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Auth check
   useEffect(() => {
@@ -63,7 +64,6 @@ export default function AdminUsers() {
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      // Get all users with their wallet balances
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select('*')
@@ -71,13 +71,11 @@ export default function AdminUsers() {
 
       if (usersError) throw usersError;
 
-      // Get wallet balances for each user
       const { data: wallets, error: walletsError } = await supabase
         .from('wallets')
         .select('*');
       if (walletsError) throw walletsError;
 
-      // Merge wallet data into users
       const usersWithWallets = usersData.map(user => {
         const wallet = wallets?.find(w => w.user_id === user.id);
         return {
@@ -93,9 +91,31 @@ export default function AdminUsers() {
       setFilteredUsers(usersWithWallets);
     } catch (err) {
       console.error('Error fetching users:', err);
-      alert('Failed to fetch users.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Sync Users from auth.users to public.users
+  const syncUsers = async () => {
+    if (!confirm('Sync all users from auth to your admin panel?')) return;
+    setSyncing(true);
+    try {
+      const response = await fetch('/api/admin/sync-users', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert(data.message || 'Users synced successfully!');
+        fetchUsers();
+      } else {
+        alert('Sync failed: ' + data.error);
+      }
+    } catch (err) {
+      alert('Failed to sync users.');
+      console.error(err);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -181,7 +201,7 @@ export default function AdminUsers() {
         <div className="space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <h1 className="text-2xl font-bold">Manage Users</h1>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <div className="relative">
                 <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"></i>
                 <input
@@ -198,6 +218,14 @@ export default function AdminUsers() {
               >
                 <i className="fa-solid fa-rotate"></i> Refresh
               </button>
+              <button
+                onClick={syncUsers}
+                disabled={syncing}
+                className="flex items-center gap-2 text-orange hover:text-orange-light transition text-sm px-4 py-2 rounded-full border border-orange/30 hover:border-orange"
+              >
+                <i className="fa-solid fa-cloud-upload-alt"></i>
+                {syncing ? 'Syncing...' : 'Sync Users'}
+              </button>
             </div>
           </div>
 
@@ -210,6 +238,12 @@ export default function AdminUsers() {
             ) : filteredUsers.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-text-muted">No users found.</p>
+                <button
+                  onClick={syncUsers}
+                  className="mt-2 text-orange hover:underline text-sm"
+                >
+                  Sync users from auth
+                </button>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -305,7 +339,6 @@ export default function AdminUsers() {
               </button>
             </div>
             <div className="p-6 space-y-4">
-              {/* Basic Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-text-muted text-xs uppercase tracking-wider">Full Name</p>
@@ -332,7 +365,6 @@ export default function AdminUsers() {
                 </div>
               </div>
 
-              {/* Bank Details */}
               <div className="border-t border-border pt-4">
                 <h3 className="font-semibold mb-2">Bank Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -351,7 +383,6 @@ export default function AdminUsers() {
                 </div>
               </div>
 
-              {/* BVN */}
               <div className="border-t border-border pt-4">
                 <h3 className="font-semibold mb-2">KYC Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -366,7 +397,6 @@ export default function AdminUsers() {
                 </div>
               </div>
 
-              {/* Wallet Balances */}
               <div className="border-t border-border pt-4">
                 <h3 className="font-semibold mb-2">Wallet Balances</h3>
                 <div className="grid grid-cols-3 gap-4">
@@ -385,7 +415,6 @@ export default function AdminUsers() {
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="border-t border-border pt-4 flex flex-wrap gap-3">
                 {selectedUser.kyc_status === 'Pending' && (
                   <>
