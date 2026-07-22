@@ -1,4 +1,4 @@
-import { supabase } from '../../../lib/supabaseClient';
+import supabaseAdmin from '../../../lib/supabaseAdmin';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -6,10 +6,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { data: authUsers, error: authError } = await supabase
-      .auth
-      .admin
-      .listUsers();
+    // ✅ Use the ADMIN client here
+    const { data: authUsers, error: authError } = await supabaseAdmin.auth.admin.listUsers();
 
     if (authError) throw authError;
 
@@ -17,14 +15,16 @@ export default async function handler(req, res) {
     let walletCount = 0;
 
     for (const user of authUsers.users) {
-      const { data: existing } = await supabase
+      // Check if user exists in public.users
+      const { data: existing } = await supabaseAdmin
         .from('users')
         .select('id')
         .eq('id', user.id)
         .single();
 
       if (!existing) {
-        await supabase
+        // Insert into public.users
+        await supabaseAdmin
           .from('users')
           .insert({
             id: user.id,
@@ -33,11 +33,15 @@ export default async function handler(req, res) {
           });
         insertedCount++;
 
-        await supabase
+        // Insert wallet
+        await supabaseAdmin
           .from('wallets')
           .insert({
             user_id: user.id,
             balance: 0,
+            usd_balance: 0,
+            ghs_balance: 0,
+            gift_points: 0,
           });
         walletCount++;
       }
@@ -45,7 +49,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       success: true,
-      message: `✅ Synced ${insertedCount} users and created ${walletCount} wallets.`,
+      message: `✅ Synced ${insertedCount} users and ${walletCount} wallets.`,
       inserted: insertedCount,
       wallets: walletCount,
     });
