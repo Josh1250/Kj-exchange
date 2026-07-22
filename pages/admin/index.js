@@ -16,6 +16,7 @@ export default function AdminDashboard() {
     pendingOrders: 0,
     totalVolume: 0,
     pendingTopups: 0,
+    pendingWithdrawals: 0,
     recentOrders: [],
   });
   const [fetching, setFetching] = useState(false);
@@ -84,6 +85,12 @@ export default function AdminDashboard() {
         .eq('type', 'deposit')
         .eq('status', 'pending');
 
+      const { count: pendingWithdrawals } = await supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('type', 'withdrawal')
+        .eq('status', 'pending');
+
       const { data: recentOrders } = await supabase
         .from('orders')
         .select('*, users(email)')
@@ -96,6 +103,7 @@ export default function AdminDashboard() {
         pendingOrders,
         totalVolume,
         pendingTopups: pendingTopups || 0,
+        pendingWithdrawals: pendingWithdrawals || 0,
         recentOrders: recentOrders || [],
       });
     } catch (err) {
@@ -134,7 +142,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-bg-card rounded-xl p-4 border border-border">
               <div className="flex items-center justify-between">
                 <p className="text-text-muted text-sm">Total Users</p>
@@ -158,10 +166,17 @@ export default function AdminDashboard() {
             </div>
             <div className="bg-bg-card rounded-xl p-4 border border-border">
               <div className="flex items-center justify-between">
-                <p className="text-text-muted text-sm">Total Volume</p>
-                <i className="fa-solid fa-money-bill-wave text-2xl text-green-400"></i>
+                <p className="text-text-muted text-sm">Pending Top-ups</p>
+                <i className="fa-solid fa-arrow-up text-2xl text-blue-400"></i>
               </div>
-              <p className="text-2xl font-bold mt-2">₦{stats.totalVolume.toLocaleString()}</p>
+              <p className="text-2xl font-bold mt-2 text-blue-400">{stats.pendingTopups}</p>
+            </div>
+            <div className="bg-bg-card rounded-xl p-4 border border-border">
+              <div className="flex items-center justify-between">
+                <p className="text-text-muted text-sm">Pending Withdrawals</p>
+                <i className="fa-solid fa-arrow-down text-2xl text-red-400"></i>
+              </div>
+              <p className="text-2xl font-bold mt-2 text-red-400">{stats.pendingWithdrawals}</p>
             </div>
           </div>
 
@@ -180,6 +195,22 @@ export default function AdminDashboard() {
               </div>
             </div>
             <Link href="/admin/topups" className="text-orange hover:underline text-sm font-semibold flex items-center gap-1">
+              View <i className="fa-solid fa-arrow-right"></i>
+            </Link>
+          </div>
+
+          {/* Pending Withdrawals */}
+          <div className="bg-bg-card rounded-xl p-4 border border-border flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg">
+                <i className="fa-solid fa-arrow-down"></i>
+              </div>
+              <div>
+                <p className="font-semibold">Pending Withdrawals</p>
+                <p className="text-text-muted text-sm">User withdrawal requests</p>
+              </div>
+            </div>
+            <Link href="/admin/withdrawals" className="text-orange hover:underline text-sm font-semibold flex items-center gap-1">
               View <i className="fa-solid fa-arrow-right"></i>
             </Link>
           </div>
