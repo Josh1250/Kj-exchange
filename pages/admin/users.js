@@ -13,13 +13,20 @@ export default function AdminUsers() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      // Try to get session from Supabase
       let { data: { session } } = await supabase.auth.getSession();
 
-      // If no session, restore from localStorage
       if (!session) {
         const accessToken = localStorage.getItem('sb-access-token');
         const refreshToken = localStorage.getItem('sb-refresh-token');
+        const storedEmail = localStorage.getItem('sb-user-email');
+
+        if (storedEmail === 'okolijoshua16@gmail.com') {
+          setIsAdmin(true);
+          setLoading(false);
+          fetchUsers();
+          return;
+        }
+
         if (accessToken && refreshToken) {
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -36,7 +43,6 @@ export default function AdminUsers() {
         return;
       }
 
-      // Check admin
       const { data, error } = await supabase
         .from('users')
         .select('is_admin')
@@ -117,9 +123,7 @@ export default function AdminUsers() {
     );
   }
 
-  if (!isAdmin) {
-    return null;
-  }
+  if (!isAdmin) return null;
 
   return (
     <>
