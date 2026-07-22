@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
+import AdminCharts from '../../components/AdminCharts';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -19,23 +20,20 @@ export default function AdminDashboard() {
   });
   const [fetching, setFetching] = useState(false);
 
+  // Auth check with localStorage bypass
   useEffect(() => {
     const checkAuth = async () => {
       let { data: { session } } = await supabase.auth.getSession();
-
       if (!session) {
-        const accessToken = localStorage.getItem('sb-access-token');
-        const refreshToken = localStorage.getItem('sb-refresh-token');
         const storedEmail = localStorage.getItem('sb-user-email');
-
-        // 🔥 BYPASS: If stored email matches admin email, allow access!
         if (storedEmail === 'okolijoshua16@gmail.com') {
           setIsAdmin(true);
           setLoading(false);
           fetchStats();
           return;
         }
-
+        const accessToken = localStorage.getItem('sb-access-token');
+        const refreshToken = localStorage.getItem('sb-refresh-token');
         if (accessToken && refreshToken) {
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -46,23 +44,19 @@ export default function AdminDashboard() {
           }
         }
       }
-
       if (!session) {
         router.push('/auth/login');
         return;
       }
-
       const { data, error } = await supabase
         .from('users')
         .select('is_admin')
         .eq('id', session.user.id)
         .single();
-
       if (error || !data?.is_admin) {
         router.push('/dashboard');
         return;
       }
-
       setIsAdmin(true);
       setLoading(false);
       fetchStats();
@@ -139,6 +133,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
+          {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-bg-card rounded-xl p-4 border border-border">
               <div className="flex items-center justify-between">
@@ -170,6 +165,10 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {/* Charts Section */}
+          <AdminCharts />
+
+          {/* Pending Top-ups */}
           <div className="bg-bg-card rounded-xl p-4 border border-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg">
@@ -185,6 +184,7 @@ export default function AdminDashboard() {
             </Link>
           </div>
 
+          {/* Recent Orders */}
           <div className="bg-bg-card rounded-2xl p-6 border border-border">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold">Recent Orders</h2>
