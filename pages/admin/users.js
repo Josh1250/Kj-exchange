@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { supabase, getSupabaseServer } from '../../lib/supabaseClient';
+import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
@@ -170,7 +170,6 @@ export default function AdminUsers({ user }) {
 }
 
 export async function getServerSideProps({ req }) {
-  const supabase = getSupabaseServer(req);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
     return { redirect: { destination: '/auth/login', permanent: false } };
