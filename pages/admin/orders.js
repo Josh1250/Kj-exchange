@@ -4,20 +4,37 @@ import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
-export default function AdminOrders({ user }) {
+export default function AdminOrders() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [processing, setProcessing] = useState(null);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/auth/login');
-      return;
-    }
-    fetchOrders();
-  }, [user, router]);
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/login');
+        return;
+      }
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+      if (error || !data?.is_admin) {
+        router.push('/dashboard');
+        return;
+      }
+      setIsAdmin(true);
+      setLoading(false);
+      fetchOrders();
+    };
+    checkAuth();
+  }, [router]);
 
   const fetchOrders = async () => {
     try {
@@ -99,7 +116,20 @@ export default function AdminOrders({ user }) {
     }
   };
 
-  if (!user) return null;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-text-primary">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
+          <p className="mt-3 text-text-muted">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
 
   const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
   const statusColors = {
@@ -200,20 +230,4 @@ export default function AdminOrders({ user }) {
       </AdminLayout>
     </>
   );
-}
-
-export async function getServerSideProps({ req }) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    return { redirect: { destination: '/auth/login', permanent: false } };
-  }
-  const { data } = await supabase
-    .from('users')
-    .select('is_admin')
-    .eq('id', session.user.id)
-    .single();
-  if (!data?.is_admin) {
-    return { redirect: { destination: '/dashboard', permanent: false } };
-  }
-  return { props: { user: session.user } };
 }
