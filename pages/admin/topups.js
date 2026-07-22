@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
+import { topupVerifiedTemplate, topupRejectedTemplate } from '../../lib/emailTemplates';
 
 export default function AdminTopups() {
   const router = useRouter();
@@ -99,7 +100,12 @@ export default function AdminTopups() {
     if (processing) return;
     setProcessing(txId);
     try {
-      console.log('Verifying top-up:', txId, userId, amount);
+      // Get user details
+      const { data: userData } = await supabase
+        .from('users')
+        .select('email, full_name')
+        .eq('id', userId)
+        .single();
 
       // 1. Update transaction
       const { error: txError } = await supabase
@@ -122,13 +128,27 @@ export default function AdminTopups() {
       }
 
       // 3. Notification
-      const { error: notifError } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          message: `💰 Your top-up of ₦${amount.toLocaleString()} has been verified!`,
-        });
-      if (notifError) console.error('Notification insert error:', notifError);
+      await supabase.from('notifications').insert({
+        user_id: userId,
+        message: `💰 Your top-up of ₦${amount.toLocaleString()} has been verified!`,
+      });
+
+      // 4. Email
+      if (userData?.email) {
+        try {
+          await fetch('/api/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: userData.email,
+              subject: '💰 Top-Up Verified - KJ Exchange',
+              html: topupVerifiedTemplate(amount, userData?.full_name),
+            }),
+          });
+        } catch (emailErr) {
+          console.error('Email send error:', emailErr);
+        }
+      }
 
       alert('✅ Top-up verified and wallet credited!');
       await fetchTopups();
@@ -144,18 +164,33 @@ export default function AdminTopups() {
     if (processing) return;
     setProcessing(txId);
     try {
-      await supabase
-        .from('transactions')
-        .update({ status: 'failed' })
-        .eq('id', txId);
-      
-      const { error: notifError } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          message: `❌ Your top-up request was rejected. Please contact support.`,
-        });
-      if (notifError) console.error('Notification insert error:', notifError);
+      const { data: userData } = await supabase
+        .from('users')
+        .select('email, full_name')
+        .eq('id', userId)
+        .single();
+
+      await supabase.from('transactions').update({ status: 'failed' }).eq('id', txId);
+      await supabase.from('notifications').insert({
+        user_id: userId,
+        message: `❌ Your top-up request was rejected. Please contact support.`,
+      });
+
+      if (userData?.email) {
+        try {
+          await fetch('/api/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: userData.email,
+              subject: '❌ Top-Up Rejected - KJ Exchange',
+              html: topupRejectedTemplate(userData?.full_name),
+            }),
+          });
+        } catch (emailErr) {
+          console.error('Email send error:', emailErr);
+        }
+      }
 
       alert('❌ Top-up rejected.');
       await fetchTopups();
@@ -185,7 +220,6 @@ export default function AdminTopups() {
             </button>
           </div>
 
-          {/* Filters */}
           <div className="flex flex-wrap gap-2 bg-bg-card rounded-xl p-2 border border-border">
             <select
               value={filter}
@@ -268,7 +302,6 @@ export default function AdminTopups() {
             )}
           </div>
 
-          {/* Export CSV */}
           <div className="flex justify-end">
             <button
               onClick={() => {
