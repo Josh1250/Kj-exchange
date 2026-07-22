@@ -1,114 +1,118 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
 
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-const WARNING_TIME = 60 * 1000; // 1 minute before logout
+const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+const WARNING_TIME = 60 * 1000; // 1 minute warning
 
 export default function SessionTimeout({ children }) {
   const router = useRouter();
   const [showWarning, setShowWarning] = useState(false);
-  const [timer, setTimer] = useState(null);
-  const [warningTimer, setWarningTimer] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const timerRef = useRef(null);
+  const warningTimerRef = useRef(null);
+  const countdownRef = useRef(null);
 
-  // Function to logout
   const logout = async () => {
-    // Clear localStorage
     localStorage.removeItem('sb-access-token');
     localStorage.removeItem('sb-refresh-token');
     localStorage.removeItem('sb-user-email');
-
     await supabase.auth.signOut();
-    router.push('/auth/login');
+    // Show a message on the login page
+    router.push('/auth/login?expired=true');
   };
 
-  // Reset the inactivity timer
-  const resetTimer = () => {
-    // Clear existing timers
-    if (timer) clearTimeout(timer);
-    if (warningTimer) clearTimeout(warningTimer);
-
+  const resetTimers = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
     setShowWarning(false);
+    setTimeLeft(60);
 
-    // Set new timer for warning
-    const warnTimeout = setTimeout(() => {
+    // Start warning timer (1 minute before logout)
+    warningTimerRef.current = setTimeout(() => {
       setShowWarning(true);
+      // Countdown
+      countdownRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }, INACTIVITY_TIMEOUT - WARNING_TIME);
-    setWarningTimer(warnTimeout);
 
-    // Set new timer for logout
-    const logoutTimeout = setTimeout(() => {
+    // Start logout timer
+    timerRef.current = setTimeout(() => {
       logout();
     }, INACTIVITY_TIMEOUT);
-    setTimer(logoutTimeout);
   };
 
-  // Handle user activity
-  useEffect(() => {
-    // Only run on client
-    if (typeof window === 'undefined') return;
+  const extendSession = () => {
+    setShowWarning(false);
+    setTimeLeft(60);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    resetTimers();
+  };
 
-    // If user is not logged in, don't run
+  useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
     };
     checkUser();
 
-    // Reset timer on any user activity
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click', 'keyup'];
-    const handleActivity = () => resetTimer();
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const handleActivity = () => {
+      // Reset timers on any activity
+      if (timerRef.current || warningTimerRef.current) {
+        resetTimers();
+      }
+    };
 
     events.forEach(event => {
       document.addEventListener(event, handleActivity);
     });
 
-    // Initial start
-    resetTimer();
+    resetTimers();
 
-    // Cleanup
     return () => {
       events.forEach(event => {
         document.removeEventListener(event, handleActivity);
       });
-      if (timer) clearTimeout(timer);
-      if (warningTimer) clearTimeout(warningTimer);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, []);
 
-  // If warning is shown, render modal
-  if (showWarning) {
-    return (
-      <>
-        {children}
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-bg-card rounded-2xl p-6 max-w-md w-full border border-border shadow-2xl">
-            <h2 className="text-xl font-bold mb-2">⚠️ Session Expiring</h2>
-            <p className="text-text-muted text-sm mb-4">
-              You've been inactive for a while. You'll be logged out in 1 minute. Click "Stay Logged In" to continue.
-            </p>
-            <div className="flex gap-3">
+  return (
+    <>
+      {children}
+      {/* Premium Toast-style warning */}
+      {showWarning && (
+        <div className="fixed bottom-6 right-6 z-50 bg-bg-card border border-orange/30 rounded-2xl p-4 max-w-sm shadow-2xl backdrop-blur-xl animate-slide-up">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange flex-shrink-0">
+              <i className="fa-regular fa-clock"></i>
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-sm">Session expiring soon</p>
+              <p className="text-text-muted text-xs">
+                You'll be logged out in <span className="text-orange font-bold">{timeLeft}s</span> due to inactivity.
+              </p>
               <button
-                onClick={() => {
-                  setShowWarning(false);
-                  resetTimer();
-                }}
-                className="flex-1 bg-orange text-white font-bold py-2 rounded-xl hover:bg-orange-600 transition"
+                onClick={extendSession}
+                className="mt-2 bg-orange text-white text-xs font-semibold px-4 py-1.5 rounded-full hover:bg-orange-600 transition"
               >
                 Stay Logged In
-              </button>
-              <button
-                onClick={logout}
-                className="flex-1 border border-border text-text-primary py-2 rounded-xl hover:border-orange transition"
-              >
-                Logout Now
               </button>
             </div>
           </div>
         </div>
-      </>
-    );
-  }
-
-  return <>{children}</>;
+      )}
+    </>
+  );
 }
