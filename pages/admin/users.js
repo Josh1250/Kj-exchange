@@ -181,6 +181,54 @@ export default function AdminUsers() {
     }
   };
 
+  // ------------------- NEW: BAN / DELETE FUNCTIONS -------------------
+  const handleBanUser = async (userId, ban) => {
+    if (!confirm(`Are you sure you want to ${ban ? 'ban' : 'unban'} this user?`)) return;
+    setProcessing(true);
+    try {
+      const res = await fetch('/api/admin/ban-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, ban }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        fetchUsers(); // refresh
+      } else {
+        alert('Failed: ' + data.error);
+      }
+    } catch (err) {
+      alert('Error banning user.');
+      console.error(err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!confirm('⚠️ This will permanently delete the user and all their data (orders, wallets). Are you sure?')) return;
+    setProcessing(true);
+    try {
+      const res = await fetch(`/api/admin/delete-user?userId=${userId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        fetchUsers();
+      } else {
+        alert('Failed: ' + data.error);
+      }
+    } catch (err) {
+      alert('Error deleting user.');
+      console.error(err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+  // ----------------------------------------------------------------
+
   const openUserModal = (user) => {
     setSelectedUser(user);
     setShowModal(true);
@@ -253,6 +301,7 @@ export default function AdminUsers() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">User</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Email</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">KYC</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Status</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Wallet</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Joined</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Actions</th>
@@ -281,6 +330,13 @@ export default function AdminUsers() {
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                            u.banned ? 'bg-red-400/20 text-red-400 border-red-400/20' : 'bg-green-400/20 text-green-400 border-green-400/20'
+                          }`}>
+                            {u.banned ? 'Banned' : 'Active'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex gap-1 text-xs">
                             <span className="text-green-400">₦{u.wallet_balance.toLocaleString()}</span>
                             <span className="text-blue-400">${u.usd_balance.toFixed(2)}</span>
@@ -291,7 +347,7 @@ export default function AdminUsers() {
                           {new Date(u.created_at).toLocaleDateString()}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 flex-wrap">
                             <button
                               onClick={() => openUserModal(u)}
                               className="bg-orange/10 hover:bg-orange/20 text-orange px-3 py-1 rounded-lg text-xs font-semibold transition"
@@ -316,6 +372,24 @@ export default function AdminUsers() {
                                 </button>
                               </>
                             )}
+                            <button
+                              onClick={() => handleBanUser(u.id, !u.banned)}
+                              disabled={processing}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold transition disabled:opacity-50 ${
+                                u.banned 
+                                  ? 'bg-yellow-500 text-white hover:bg-yellow-600' 
+                                  : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                              }`}
+                            >
+                              {u.banned ? 'Unban' : 'Ban'}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(u.id)}
+                              disabled={processing}
+                              className="bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-red-700 transition disabled:opacity-50"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -361,6 +435,14 @@ export default function AdminUsers() {
                     'bg-gray-400/20 text-gray-400 border-gray-400/20'
                   }`}>
                     {selectedUser.kyc_status || 'Not Submitted'}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs uppercase tracking-wider">Account Status</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                    selectedUser.banned ? 'bg-red-400/20 text-red-400 border-red-400/20' : 'bg-green-400/20 text-green-400 border-green-400/20'
+                  }`}>
+                    {selectedUser.banned ? 'Banned' : 'Active'}
                   </span>
                 </div>
               </div>
@@ -440,6 +522,30 @@ export default function AdminUsers() {
                     </button>
                   </>
                 )}
+                <button
+                  onClick={() => {
+                    handleBanUser(selectedUser.id, !selectedUser.banned);
+                    closeModal();
+                  }}
+                  disabled={processing}
+                  className={`px-4 py-2 rounded-xl font-semibold transition disabled:opacity-50 ${
+                    selectedUser.banned 
+                      ? 'bg-yellow-500 text-white hover:bg-yellow-600' 
+                      : 'bg-red-500 text-white hover:bg-red-600'
+                  }`}
+                >
+                  {selectedUser.banned ? 'Unban User' : 'Ban User'}
+                </button>
+                <button
+                  onClick={() => {
+                    handleDeleteUser(selectedUser.id);
+                    closeModal();
+                  }}
+                  disabled={processing}
+                  className="bg-red-700 text-white px-4 py-2 rounded-xl font-semibold hover:bg-red-800 transition disabled:opacity-50"
+                >
+                  Delete Permanently
+                </button>
                 <button
                   onClick={closeModal}
                   className="border border-border text-text-primary px-4 py-2 rounded-xl hover:border-orange transition"
