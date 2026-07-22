@@ -4,18 +4,35 @@ import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
-export default function AdminTopups({ user }) {
+export default function AdminTopups() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [topups, setTopups] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/auth/login');
-      return;
-    }
-    fetchTopups();
-  }, [user, router]);
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/login');
+        return;
+      }
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+      if (error || !data?.is_admin) {
+        router.push('/dashboard');
+        return;
+      }
+      setIsAdmin(true);
+      setLoading(false);
+      fetchTopups();
+    };
+    checkAuth();
+  }, [router]);
 
   const fetchTopups = async () => {
     try {
@@ -82,7 +99,20 @@ export default function AdminTopups({ user }) {
     }
   };
 
-  if (!user) return null;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-text-primary">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
+          <p className="mt-3 text-text-muted">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
     <>
@@ -146,20 +176,4 @@ export default function AdminTopups({ user }) {
       </AdminLayout>
     </>
   );
-}
-
-export async function getServerSideProps({ req }) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    return { redirect: { destination: '/auth/login', permanent: false } };
-  }
-  const { data } = await supabase
-    .from('users')
-    .select('is_admin')
-    .eq('id', session.user.id)
-    .single();
-  if (!data?.is_admin) {
-    return { redirect: { destination: '/dashboard', permanent: false } };
-  }
-  return { props: { user: session.user } };
 }
