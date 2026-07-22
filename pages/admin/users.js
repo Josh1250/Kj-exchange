@@ -17,10 +17,13 @@ export default function AdminUsers() {
   const [processing, setProcessing] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  // Auth check
+  // Auth check + Admin verification (with email fallback)
   useEffect(() => {
     const checkAuth = async () => {
+      // 1. Get session
       let { data: { session } } = await supabase.auth.getSession();
+
+      // 2. If no session, try localStorage (for persistence)
       if (!session) {
         const storedEmail = localStorage.getItem('sb-user-email');
         if (storedEmail === 'okolijoshua16@gmail.com') {
@@ -41,23 +44,60 @@ export default function AdminUsers() {
           }
         }
       }
+
+      // 3. No session at all → redirect to login
       if (!session) {
         router.push('/auth/login');
         return;
       }
-      const { data, error } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', session.user.id)
-        .single();
-      if (error || !data?.is_admin) {
+
+      // 4. Check if user is admin in database
+      let isAdminUser = false;
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('is_admin')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!error && data?.is_admin === true) {
+          isAdminUser = true;
+        }
+      } catch (e) {
+        console.error('Admin query error:', e);
+      }
+
+      // 5. FALLBACK: If DB says false but email matches → force admin
+      const userEmail = session.user?.email;
+      if (!isAdminUser && userEmail === 'okolijoshua16@gmail.com') {
+        console.log('🔧 Fallback: Forcing admin access for', userEmail);
+        isAdminUser = true;
+
+        // Update database so next time it works without fallback
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ is_admin: true })
+          .eq('id', session.user.id);
+
+        if (updateError) {
+          console.error('Failed to update admin flag:', updateError);
+        } else {
+          console.log('✅ Admin flag updated in database.');
+        }
+      }
+
+      // 6. Not admin → go to user dashboard
+      if (!isAdminUser) {
         router.push('/dashboard');
         return;
       }
+
+      // 7. Admin confirmed → load page
       setIsAdmin(true);
       setLoading(false);
       fetchUsers();
     };
+
     checkAuth();
   }, [router]);
 
@@ -181,7 +221,7 @@ export default function AdminUsers() {
     }
   };
 
-  // ------------------- NEW: BAN / DELETE FUNCTIONS -------------------
+  // ------------------- BAN / DELETE FUNCTIONS -------------------
   const handleBanUser = async (userId, ban) => {
     if (!confirm(`Are you sure you want to ${ban ? 'ban' : 'unban'} this user?`)) return;
     setProcessing(true);
@@ -194,7 +234,7 @@ export default function AdminUsers() {
       const data = await res.json();
       if (data.success) {
         alert(data.message);
-        fetchUsers(); // refresh
+        fetchUsers();
       } else {
         alert('Failed: ' + data.error);
       }
@@ -207,7 +247,7 @@ export default function AdminUsers() {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!confirm('⚠️ This will permanently delete the user and all their data (orders, wallets). Are you sure?')) return;
+    if (!confirm('⚠️ This will permanently delete the user and all their data. Are you sure?')) return;
     setProcessing(true);
     try {
       const res = await fetch(`/api/admin/delete-user?userId=${userId}`, {
