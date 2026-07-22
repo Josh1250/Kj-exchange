@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
+import { orderVerifiedTemplate, orderRejectedTemplate } from '../../lib/emailTemplates';
 
 export default function AdminOrders() {
   const router = useRouter();
@@ -97,16 +98,22 @@ export default function AdminOrders() {
     if (processing) return;
     setProcessing(orderId);
     try {
-      console.log('Verifying order:', orderId, userId, valueNgn);
-
-      // 1. Update order status
+      // 1. Update order
       const { error: orderError } = await supabase
         .from('orders')
         .update({ status: 'verified' })
         .eq('id', orderId);
       if (orderError) throw new Error(orderError.message);
 
-      // 2. Wallet update (with fallback)
+      // 2. Get asset name and user details
+      const order = orders.find(o => o.id === orderId);
+      const { data: userData } = await supabase
+        .from('users')
+        .select('email, full_name')
+        .eq('id', userId)
+        .single();
+
+      // 3. Wallet update
       let { data: wallet } = await supabase
         .from('wallets')
         .select('balance')
@@ -114,38 +121,42 @@ export default function AdminOrders() {
         .maybeSingle();
       let newBalance = (wallet?.balance || 0) + valueNgn;
       if (wallet) {
-        const { error: updateError } = await supabase
-          .from('wallets')
-          .update({ balance: newBalance })
-          .eq('user_id', userId);
-        if (updateError) throw new Error(updateError.message);
+        await supabase.from('wallets').update({ balance: newBalance }).eq('user_id', userId);
       } else {
-        const { error: insertError } = await supabase
-          .from('wallets')
-          .insert({ user_id: userId, balance: newBalance });
-        if (insertError) throw new Error(insertError.message);
+        await supabase.from('wallets').insert({ user_id: userId, balance: newBalance });
       }
 
-      // 3. Transaction record
-      const { error: txError } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          type: 'trade_credit',
-          amount: valueNgn,
-          status: 'completed',
-          metadata: { order_id: orderId },
-        });
-      if (txError) throw new Error(txError.message);
+      // 4. Transaction record
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        type: 'trade_credit',
+        amount: valueNgn,
+        status: 'completed',
+        metadata: { order_id: orderId },
+      });
 
-      // 4. Notification with logging
-      const { error: notifError } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          message: `✅ Your order #${orderId.slice(0,8)} has been verified! ₦${valueNgn.toLocaleString()} credited.`,
-        });
-      if (notifError) console.error('Notification insert error:', notifError);
+      // 5. Notification
+      await supabase.from('notifications').insert({
+        user_id: userId,
+        message: `✅ Your order #${orderId.slice(0,8)} has been verified! ₦${valueNgn.toLocaleString()} credited.`,
+      });
+
+      // 6. Send Email
+      if (userData?.email) {
+        try {
+          await fetch('/api/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: userData.email,
+              subject: '✅ Order Verified - KJ Exchange',
+              html: orderVerifiedTemplate(orderId, valueNgn, order?.asset || 'asset', userData?.full_name),
+            }),
+          });
+        } catch (emailErr) {
+          console.error('Email send error:', emailErr);
+        }
+      }
 
       alert('✅ Order verified and wallet credited!');
       await fetchOrders();
@@ -161,18 +172,34 @@ export default function AdminOrders() {
     if (processing) return;
     setProcessing(orderId);
     try {
-      await supabase
-        .from('orders')
-        .update({ status: 'failed' })
-        .eq('id', orderId);
-      
-      const { error: notifError } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          message: `❌ Your order #${orderId.slice(0,8)} has been rejected. Contact support.`,
-        });
-      if (notifError) console.error('Notification insert error:', notifError);
+      const order = orders.find(o => o.id === orderId);
+      const { data: userData } = await supabase
+        .from('users')
+        .select('email, full_name')
+        .eq('id', userId)
+        .single();
+
+      await supabase.from('orders').update({ status: 'failed' }).eq('id', orderId);
+      await supabase.from('notifications').insert({
+        user_id: userId,
+        message: `❌ Your order #${orderId.slice(0,8)} has been rejected. Contact support.`,
+      });
+
+      if (userData?.email) {
+        try {
+          await fetch('/api/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: userData.email,
+              subject: '❌ Order Rejected - KJ Exchange',
+              html: orderRejectedTemplate(orderId, order?.asset || 'asset', userData?.full_name),
+            }),
+          });
+        } catch (emailErr) {
+          console.error('Email send error:', emailErr);
+        }
+      }
 
       alert('❌ Order rejected.');
       await fetchOrders();
@@ -211,7 +238,6 @@ export default function AdminOrders() {
             </button>
           </div>
 
-          {/* Filters */}
           <div className="flex flex-wrap gap-2 bg-bg-card rounded-xl p-2 border border-border">
             <select
               value={filter}
@@ -250,7 +276,6 @@ export default function AdminOrders() {
             )}
           </div>
 
-          {/* Orders List */}
           <div className="bg-bg-card rounded-2xl border border-border overflow-hidden">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
@@ -307,7 +332,6 @@ export default function AdminOrders() {
             )}
           </div>
 
-          {/* Export CSV */}
           <div className="flex justify-end">
             <button
               onClick={() => {
