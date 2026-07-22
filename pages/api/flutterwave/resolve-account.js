@@ -6,9 +6,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { account_number, bank_code } = req.body;
-    if (!account_number || !bank_code) {
-      return res.status(400).json({ error: 'Missing account_number or bank_code' });
+    // ✅ Changed: use account_bank instead of bank_code
+    const { account_number, account_bank } = req.body;
+    if (!account_number || !account_bank) {
+      return res.status(400).json({ error: 'Missing account_number or account_bank' });
     }
 
     const response = await fetch('https://api.flutterwave.com/v3/accounts/resolve', {
@@ -19,7 +20,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         account_number: account_number,
-        bank_code: bank_code,
+        account_bank: account_bank, // ← This is what Flutterwave expects
       }),
     });
 
