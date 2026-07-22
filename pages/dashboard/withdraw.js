@@ -22,6 +22,11 @@ export default function Withdraw() {
   const [submitting, setSubmitting] = useState(false);
   const [withdrawalHistory, setWithdrawalHistory] = useState([]);
 
+  // ===== Fee Calculation =====
+  const [fee, setFee] = useState(0);
+  const [vat, setVat] = useState(0);
+  const [totalDeduction, setTotalDeduction] = useState(0);
+
   // ===== Load Data =====
   useEffect(() => {
     if (!loading && !user) {
@@ -33,9 +38,13 @@ export default function Withdraw() {
     }
   }, [user, loading, router, currency]);
 
+  // ===== Recalculate fee whenever amount changes =====
+  useEffect(() => {
+    calculateFees();
+  }, [amount, currency]);
+
   const fetchData = async () => {
     try {
-      // 1. Get wallet balance
       const field = currency === 'USD' ? 'usd_balance' : currency === 'GHS' ? 'ghs_balance' : 'balance';
       const { data: wallet } = await supabase
         .from('wallets')
@@ -44,7 +53,6 @@ export default function Withdraw() {
         .maybeSingle();
       setBalance(wallet?.[field] || 0);
 
-      // 2. Get user's KYC level
       const { data: profile } = await supabase
         .from('users')
         .select('kyc_level')
@@ -52,7 +60,6 @@ export default function Withdraw() {
         .single();
       setKycLevel(profile?.kyc_level || 1);
 
-      // 3. Get saved banks
       const { data: bankData } = await supabase
         .from('bank_accounts')
         .select('*')
@@ -60,11 +67,9 @@ export default function Withdraw() {
         .order('is_default', { ascending: false });
       setBanks(bankData || []);
 
-      // Auto-select default bank
       const defaultBank = bankData?.find(b => b.is_default);
       if (defaultBank) setSelectedBankId(defaultBank.id);
 
-      // 4. Get withdrawal history (last 5)
       const { data: history } = await supabase
         .from('transactions')
         .select('*')
@@ -78,7 +83,37 @@ export default function Withdraw() {
     }
   };
 
-  // ===== Get Selected Bank Details =====
+  // ===== Calculate Fees =====
+  const calculateFees = () => {
+    const amt = parseFloat(amount) || 0;
+    if (amt <= 0) {
+      setFee(0);
+      setVat(0);
+      setTotalDeduction(0);
+      return;
+    }
+
+    let calculatedFee = 0;
+    let calculatedVat = 0;
+
+    // Only apply fees for NGN withdrawals (can extend to other currencies later)
+    if (currency === 'NGN') {
+      const flatFee = 50; // ₦50 flat fee
+      const percentageFee = 0.005; // 0.5%
+      const vatRate = 0.075; // 7.5% VAT on fee
+
+      calculatedFee = flatFee + (amt * percentageFee);
+      calculatedFee = Math.round(calculatedFee * 100) / 100; // Round to 2 decimal places
+      calculatedVat = calculatedFee * vatRate;
+      calculatedVat = Math.round(calculatedVat * 100) / 100;
+    }
+
+    setFee(calculatedFee);
+    setVat(calculatedVat);
+    setTotalDeduction(amt + calculatedFee + calculatedVat);
+  };
+
+  // ===== Get Selected Bank =====
   const getSelectedBank = () => {
     return banks.find(b => b.id === selectedBankId);
   };
@@ -96,8 +131,9 @@ export default function Withdraw() {
       setSubmitting(false);
       return;
     }
-    if (amt > balance) {
-      setError('Insufficient balance');
+
+    if (totalDeduction > balance) {
+      setError(`Insufficient balance. Total deduction: ${currencySymbol}${totalDeduction.toFixed(2)}`);
       setSubmitting(false);
       return;
     }
@@ -109,26 +145,26 @@ export default function Withdraw() {
       return;
     }
 
-    // KYC Limit Check
     if (kycLevel < 2 && amt > 50000) {
       setError('KYC Level 2 required for withdrawals above ₦50,000. Complete KYC in your profile.');
       setSubmitting(false);
       return;
     }
 
-    // Determine if withdrawal is auto (KYC Level 2)
     const isAuto = kycLevel >= 2;
-    const withdrawalType = isAuto ? 'auto' : 'manual';
     const status = isAuto ? 'processing' : 'pending';
+    const withdrawalType = isAuto ? 'auto' : 'manual';
 
     try {
-      // 1. Create transaction record
+      // 1. Create transaction with fee and VAT
       const { data: txData, error: txError } = await supabase
         .from('transactions')
         .insert({
           user_id: user.id,
           type: 'withdrawal',
           amount: -amt,
+          fee: fee,
+          vat: vat,
           status: status,
           currency: currency,
           metadata: {
@@ -144,7 +180,7 @@ export default function Withdraw() {
 
       if (txError) throw new Error(txError.message);
 
-      // 2. Update wallet balance
+      // 2. Deduct total (amount + fee + VAT) from wallet
       const field = currency === 'USD' ? 'usd_balance' : currency === 'GHS' ? 'ghs_balance' : 'balance';
       const { data: wallet } = await supabase
         .from('wallets')
@@ -152,7 +188,7 @@ export default function Withdraw() {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      const newBalance = (wallet?.[field] || 0) - amt;
+      const newBalance = (wallet?.[field] || 0) - totalDeduction;
       await supabase
         .from('wallets')
         .update({ [field]: newBalance })
@@ -165,7 +201,7 @@ export default function Withdraw() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              amount: amt,
+              amount: amt, // Send net amount (fees already deducted from wallet)
               currency: currency,
               bank_code: selectedBank.bank_code,
               account_number: selectedBank.account_number,
@@ -177,7 +213,6 @@ export default function Withdraw() {
           const transferData = await transferResponse.json();
 
           if (transferData.status === 'success') {
-            // Update transaction to completed
             await supabase
               .from('transactions')
               .update({
@@ -186,39 +221,35 @@ export default function Withdraw() {
               })
               .eq('id', txData.id);
 
-            setSuccess(`✅ Withdrawal of ${currency} ${amt.toLocaleString()} processed instantly!`);
+            setSuccess(`✅ Withdrawal of ${currency} ${amt.toLocaleString()} processed instantly! (Fee: ${currencySymbol}${fee.toFixed(2)}, VAT: ${currencySymbol}${vat.toFixed(2)})`);
 
-            // Notification
             await supabase
               .from('notifications')
               .insert({
                 user_id: user.id,
-                message: `💸 Instant withdrawal of ${currency} ${amt.toLocaleString()} sent to your bank.`,
+                message: `💸 Instant withdrawal of ${currency} ${amt.toLocaleString()} sent to your bank. Fee: ${currencySymbol}${fee.toFixed(2)}, VAT: ${currencySymbol}${vat.toFixed(2)}`,
               });
           } else {
-            // If transfer fails, keep as pending for manual review
-            setSuccess(`⚠️ Withdrawal initiated but bank transfer failed. Our team will review it.`);
+            setSuccess(`⚠️ Withdrawal recorded but bank transfer failed. Our team will review it.`);
           }
         } catch (transferErr) {
           console.error('Transfer error:', transferErr);
           setSuccess(`⚠️ Withdrawal recorded but bank transfer is pending. Our team will process it shortly.`);
         }
       } else {
-        // Manual withdrawal – notify user
-        setSuccess(`✅ Withdrawal of ${currency} ${amt.toLocaleString()} initiated. Our team will process it within 24 hours.`);
+        setSuccess(`✅ Withdrawal of ${currency} ${amt.toLocaleString()} initiated for review. (Fee: ${currencySymbol}${fee.toFixed(2)}, VAT: ${currencySymbol}${vat.toFixed(2)})`);
 
-        // Notification
         await supabase
           .from('notifications')
           .insert({
             user_id: user.id,
-            message: `💸 Withdrawal of ${currency} ${amt.toLocaleString()} submitted for review.`,
+            message: `💸 Withdrawal of ${currency} ${amt.toLocaleString()} submitted for review. Fee: ${currencySymbol}${fee.toFixed(2)}, VAT: ${currencySymbol}${vat.toFixed(2)}`,
           });
       }
 
       setAmount('');
       setBalance(newBalance);
-      fetchData(); // Refresh history
+      fetchData();
 
     } catch (err) {
       console.error('Withdrawal error:', err);
@@ -228,7 +259,7 @@ export default function Withdraw() {
     }
   };
 
-  // ===== Processing Time Text =====
+  // ===== Processing Time =====
   const getProcessingTime = () => {
     if (kycLevel >= 2) {
       return {
@@ -248,7 +279,6 @@ export default function Withdraw() {
 
   const processingInfo = getProcessingTime();
 
-  // ===== Loading State =====
   if (loading) return <div>Loading...</div>;
   if (!user) return null;
 
@@ -259,7 +289,6 @@ export default function Withdraw() {
       <Head><title>Withdraw · KJ Exchange</title></Head>
       <DashboardLayout>
         <div className="max-w-3xl mx-auto space-y-6">
-          {/* Header */}
           <div className="flex items-center gap-2">
             <Link href="/dashboard/wallet" className="text-text-muted hover:text-text-primary transition group">
               <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
@@ -273,10 +302,7 @@ export default function Withdraw() {
             </span>
           </div>
 
-          {/* Main Card */}
           <div className="glass rounded-2xl p-6 md:p-8 border border-border">
-
-            {/* Balance */}
             <div className="flex justify-between items-center mb-6 p-4 bg-black/20 rounded-xl border border-border/50">
               <p className="text-text-muted text-sm flex items-center gap-2">
                 <i className="fa-regular fa-wallet text-orange"></i>
@@ -285,7 +311,6 @@ export default function Withdraw() {
               <p className="text-2xl font-bold">{currencySymbol}{balance.toLocaleString()}</p>
             </div>
 
-            {/* Processing Time Badge */}
             <div className={`${processingInfo.bg} rounded-xl p-3 mb-6 flex items-center gap-2 text-sm`}>
               <i className={`fa-solid ${processingInfo.icon} ${processingInfo.color}`}></i>
               <span className={processingInfo.color}>{processingInfo.label}</span>
@@ -297,11 +322,8 @@ export default function Withdraw() {
             </div>
 
             <form onSubmit={handleWithdraw} className="space-y-5">
-              {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                  Amount
-                </label>
+                <label className="block text-sm font-medium text-text-secondary mb-1.5">Amount</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">
                     {currencySymbol}
@@ -325,7 +347,31 @@ export default function Withdraw() {
                 )}
               </div>
 
-              {/* Bank Selection */}
+              {/* ===== Fee Breakdown ===== */}
+              {fee > 0 && (
+                <div className="bg-black/20 rounded-xl p-4 border border-border">
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                    <i className="fa-solid fa-receipt text-orange"></i>
+                    Fee Breakdown
+                  </h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">Withdrawal Fee</span>
+                      <span>{currencySymbol}{fee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">VAT (7.5%)</span>
+                      <span>{currencySymbol}{vat.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
+                      <span>Total Deduction</span>
+                      <span className="text-orange">{currencySymbol}{totalDeduction.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ===== Bank Selection ===== */}
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1.5">
                   <i className="fa-solid fa-building-columns text-orange mr-1"></i>
@@ -388,7 +434,6 @@ export default function Withdraw() {
                 )}
               </div>
 
-              {/* Error / Success */}
               {error && (
                 <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
                   <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
@@ -402,10 +447,9 @@ export default function Withdraw() {
                 </div>
               )}
 
-              {/* Submit */}
               <button
                 type="submit"
-                disabled={submitting || !selectedBankId}
+                disabled={submitting || !selectedBankId || totalDeduction === 0}
                 className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
               >
                 {submitting ? (
@@ -456,6 +500,7 @@ export default function Withdraw() {
                         <p className="font-medium text-sm">Withdrawal</p>
                         <p className="text-text-muted text-xs">
                           {new Date(tx.created_at).toLocaleDateString()} • {tx.currency}
+                          {tx.fee > 0 && ` • Fee: ${currencySymbol}${tx.fee.toFixed(2)}`}
                         </p>
                       </div>
                     </div>
