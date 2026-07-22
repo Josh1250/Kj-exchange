@@ -4,6 +4,9 @@ import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
+// 🔥 Set your admin email here – change if different
+const ADMIN_EMAIL = 'okolijoshua16@gmail.com';
+
 export default function AdminUsers() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -17,16 +20,15 @@ export default function AdminUsers() {
   const [processing, setProcessing] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  // Auth check + Admin verification (with email fallback)
   useEffect(() => {
     const checkAuth = async () => {
       // 1. Get session
       let { data: { session } } = await supabase.auth.getSession();
 
-      // 2. If no session, try localStorage (for persistence)
+      // 2. If no session, try localStorage (as before)
       if (!session) {
         const storedEmail = localStorage.getItem('sb-user-email');
-        if (storedEmail === 'okolijoshua16@gmail.com') {
+        if (storedEmail === ADMIN_EMAIL) {
           setIsAdmin(true);
           setLoading(false);
           fetchUsers();
@@ -45,13 +47,31 @@ export default function AdminUsers() {
         }
       }
 
-      // 3. No session at all → redirect to login
       if (!session) {
         router.push('/auth/login');
         return;
       }
 
-      // 4. Check if user is admin in database
+      // 3. 🔥 FORCE ADMIN IF EMAIL MATCHES – SKIP ANY DATABASE QUERY
+      const userEmail = session.user?.email;
+      if (userEmail === ADMIN_EMAIL) {
+        console.log('✅ Admin email matched – granting access without DB check.');
+        setIsAdmin(true);
+        setLoading(false);
+        fetchUsers();
+
+        // (Optional) Update DB in background so it works later
+        supabase
+          .from('users')
+          .update({ is_admin: true })
+          .eq('id', session.user.id)
+          .then(({ error }) => {
+            if (error) console.warn('Could not update admin flag:', error);
+          });
+        return;
+      }
+
+      // 4. For other users, do the normal admin check
       let isAdminUser = false;
       try {
         const { data, error } = await supabase
@@ -59,7 +79,6 @@ export default function AdminUsers() {
           .select('is_admin')
           .eq('id', session.user.id)
           .single();
-
         if (!error && data?.is_admin === true) {
           isAdminUser = true;
         }
@@ -67,32 +86,11 @@ export default function AdminUsers() {
         console.error('Admin query error:', e);
       }
 
-      // 5. FALLBACK: If DB says false but email matches → force admin
-      const userEmail = session.user?.email;
-      if (!isAdminUser && userEmail === 'okolijoshua16@gmail.com') {
-        console.log('🔧 Fallback: Forcing admin access for', userEmail);
-        isAdminUser = true;
-
-        // Update database so next time it works without fallback
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({ is_admin: true })
-          .eq('id', session.user.id);
-
-        if (updateError) {
-          console.error('Failed to update admin flag:', updateError);
-        } else {
-          console.log('✅ Admin flag updated in database.');
-        }
-      }
-
-      // 6. Not admin → go to user dashboard
       if (!isAdminUser) {
         router.push('/dashboard');
         return;
       }
 
-      // 7. Admin confirmed → load page
       setIsAdmin(true);
       setLoading(false);
       fetchUsers();
@@ -100,6 +98,14 @@ export default function AdminUsers() {
 
     checkAuth();
   }, [router]);
+
+  // ... the rest of your component (fetchUsers, syncUsers, handlers, etc.) stays exactly as before.
+  // To save space, I'll include it all – but you already have the full code from the last message.
+  // For brevity here, I'll assume you copy the full file from the last message and just replace the checkAuth part.
+  // But since we're providing a complete file, I'll include everything.
+
+  // ----- All your existing functions (fetchUsers, syncUsers, handleApproveKyc, handleBanUser, etc.) -----
+  // They are the same as the previous version – I'll include them for completeness.
 
   const fetchUsers = async () => {
     try {
@@ -136,7 +142,6 @@ export default function AdminUsers() {
     }
   };
 
-  // Sync Users from auth.users to public.users
   const syncUsers = async () => {
     if (!confirm('Sync all users from auth to your admin panel?')) return;
     setSyncing(true);
@@ -221,7 +226,6 @@ export default function AdminUsers() {
     }
   };
 
-  // ------------------- BAN / DELETE FUNCTIONS -------------------
   const handleBanUser = async (userId, ban) => {
     if (!confirm(`Are you sure you want to ${ban ? 'ban' : 'unban'} this user?`)) return;
     setProcessing(true);
@@ -267,7 +271,6 @@ export default function AdminUsers() {
       setProcessing(false);
     }
   };
-  // ----------------------------------------------------------------
 
   const openUserModal = (user) => {
     setSelectedUser(user);
@@ -282,6 +285,7 @@ export default function AdminUsers() {
   if (loading) return <div>Loading admin panel...</div>;
   if (!isAdmin) return null;
 
+  // ----- The JSX is identical to the previous version – I'll include it here for completeness -----
   return (
     <>
       <Head><title>Admin Users · KJ Exchange</title></Head>
@@ -442,7 +446,7 @@ export default function AdminUsers() {
         </div>
       </AdminLayout>
 
-      {/* User Detail Modal */}
+      {/* Modal – same as before */}
       {showModal && selectedUser && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-bg-card rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-border shadow-2xl">
