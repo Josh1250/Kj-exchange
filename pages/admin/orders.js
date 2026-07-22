@@ -12,24 +12,24 @@ export default function AdminOrders() {
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [processing, setProcessing] = useState(null);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('');
 
+  // Check admin (with localStorage bypass)
   useEffect(() => {
     const checkAuth = async () => {
       let { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
-        const accessToken = localStorage.getItem('sb-access-token');
-        const refreshToken = localStorage.getItem('sb-refresh-token');
         const storedEmail = localStorage.getItem('sb-user-email');
-
-        // Bypass: if stored email matches admin email
         if (storedEmail === 'okolijoshua16@gmail.com') {
           setIsAdmin(true);
           setLoading(false);
           fetchOrders();
           return;
         }
-
+        const accessToken = localStorage.getItem('sb-access-token');
+        const refreshToken = localStorage.getItem('sb-refresh-token');
         if (accessToken && refreshToken) {
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -67,38 +67,73 @@ export default function AdminOrders() {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const { data } = await supabase
+      let query = supabase
         .from('orders')
         .select('*, users(email, full_name)')
         .order('created_at', { ascending: false });
-      if (data) setOrders(data);
+
+      if (filter !== 'all') {
+        query = query.eq('status', filter);
+      }
+      if (typeFilter !== 'all') {
+        query = query.eq('type', typeFilter);
+      }
+      if (dateFilter) {
+        const start = new Date(dateFilter);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(dateFilter);
+        end.setHours(23, 59, 59, 999);
+        query = query.gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setOrders(data || []);
     } catch (err) {
       console.error('Error fetching orders:', err);
+      alert('Failed to fetch orders. Please refresh.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleVerify = async (orderId, userId, valueNgn) => {
+    if (processing) return;
     setProcessing(orderId);
     try {
+      console.log('Verifying order:', orderId, userId, valueNgn);
+
+      // 1. Update order status
       const { error: orderError } = await supabase
         .from('orders')
         .update({ status: 'verified' })
         .eq('id', orderId);
-      if (orderError) throw orderError;
+      if (orderError) throw new Error(orderError.message);
 
-      const { data: wallet } = await supabase
+      // 2. Get current wallet balance
+      const { data: wallet, error: walletError } = await supabase
         .from('wallets')
         .select('balance')
         .eq('user_id', userId)
         .single();
-      const newBalance = (wallet?.balance || 0) + valueNgn;
-      await supabase
-        .from('wallets')
-        .upsert({ user_id: userId, balance: newBalance });
+      if (walletError && walletError.code !== 'PGRST116') {
+        throw new Error(walletError.message);
+      }
+      const currentBalance = wallet?.balance || 0;
+      const newBalance = currentBalance + valueNgn;
 
-      await supabase
+      // 3. Update wallet balance
+      const { error: upsertError } = await supabase
+        .from('wallets')
+        .upsert(
+          { user_id: userId, balance: newBalance },
+          { onConflict: 'user_id' }
+        );
+      if (upsertError) throw new Error(upsertError.message);
+
+      // 4. Insert transaction record
+      const { error: txError } = await supabase
         .from('transactions')
         .insert({
           user_id: userId,
@@ -107,7 +142,9 @@ export default function AdminOrders() {
           status: 'completed',
           metadata: { order_id: orderId },
         });
+      if (txError) throw new Error(txError.message);
 
+      // 5. Send notification
       await supabase
         .from('notifications')
         .insert({
@@ -115,49 +152,48 @@ export default function AdminOrders() {
           message: `✅ Your order #${orderId.slice(0,8)} has been verified! ₦${valueNgn.toLocaleString()} credited.`,
         });
 
-      await fetchOrders();
+      alert('✅ Order verified and wallet credited!');
+      await fetchOrders(); // Refresh list
     } catch (err) {
-      console.error(err);
+      console.error('Verification error:', err);
+      alert('❌ Failed to verify order: ' + err.message);
     } finally {
       setProcessing(null);
     }
   };
 
   const handleReject = async (orderId, userId) => {
+    if (processing) return;
     setProcessing(orderId);
     try {
-      await supabase
+      const { error } = await supabase
         .from('orders')
         .update({ status: 'failed' })
         .eq('id', orderId);
+      if (error) throw new Error(error.message);
+
       await supabase
         .from('notifications')
         .insert({
           user_id: userId,
           message: `❌ Your order #${orderId.slice(0,8)} has been rejected. Contact support.`,
         });
+
+      alert('❌ Order rejected.');
       await fetchOrders();
     } catch (err) {
-      console.error(err);
+      console.error('Rejection error:', err);
+      alert('Failed to reject order: ' + err.message);
     } finally {
       setProcessing(null);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen text-text-primary">
-        <div className="text-center">
-          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange"></i>
-          <p className="mt-3 text-text-muted">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
+  if (loading) return <div>Loading admin panel...</div>;
   if (!isAdmin) return null;
 
-  const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
+  const filteredOrders = orders;
+
   const statusColors = {
     pending: 'bg-yellow-400/20 text-yellow-400 border-yellow-400/20',
     verifying: 'bg-blue-400/20 text-blue-400 border-blue-400/20',
@@ -171,7 +207,7 @@ export default function AdminOrders() {
       <Head><title>Admin Orders · KJ Exchange</title></Head>
       <AdminLayout>
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <h1 className="text-2xl font-bold">Manage Orders</h1>
             <button
               onClick={fetchOrders}
@@ -181,22 +217,46 @@ export default function AdminOrders() {
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-2 bg-bg-card rounded-xl p-1 border border-border">
-            {['all', 'pending', 'verifying', 'verified', 'completed', 'failed'].map((status) => (
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2 bg-bg-card rounded-xl p-2 border border-border">
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="bg-black/40 border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:border-orange"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="verifying">Verifying</option>
+              <option value="verified">Verified</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+            </select>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="bg-black/40 border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:border-orange"
+            >
+              <option value="all">All Types</option>
+              <option value="gift_card">Gift Cards</option>
+              <option value="crypto">Crypto</option>
+            </select>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="bg-black/40 border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:border-orange"
+            />
+            {dateFilter && (
               <button
-                key={status}
-                onClick={() => setFilter(status)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                  filter === status
-                    ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange/20'
-                    : 'text-text-muted hover:text-text-primary hover:bg-white/5'
-                }`}
+                onClick={() => setDateFilter('')}
+                className="text-xs text-red-400 hover:text-red-300"
               >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
+                Clear Date
               </button>
-            ))}
+            )}
           </div>
 
+          {/* Orders List */}
           <div className="bg-bg-card rounded-2xl border border-border overflow-hidden">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
@@ -251,6 +311,37 @@ export default function AdminOrders() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Export CSV Button */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                if (orders.length === 0) return alert('No orders to export.');
+                const headers = ['ID', 'Asset', 'Type', 'Amount', 'Value (NGN)', 'Status', 'User', 'Date'];
+                const rows = orders.map(o => [
+                  o.id.slice(0,8),
+                  o.asset,
+                  o.type,
+                  o.amount,
+                  o.value_ngn,
+                  o.status,
+                  o.users?.email || '',
+                  new Date(o.created_at).toLocaleString(),
+                ]);
+                const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `orders_${new Date().toISOString().slice(0,10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="bg-orange text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-orange-600 transition"
+            >
+              <i className="fa-solid fa-file-csv mr-2"></i> Export CSV
+            </button>
           </div>
         </div>
       </AdminLayout>
