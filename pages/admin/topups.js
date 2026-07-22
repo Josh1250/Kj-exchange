@@ -117,23 +117,27 @@ export default function AdminTopups() {
         .from('wallets')
         .select('balance')
         .eq('user_id', userId)
-        .single();
-      if (walletError && walletError.code !== 'PGRST116') {
-        throw new Error(walletError.message);
+        .maybeSingle();
+
+      let newBalance;
+      if (wallet) {
+        newBalance = (wallet.balance || 0) + amount;
+        // Update existing wallet
+        const { error: updateError } = await supabase
+          .from('wallets')
+          .update({ balance: newBalance })
+          .eq('user_id', userId);
+        if (updateError) throw new Error(updateError.message);
+      } else {
+        newBalance = amount;
+        // Insert new wallet
+        const { error: insertError } = await supabase
+          .from('wallets')
+          .insert({ user_id: userId, balance: newBalance });
+        if (insertError) throw new Error(insertError.message);
       }
-      const currentBalance = wallet?.balance || 0;
-      const newBalance = currentBalance + amount;
 
-      // 3. Update wallet balance
-      const { error: upsertError } = await supabase
-        .from('wallets')
-        .upsert(
-          { user_id: userId, balance: newBalance },
-          { onConflict: 'user_id' }
-        );
-      if (upsertError) throw new Error(upsertError.message);
-
-      // 4. Send notification
+      // 3. Send notification
       await supabase
         .from('notifications')
         .insert({
