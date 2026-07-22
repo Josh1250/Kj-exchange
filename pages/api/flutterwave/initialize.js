@@ -47,6 +47,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
+    // ✅ Generate txRef ONCE (used for both DB and Flutterwave)
+    const txRef = `topup_${user.id}_${Date.now()}`;
+
     // 5. Create transaction record in database
     const { data: txRecord, error: dbError } = await supabaseServer
       .from('transactions')
@@ -56,7 +59,7 @@ export default async function handler(req, res) {
         amount: amount,
         status: 'pending',
         currency: currency,
-        payment_reference: `topup_${user.id}_${Date.now()}`,
+        payment_reference: txRef, // ✅ use the same txRef
         metadata: { purpose: 'wallet_topup' },
       })
       .select()
@@ -67,8 +70,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Database error' });
     }
 
-    // 6. Initialize Flutterwave payment
-    const txRef = `topup_${user.id}_${Date.now()}`;
+    // 6. Initialize Flutterwave payment using the SAME txRef
     const result = await initializePayment(amount, user.email, txRef, currency);
 
     if (result.status === 'success') {
