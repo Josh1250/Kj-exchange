@@ -11,12 +11,19 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
   const router = useRouter();
+
+  // Check if user just verified their email
+  const { verified } = router.query;
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setShowResend(false);
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -24,10 +31,16 @@ export default function Login() {
     });
 
     if (error) {
-      setError(error.message);
+      // Check if the error is due to unverified email
+      if (error.message.includes('Email not confirmed')) {
+        setError('Please verify your email address first. Check your inbox for the confirmation link.');
+        setShowResend(true);
+      } else {
+        setError(error.message);
+      }
       setLoading(false);
     } else {
-      // ✅ Store session tokens and user email in localStorage
+      // Store session tokens in localStorage for admin bypass
       const { data: { session, user } } = await supabase.auth.getSession();
       if (session && user) {
         localStorage.setItem('sb-access-token', session.access_token);
@@ -35,6 +48,31 @@ export default function Login() {
         localStorage.setItem('sb-user-email', user.email);
       }
       router.push('/dashboard');
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResending(true);
+    setResendSuccess(false);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/verify-email`,
+        },
+      });
+      if (error) {
+        setError('Failed to resend verification email. Please try again.');
+      } else {
+        setResendSuccess(true);
+        setShowResend(false);
+        setError('');
+      }
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -51,7 +89,10 @@ export default function Login() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl h-64 bg-purple-400/10 rounded-full blur-2xl animate-pulse-slow"></div>
 
         <div className="relative z-10 w-full max-w-md">
-          <Link href="/" className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition mb-6 group">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition mb-6 group"
+          >
             <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
             <span className="text-sm font-medium">Back to Home</span>
           </Link>
@@ -63,6 +104,14 @@ export default function Login() {
 
             <h1 className="text-2xl font-bold text-center">Welcome Back</h1>
             <p className="text-text-muted text-center text-sm mt-1">Login to continue trading</p>
+
+            {/* Success message after verification */}
+            {verified && (
+              <div className="mt-4 bg-green-400/10 border border-green-400/20 rounded-xl p-3 text-green-400 text-sm flex items-center gap-2">
+                <i className="fa-regular fa-circle-check"></i>
+                <span>✅ Email verified! You can now log in.</span>
+              </div>
+            )}
 
             <form onSubmit={handleLogin} className="mt-8 space-y-5">
               <div>
@@ -109,10 +158,31 @@ export default function Login() {
                 </div>
               </div>
 
+              {/* Error message with Resend button */}
               {error && (
-                <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-center gap-2">
-                  <i className="fa-solid fa-circle-exclamation"></i>
-                  <span>{error}</span>
+                <div className={`rounded-xl p-3 text-sm flex flex-col gap-2 ${
+                  showResend ? 'bg-yellow-400/10 border border-yellow-400/20 text-yellow-400' : 'bg-red-400/10 border border-red-400/20 text-red-400'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <i className={`fa-solid ${showResend ? 'fa-triangle-exclamation' : 'fa-circle-exclamation'} mt-0.5`}></i>
+                    <span>{error}</span>
+                  </div>
+                  {showResend && (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resending || resendSuccess}
+                      className="mt-1 self-start bg-orange/20 hover:bg-orange/30 text-orange px-4 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50"
+                    >
+                      {resending ? (
+                        <><i className="fa-solid fa-spinner fa-spin mr-1"></i> Sending...</>
+                      ) : resendSuccess ? (
+                        <><i className="fa-regular fa-check-circle mr-1"></i> Sent! Check your email.</>
+                      ) : (
+                        <><i className="fa-regular fa-paper-plane mr-1"></i> Resend Verification Email</>
+                      )}
+                    </button>
+                  )}
                 </div>
               )}
 
