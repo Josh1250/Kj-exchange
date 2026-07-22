@@ -11,48 +11,31 @@ export default function Withdraw() {
   const router = useRouter();
   const { currency = 'NGN' } = router.query;
 
-  // State
+  // ===== State =====
   const [balance, setBalance] = useState(0);
   const [amount, setAmount] = useState('');
-  const [bankCode, setBankCode] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [accountName, setAccountName] = useState('');
-  const [routingNumber, setRoutingNumber] = useState('');
-  const [mobileMoney, setMobileMoney] = useState('');
+  const [selectedBankId, setSelectedBankId] = useState('');
   const [banks, setBanks] = useState([]);
-  const [filteredBanks, setFilteredBanks] = useState([]);
-  const [showBankDropdown, setShowBankDropdown] = useState(false);
-  const [bankSearch, setBankSearch] = useState('');
+  const [kycLevel, setKycLevel] = useState(1);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [kycLevel, setKycLevel] = useState(1);
-  const [fetchingAccount, setFetchingAccount] = useState(false);
-  const [loadingBanks, setLoadingBanks] = useState(false);
+  const [withdrawalHistory, setWithdrawalHistory] = useState([]);
 
-  const currencySymbol = { NGN: '₦', USD: '$', GHS: '₵' }[currency] || '₦';
-  const isNGN = currency === 'NGN';
-  const isUSD = currency === 'USD';
-  const isGHS = currency === 'GHS';
-
-  // ============================================
-  // 1. Fetch wallet, profile, and banks
-  // ============================================
+  // ===== Load Data =====
   useEffect(() => {
     if (!loading && !user) {
       router.push('/auth/login');
       return;
     }
     if (user) {
-      fetchWalletAndProfile();
-      fetchBanks();
+      fetchData();
     }
   }, [user, loading, router, currency]);
 
-  const fetchWalletAndProfile = async () => {
+  const fetchData = async () => {
     try {
-      // Wallet balance
+      // 1. Get wallet balance
       const field = currency === 'USD' ? 'usd_balance' : currency === 'GHS' ? 'ghs_balance' : 'balance';
       const { data: wallet } = await supabase
         .from('wallets')
@@ -61,97 +44,46 @@ export default function Withdraw() {
         .maybeSingle();
       setBalance(wallet?.[field] || 0);
 
-      // Profile
+      // 2. Get user's KYC level
       const { data: profile } = await supabase
         .from('users')
-        .select('bank_code, bank_name, account_number, account_name, kyc_level')
+        .select('kyc_level')
         .eq('id', user.id)
         .single();
+      setKycLevel(profile?.kyc_level || 1);
 
-      if (profile) {
-        setBankCode(profile.bank_code || '');
-        setBankName(profile.bank_name || '');
-        setAccountNumber(profile.account_number || '');
-        setAccountName(profile.account_name || '');
-        setKycLevel(profile.kyc_level || 1);
-        setBankSearch(profile.bank_name || '');
-      }
+      // 3. Get saved banks
+      const { data: bankData } = await supabase
+        .from('bank_accounts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false });
+      setBanks(bankData || []);
+
+      // Auto-select default bank
+      const defaultBank = bankData?.find(b => b.is_default);
+      if (defaultBank) setSelectedBankId(defaultBank.id);
+
+      // 4. Get withdrawal history (last 5)
+      const { data: history } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('type', 'withdrawal')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      setWithdrawalHistory(history || []);
     } catch (err) {
       console.error('Error fetching data:', err);
     }
   };
 
-  const fetchBanks = async () => {
-    setLoadingBanks(true);
-    try {
-      const response = await fetch('/api/flutterwave/banks');
-      const data = await response.json();
-      if (data.status === 'success') {
-        setBanks(data.data);
-        setFilteredBanks(data.data);
-      }
-    } catch (err) {
-      console.error('Error fetching banks:', err);
-    } finally {
-      setLoadingBanks(false);
-    }
+  // ===== Get Selected Bank Details =====
+  const getSelectedBank = () => {
+    return banks.find(b => b.id === selectedBankId);
   };
 
-  // ============================================
-  // 2. Bank search and account resolution
-  // ============================================
-  useEffect(() => {
-    const filtered = banks.filter(bank =>
-      bank.name.toLowerCase().includes(bankSearch.toLowerCase())
-    );
-    setFilteredBanks(filtered);
-  }, [bankSearch, banks]);
-
-  const handleBankSelect = (bank) => {
-    setBankCode(bank.code);
-    setBankName(bank.name);
-    setBankSearch(bank.name);
-    setShowBankDropdown(false);
-  };
-
-  const fetchAccountName = async () => {
-    if (!accountNumber || accountNumber.length < 10) {
-      setError('Enter a valid account number');
-      return;
-    }
-    if (!bankCode) {
-      setError('Select a bank first');
-      return;
-    }
-
-    setFetchingAccount(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/flutterwave/resolve-account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_number: accountNumber, bank_code: bankCode }),
-      });
-
-      const data = await response.json();
-      if (data.status === 'success') {
-        setAccountName(data.data.account_name);
-        setSuccess('Account name fetched successfully!');
-        setTimeout(() => setSuccess(''), 3000);
-      } else {
-        setError(data.message || 'Failed to fetch account name');
-      }
-    } catch (err) {
-      setError('Failed to resolve account. Please try again.');
-    } finally {
-      setFetchingAccount(false);
-    }
-  };
-
-  // ============================================
-  // 3. Withdraw submission
-  // ============================================
+  // ===== Withdraw =====
   const handleWithdraw = async (e) => {
     e.preventDefault();
     setError('');
@@ -170,40 +102,46 @@ export default function Withdraw() {
       return;
     }
 
-    if (isNGN && amt > 50000 && kycLevel < 2) {
+    const selectedBank = getSelectedBank();
+    if (!selectedBank) {
+      setError('Please select a bank account');
+      setSubmitting(false);
+      return;
+    }
+
+    // KYC Limit Check
+    if (kycLevel < 2 && amt > 50000) {
       setError('KYC Level 2 required for withdrawals above ₦50,000. Complete KYC in your profile.');
       setSubmitting(false);
       return;
     }
 
-    if (!bankCode || !accountNumber) {
-      setError('Please select a bank and enter account number');
-      setSubmitting(false);
-      return;
-    }
-
-    const metadata = {
-      currency,
-      bank_code: bankCode,
-      bank_name: bankName,
-      account_number: accountNumber,
-      account_name: accountName,
-      routing_number: routingNumber,
-      mobile_money: mobileMoney,
-    };
+    // Determine if withdrawal is auto (KYC Level 2)
+    const isAuto = kycLevel >= 2;
+    const withdrawalType = isAuto ? 'auto' : 'manual';
+    const status = isAuto ? 'processing' : 'pending';
 
     try {
-      // 1. Create transaction
-      const { error: txError } = await supabase
+      // 1. Create transaction record
+      const { data: txData, error: txError } = await supabase
         .from('transactions')
         .insert({
           user_id: user.id,
           type: 'withdrawal',
           amount: -amt,
-          status: 'pending',
+          status: status,
           currency: currency,
-          metadata,
-        });
+          metadata: {
+            bank_name: selectedBank.bank_name,
+            account_number: selectedBank.account_number,
+            account_name: selectedBank.account_name,
+            bank_code: selectedBank.bank_code,
+          },
+          withdrawal_type: withdrawalType,
+        })
+        .select()
+        .single();
+
       if (txError) throw new Error(txError.message);
 
       // 2. Update wallet balance
@@ -215,31 +153,73 @@ export default function Withdraw() {
         .maybeSingle();
 
       const newBalance = (wallet?.[field] || 0) - amt;
+      await supabase
+        .from('wallets')
+        .update({ [field]: newBalance })
+        .eq('user_id', user.id);
 
-      if (wallet) {
-        const { error: updateErr } = await supabase
-          .from('wallets')
-          .update({ [field]: newBalance })
-          .eq('user_id', user.id);
-        if (updateErr) throw new Error(updateErr.message);
+      // 3. If auto withdrawal – trigger Flutterwave transfer
+      if (isAuto) {
+        try {
+          const transferResponse = await fetch('/api/flutterwave/transfer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amount: amt,
+              currency: currency,
+              bank_code: selectedBank.bank_code,
+              account_number: selectedBank.account_number,
+              account_name: selectedBank.account_name,
+              reference: `withdraw_${txData.id}`,
+            }),
+          });
+
+          const transferData = await transferResponse.json();
+
+          if (transferData.status === 'success') {
+            // Update transaction to completed
+            await supabase
+              .from('transactions')
+              .update({
+                status: 'completed',
+                processed_at: new Date().toISOString(),
+              })
+              .eq('id', txData.id);
+
+            setSuccess(`✅ Withdrawal of ${currency} ${amt.toLocaleString()} processed instantly!`);
+
+            // Notification
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: user.id,
+                message: `💸 Instant withdrawal of ${currency} ${amt.toLocaleString()} sent to your bank.`,
+              });
+          } else {
+            // If transfer fails, keep as pending for manual review
+            setSuccess(`⚠️ Withdrawal initiated but bank transfer failed. Our team will review it.`);
+          }
+        } catch (transferErr) {
+          console.error('Transfer error:', transferErr);
+          setSuccess(`⚠️ Withdrawal recorded but bank transfer is pending. Our team will process it shortly.`);
+        }
       } else {
-        const { error: insertErr } = await supabase
-          .from('wallets')
-          .insert({ user_id: user.id, [field]: newBalance });
-        if (insertErr) throw new Error(insertErr.message);
+        // Manual withdrawal – notify user
+        setSuccess(`✅ Withdrawal of ${currency} ${amt.toLocaleString()} initiated. Our team will process it within 24 hours.`);
+
+        // Notification
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: user.id,
+            message: `💸 Withdrawal of ${currency} ${amt.toLocaleString()} submitted for review.`,
+          });
       }
 
-      // 3. Notification
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: user.id,
-          message: `💸 Withdrawal of ${currency} ${amt.toLocaleString()} initiated.`,
-        });
-
-      setSuccess(`✅ Withdrawal of ${currencySymbol}${amt.toLocaleString()} initiated!`);
       setAmount('');
       setBalance(newBalance);
+      fetchData(); // Refresh history
+
     } catch (err) {
       console.error('Withdrawal error:', err);
       setError('❌ Failed to process withdrawal: ' + err.message);
@@ -248,39 +228,80 @@ export default function Withdraw() {
     }
   };
 
-  // ============================================
-  // 4. UI
-  // ============================================
+  // ===== Processing Time Text =====
+  const getProcessingTime = () => {
+    if (kycLevel >= 2) {
+      return {
+        label: '⚡ Instant Processing',
+        color: 'text-green-400',
+        bg: 'bg-green-400/10',
+        icon: 'fa-bolt',
+      };
+    }
+    return {
+      label: '⏳ 24-Hour Processing',
+      color: 'text-yellow-400',
+      bg: 'bg-yellow-400/10',
+      icon: 'fa-clock',
+    };
+  };
+
+  const processingInfo = getProcessingTime();
+
+  // ===== Loading State =====
   if (loading) return <div>Loading...</div>;
   if (!user) return null;
+
+  const currencySymbol = { NGN: '₦', USD: '$', GHS: '₵' }[currency] || '₦';
 
   return (
     <>
       <Head><title>Withdraw · KJ Exchange</title></Head>
       <DashboardLayout>
-        <div className="max-w-3xl mx-auto">
-          {/* Header with back button */}
-          <div className="flex items-center gap-2 mb-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-2">
             <Link href="/dashboard/wallet" className="text-text-muted hover:text-text-primary transition group">
               <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
             </Link>
-            <h1 className="text-2xl font-bold">Withdraw {currency}</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <i className="fa-solid fa-arrow-down text-orange"></i>
+              Withdraw {currency}
+            </h1>
             <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-orange/10 text-orange border border-orange/20">
               {currency}
             </span>
           </div>
 
-          <div className="bg-bg-card rounded-2xl p-6 md:p-8 border border-border shadow-2xl shadow-purple/5">
-            {/* Balance display */}
+          {/* Main Card */}
+          <div className="glass rounded-2xl p-6 md:p-8 border border-border">
+
+            {/* Balance */}
             <div className="flex justify-between items-center mb-6 p-4 bg-black/20 rounded-xl border border-border/50">
-              <p className="text-text-muted text-sm">Available Balance</p>
+              <p className="text-text-muted text-sm flex items-center gap-2">
+                <i className="fa-regular fa-wallet text-orange"></i>
+                Available Balance
+              </p>
               <p className="text-2xl font-bold">{currencySymbol}{balance.toLocaleString()}</p>
+            </div>
+
+            {/* Processing Time Badge */}
+            <div className={`${processingInfo.bg} rounded-xl p-3 mb-6 flex items-center gap-2 text-sm`}>
+              <i className={`fa-solid ${processingInfo.icon} ${processingInfo.color}`}></i>
+              <span className={processingInfo.color}>{processingInfo.label}</span>
+              {kycLevel < 2 && (
+                <span className="text-text-muted text-xs ml-auto">
+                  (Upgrade to KYC Level 2 for instant)
+                </span>
+              )}
             </div>
 
             <form onSubmit={handleWithdraw} className="space-y-5">
               {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1.5">Amount</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                  Amount
+                </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">
                     {currencySymbol}
@@ -296,133 +317,78 @@ export default function Withdraw() {
                     step="any"
                   />
                 </div>
-                {isNGN && (
-                  <p className="text-xs text-text-muted mt-1.5">
-                    💡 Withdrawals above ₦50,000 require KYC Level 2
+                {kycLevel < 2 && (
+                  <p className="text-xs text-text-muted mt-1.5 flex items-center gap-1">
+                    <i className="fa-solid fa-info-circle text-orange"></i>
+                    Withdrawals above ₦50,000 require KYC Level 2
                   </p>
                 )}
               </div>
 
-              {/* Bank selection with search */}
-              <div className="relative">
-                <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Bank</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={bankSearch}
-                    onChange={(e) => {
-                      setBankSearch(e.target.value);
-                      setShowBankDropdown(true);
-                    }}
-                    onFocus={() => setShowBankDropdown(true)}
-                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
-                    placeholder="Search for your bank..."
-                    required
-                  />
-                  {loadingBanks && (
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2">
-                      <i className="fa-solid fa-spinner fa-spin text-text-muted"></i>
-                    </span>
-                  )}
-                </div>
-
-                {showBankDropdown && filteredBanks.length > 0 && (
-                  <div className="absolute z-20 w-full mt-1 bg-bg-card border border-border rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-                    {filteredBanks.map((bank) => (
+              {/* Bank Selection */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                  <i className="fa-solid fa-building-columns text-orange mr-1"></i>
+                  Withdraw to
+                </label>
+                {banks.length === 0 ? (
+                  <div className="bg-black/20 border border-border rounded-xl p-4 text-center text-text-muted text-sm">
+                    <i className="fa-regular fa-building-columns text-2xl block mb-2 opacity-40"></i>
+                    <p>No bank accounts saved.</p>
+                    <Link
+                      href="/dashboard/profile"
+                      className="text-orange hover:underline text-xs mt-1 inline-block"
+                    >
+                      Add a bank in your profile →
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {banks.map((bank) => (
                       <button
-                        key={bank.code}
+                        key={bank.id}
                         type="button"
-                        onClick={() => handleBankSelect(bank)}
-                        className="w-full px-4 py-2.5 text-left hover:bg-orange/10 hover:text-orange transition text-sm flex items-center gap-2 border-b border-border/50 last:border-0"
+                        onClick={() => setSelectedBankId(bank.id)}
+                        className={`w-full p-4 rounded-xl border transition flex items-center justify-between ${
+                          selectedBankId === bank.id
+                            ? 'border-orange bg-orange/10'
+                            : 'border-border hover:border-orange/30 bg-black/20'
+                        }`}
                       >
-                        <span>{bank.name}</span>
-                        {bank.code === bankCode && (
-                          <span className="ml-auto text-xs text-green-400">
-                            <i className="fa-regular fa-circle-check"></i>
-                          </span>
-                        )}
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange">
+                            <i className="fa-solid fa-building-columns"></i>
+                          </div>
+                          <div className="text-left">
+                            <p className="font-semibold text-sm">{bank.bank_name}</p>
+                            <p className="text-text-muted text-xs">
+                              {bank.account_number} • {bank.account_name}
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          {bank.is_default && (
+                            <span className="text-[10px] bg-green-400/20 text-green-400 px-2 py-0.5 rounded-full mr-2">
+                              Default
+                            </span>
+                          )}
+                          {selectedBankId === bank.id && (
+                            <i className="fa-regular fa-circle-check text-orange text-lg"></i>
+                          )}
+                        </div>
                       </button>
                     ))}
-                  </div>
-                )}
-
-                {showBankDropdown && filteredBanks.length === 0 && bankSearch && (
-                  <div className="absolute z-20 w-full mt-1 bg-bg-card border border-border rounded-xl shadow-2xl p-4 text-center text-text-muted text-sm">
-                    No banks found.
-                  </div>
-                )}
-              </div>
-
-              {/* Account Number */}
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1.5">Account Number</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={accountNumber}
-                    onChange={(e) => setAccountNumber(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
-                    placeholder={isNGN ? '10-digit account number' : 'Enter account number'}
-                    required
-                    onBlur={() => {
-                      if (accountNumber && accountNumber.length >= 10 && bankCode) {
-                        fetchAccountName();
-                      }
-                    }}
-                  />
-                  {bankCode && accountNumber && accountNumber.length >= 10 && (
-                    <button
-                      type="button"
-                      onClick={fetchAccountName}
-                      disabled={fetchingAccount}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 bg-orange/10 hover:bg-orange/20 text-orange px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50"
+                    <Link
+                      href="/dashboard/profile"
+                      className="text-xs text-text-muted hover:text-orange transition inline-flex items-center gap-1 mt-2"
                     >
-                      {fetchingAccount ? (
-                        <i className="fa-solid fa-spinner fa-spin"></i>
-                      ) : (
-                        'Fetch Name'
-                      )}
-                    </button>
-                  )}
-                </div>
+                      <i className="fa-solid fa-plus"></i> Manage banks in profile
+                    </Link>
+                  </div>
+                )}
               </div>
 
-              {/* Account Name (auto-filled) */}
-              {accountName && (
-                <div className="bg-green-400/5 border border-green-400/20 rounded-xl p-3 flex items-center gap-2">
-                  <i className="fa-regular fa-circle-check text-green-400"></i>
-                  <span className="text-text-secondary text-sm">Account Name: <strong className="text-text-primary">{accountName}</strong></span>
-                </div>
-              )}
-
-              {/* Additional fields per currency */}
-              {isUSD && (
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1.5">Routing Number</label>
-                  <input
-                    type="text"
-                    value={routingNumber}
-                    onChange={(e) => setRoutingNumber(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none"
-                    placeholder="9-digit routing number"
-                    required
-                  />
-                </div>
-              )}
-
-              {isGHS && (
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1.5">Mobile Money (Optional)</label>
-                  <input
-                    type="text"
-                    value={mobileMoney}
-                    onChange={(e) => setMobileMoney(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none"
-                    placeholder="e.g., 0241234567 (MTN MoMo)"
-                  />
-                </div>
-              )}
-
+              {/* Error / Success */}
               {error && (
                 <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
                   <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
@@ -436,9 +402,10 @@ export default function Withdraw() {
                 </div>
               )}
 
+              {/* Submit */}
               <button
                 type="submit"
-                disabled={submitting || !bankCode || !accountNumber}
+                disabled={submitting || !selectedBankId}
                 className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
               >
                 {submitting ? (
@@ -448,12 +415,72 @@ export default function Withdraw() {
                 )}
               </button>
 
-              <p className="text-center text-text-muted text-xs">
-                Withdrawals are processed within 24 hours.
-                <br />
-                <span className="text-green-400 font-semibold">🔒 Secure &amp; Transparent</span>
+              <p className="text-center text-text-muted text-xs flex items-center justify-center gap-2">
+                <i className="fa-solid fa-lock text-green-400"></i>
+                Secure &amp; Transparent
               </p>
             </form>
+          </div>
+
+          {/* ===== Withdrawal History ===== */}
+          <div className="glass rounded-2xl p-6 border border-border">
+            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
+              <i className="fa-solid fa-clock-rotate-left text-orange"></i>
+              Recent Withdrawals
+            </h2>
+            {withdrawalHistory.length === 0 ? (
+              <div className="text-center py-6 text-text-muted">
+                <i className="fa-regular fa-clock text-4xl block mb-3 opacity-40"></i>
+                <p className="text-sm">No withdrawal history yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {withdrawalHistory.map((tx) => (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-border"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                        tx.status === 'completed' ? 'bg-green-400/10 text-green-400' :
+                        tx.status === 'processing' ? 'bg-blue-400/10 text-blue-400' :
+                        'bg-yellow-400/10 text-yellow-400'
+                      }`}>
+                        <i className={`fa-solid ${
+                          tx.status === 'completed' ? 'fa-circle-check' :
+                          tx.status === 'processing' ? 'fa-spinner fa-spin' :
+                          'fa-clock'
+                        }`}></i>
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Withdrawal</p>
+                        <p className="text-text-muted text-xs">
+                          {new Date(tx.created_at).toLocaleDateString()} • {tx.currency}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-red-400">
+                        -{currencySymbol}{Math.abs(tx.amount).toLocaleString()}
+                      </p>
+                      <span className={`text-xs capitalize ${
+                        tx.status === 'completed' ? 'text-green-400' :
+                        tx.status === 'processing' ? 'text-blue-400' :
+                        'text-yellow-400'
+                      }`}>
+                        {tx.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <Link
+                  href="/dashboard/orders"
+                  className="text-xs text-orange hover:underline inline-block mt-2"
+                >
+                  View all transactions →
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </DashboardLayout>
