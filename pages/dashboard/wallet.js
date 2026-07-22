@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../_app';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
-import { initializePayment } from '../../lib/flutterwave';
 import Link from 'next/link';
 import Head from 'next/head';
 
@@ -18,7 +17,7 @@ export default function Wallet() {
   const [isLoading, setIsLoading] = useState(true);
   const [hideBalance, setHideBalance] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('NGN');
-  const [exchangeRates, setExchangeRates] = useState({ USD: 1550, GHS: 120 });
+  const [exchangeRates, setExchangeRates] = useState({ USD: 1500, GHS: 120 }); // fallback
 
   // Top-Up Modal
   const [showTopUpModal, setShowTopUpModal] = useState(false);
@@ -26,7 +25,7 @@ export default function Wallet() {
   const [topUpCurrency, setTopUpCurrency] = useState('NGN');
   const [topUpLoading, setTopUpLoading] = useState(false);
   const [topUpError, setTopUpError] = useState('');
-  const [topUpTab, setTopUpTab] = useState('bank'); // 'bank' or 'card'
+  const [topUpTab, setTopUpTab] = useState('bank');
   const [verifying, setVerifying] = useState(false);
 
   // Virtual Account Details
@@ -130,17 +129,19 @@ export default function Wallet() {
 
   const fetchExchangeRates = async () => {
     try {
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/NGN');
+      // Using a more reliable free API
+      const response = await fetch('https://api.frankfurter.app/latest?from=NGN');
       const data = await response.json();
       if (data.rates) {
         setExchangeRates({
-          USD: data.rates.USD || 1550,
+          USD: data.rates.USD || 1500,
           GHS: data.rates.GHS || 120,
         });
       }
     } catch (error) {
       console.error('Error fetching exchange rates:', error);
-      setExchangeRates({ USD: 1550, GHS: 120 });
+      // Fallback rates (you can adjust these)
+      setExchangeRates({ USD: 1500, GHS: 120 });
     }
   };
 
@@ -159,15 +160,17 @@ export default function Wallet() {
           accountName: `${userData.full_name || user.email?.split('@')[0]}/KJ Exchange`,
         });
       } else {
-        // Try to create a virtual account
-        await createVirtualAccount();
+        // No virtual account – show "Create Wallet" button
+        console.log('No virtual account found for user.');
       }
     } catch (err) {
       console.error('Error fetching virtual account:', err);
     }
   };
 
+  // ===== Create Virtual Account (with debug alerts) =====
   const createVirtualAccount = async () => {
+    alert('⏳ Creating virtual account...');
     try {
       const response = await fetch('/api/flutterwave/create-wallet', {
         method: 'POST',
@@ -180,15 +183,23 @@ export default function Wallet() {
         }),
       });
       const data = await response.json();
+      console.log('Create wallet response:', data);
+      alert('Response: ' + JSON.stringify(data, null, 2));
       if (data.success) {
         setVirtualAccount({
           accountNumber: data.accountNumber,
           bankName: data.bankName || 'Wema Bank',
           accountName: `${user.full_name || user.email?.split('@')[0]}/KJ Exchange`,
         });
+        alert('✅ Virtual account created!\nAccount: ' + data.accountNumber);
+        // Refresh the page to show the account
+        window.location.reload();
+      } else {
+        alert('❌ Failed: ' + (data.error || 'Unknown error'));
       }
     } catch (err) {
-      console.error('Error creating virtual account:', err);
+      alert('❌ Error: ' + err.message);
+      console.error(err);
     }
   };
 
@@ -295,19 +306,29 @@ export default function Wallet() {
         )}
 
         <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
+          {/* Header with Create Wallet Button */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <i className="fa-solid fa-wallet text-orange"></i>
               Wallet
             </h1>
-            <button
-              onClick={() => setHideBalance(!hideBalance)}
-              className="flex items-center gap-2 text-text-muted hover:text-text-primary transition text-sm px-4 py-2 rounded-full border border-border hover:border-orange"
-            >
-              <i className={`fa-regular ${hideBalance ? 'fa-eye' : 'fa-eye-slash'}`}></i>
-              {hideBalance ? 'Show' : 'Hide'}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {!virtualAccount.accountNumber && (
+                <button
+                  onClick={createVirtualAccount}
+                  className="bg-orange/20 hover:bg-orange/30 text-orange px-4 py-2 rounded-full text-sm font-semibold transition flex items-center gap-2"
+                >
+                  <i className="fa-solid fa-plus"></i> Create Wallet
+                </button>
+              )}
+              <button
+                onClick={() => setHideBalance(!hideBalance)}
+                className="flex items-center gap-2 text-text-muted hover:text-text-primary transition text-sm px-4 py-2 rounded-full border border-border hover:border-orange"
+              >
+                <i className={`fa-regular ${hideBalance ? 'fa-eye' : 'fa-eye-slash'}`}></i>
+                {hideBalance ? 'Show' : 'Hide'}
+              </button>
+            </div>
           </div>
 
           {/* Balance Card */}
@@ -554,30 +575,43 @@ export default function Wallet() {
             {topUpTab === 'bank' && (
               // Bank Transfer Tab – Show Virtual Account
               <div className="space-y-6">
-                <div className="bg-black/20 rounded-xl p-4 border border-border text-center">
-                  <p className="text-text-muted text-xs uppercase tracking-wider">Bank Name</p>
-                  <p className="text-lg font-bold">{virtualAccount.bankName || 'Wema Bank'}</p>
-                </div>
-                <div className="bg-black/20 rounded-xl p-4 border border-border text-center relative">
-                  <p className="text-text-muted text-xs uppercase tracking-wider">Account Number</p>
-                  <p className="text-2xl font-bold tracking-wider">{virtualAccount.accountNumber || 'Loading...'}</p>
-                  {virtualAccount.accountNumber && (
+                {!virtualAccount.accountNumber ? (
+                  <div className="text-center py-8">
+                    <i className="fa-regular fa-building-columns text-5xl text-text-muted block mb-4"></i>
+                    <p className="text-text-muted">You don't have a virtual account yet.</p>
                     <button
-                      onClick={() => copyToClipboard(virtualAccount.accountNumber)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-orange/10 hover:bg-orange/20 text-orange px-3 py-1.5 rounded-lg text-sm font-semibold transition"
+                      onClick={createVirtualAccount}
+                      className="mt-4 bg-orange text-white px-6 py-2 rounded-full font-semibold hover:bg-orange-600 transition"
                     >
-                      <i className="fa-regular fa-copy"></i> Copy
+                      Create Wallet
                     </button>
-                  )}
-                </div>
-                <div className="bg-black/20 rounded-xl p-4 border border-border text-center">
-                  <p className="text-text-muted text-xs uppercase tracking-wider">Account Name</p>
-                  <p className="text-lg font-semibold">{virtualAccount.accountName || `${user?.full_name || user?.email?.split('@')[0]}/KJ Exchange`}</p>
-                </div>
-                <div className="bg-orange/5 border border-orange/20 rounded-xl p-3 text-center text-sm text-text-muted">
-                  <i className="fa-solid fa-info-circle text-orange mr-1"></i>
-                  Min. deposit: ₦100 • Funds auto‑credit within 10 minutes
-                </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-black/20 rounded-xl p-4 border border-border text-center">
+                      <p className="text-text-muted text-xs uppercase tracking-wider">Bank Name</p>
+                      <p className="text-lg font-bold">{virtualAccount.bankName || 'Wema Bank'}</p>
+                    </div>
+                    <div className="bg-black/20 rounded-xl p-4 border border-border text-center relative">
+                      <p className="text-text-muted text-xs uppercase tracking-wider">Account Number</p>
+                      <p className="text-2xl font-bold tracking-wider">{virtualAccount.accountNumber}</p>
+                      <button
+                        onClick={() => copyToClipboard(virtualAccount.accountNumber)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-orange/10 hover:bg-orange/20 text-orange px-3 py-1.5 rounded-lg text-sm font-semibold transition"
+                      >
+                        <i className="fa-regular fa-copy"></i> Copy
+                      </button>
+                    </div>
+                    <div className="bg-black/20 rounded-xl p-4 border border-border text-center">
+                      <p className="text-text-muted text-xs uppercase tracking-wider">Account Name</p>
+                      <p className="text-lg font-semibold">{virtualAccount.accountName}</p>
+                    </div>
+                    <div className="bg-orange/5 border border-orange/20 rounded-xl p-3 text-center text-sm text-text-muted">
+                      <i className="fa-solid fa-info-circle text-orange mr-1"></i>
+                      Min. deposit: ₦100 • Funds auto‑credit within 10 minutes
+                    </div>
+                  </>
+                )}
                 <div className="text-center text-xs text-text-muted mt-4">
                   <i className="fa-brands fa-gg text-orange mr-1"></i>
                   Powered by Flutterwave
@@ -586,7 +620,6 @@ export default function Wallet() {
             )}
 
             {topUpTab === 'card' && (
-              // Card Payment Tab – Flutterwave
               <form onSubmit={handleTopUp} className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1.5">
