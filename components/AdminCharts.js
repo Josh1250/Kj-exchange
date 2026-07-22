@@ -1,64 +1,83 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
 
-// Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
-
-// Color palette (matching your brand)
-const colors = {
-  purple: '#4E1F91',
-  purpleLight: '#7B3FBF',
-  orange: '#FF7300',
-  orangeLight: '#FF9A44',
-  green: '#2ECC71',
-  red: '#E74C3C',
-  blue: '#3498DB',
+// Simple bar chart component
+const BarChart = ({ data, labels, color = '#FF7300', height = 200 }) => {
+  const maxValue = Math.max(...data, 1);
+  return (
+    <div className="relative" style={{ height: `${height}px` }}>
+      <div className="flex items-end justify-between h-full gap-1">
+        {data.map((value, index) => {
+          const barHeight = (value / maxValue) * 100;
+          return (
+            <div key={index} className="flex flex-col items-center flex-1">
+              <div
+                className="w-full rounded-t transition-all duration-500"
+                style={{
+                  height: `${barHeight}%`,
+                  backgroundColor: color,
+                  minHeight: '2px',
+                }}
+              ></div>
+              <span className="text-text-muted text-[8px] mt-1 truncate max-w-full">
+                {labels[index] || ''}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      labels: {
-        color: '#B8B0C9',
-        font: { size: 12, family: 'Inter' },
-      },
-    },
-  },
-  scales: {
-    x: {
-      grid: { color: 'rgba(255,255,255,0.05)' },
-      ticks: { color: '#7A728F' },
-    },
-    y: {
-      grid: { color: 'rgba(255,255,255,0.05)' },
-      ticks: { color: '#7A728F' },
-    },
-  },
+// Simple line chart using SVG
+const LineChart = ({ data, labels, color = '#FF7300', height = 200 }) => {
+  const maxValue = Math.max(...data, 1);
+  const points = data.map((value, index) => {
+    const x = (index / (data.length - 1 || 1)) * 100;
+    const y = 100 - (value / maxValue) * 100;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="relative" style={{ height: `${height}px` }}>
+      <svg width="100%" height="100%" viewBox={`0 0 100 100`} preserveAspectRatio="none">
+        {/* Grid lines */}
+        <line x1="0" y1="25" x2="100" y2="25" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
+        <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
+        <line x1="0" y1="75" x2="100" y2="75" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
+        {/* Line */}
+        <polyline
+          points={points}
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {/* Area under line */}
+        <polygon
+          points={`0,100 ${points} 100,100`}
+          fill={`${color}20`}
+        />
+        {/* Points */}
+        {data.map((value, index) => {
+          const x = (index / (data.length - 1 || 1)) * 100;
+          const y = 100 - (value / maxValue) * 100;
+          return (
+            <circle key={index} cx={x} cy={y} r="2" fill={color} />
+          );
+        })}
+      </svg>
+      <div className="flex justify-between mt-1">
+        {labels.map((label, index) => (
+          <span key={index} className="text-text-muted text-[8px]">
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 export default function AdminCharts() {
@@ -82,11 +101,10 @@ export default function AdminCharts() {
     try {
       setLoading(true);
 
-      // Get date range for last 30 days
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      // 1. Total Stats
+      // Total stats
       const { data: orders, count: totalOrders } = await supabase
         .from('orders')
         .select('*', { count: 'exact' });
@@ -104,45 +122,36 @@ export default function AdminCharts() {
         return sum;
       }, 0) || 0;
 
-      // 2. Revenue by day (last 30 days)
+      // Revenue by day
       const revenueByDay = {};
       const ordersByDay = {};
-      const usersByDay = {};
-
-      // Revenue + Orders by day
       orders?.forEach(order => {
-        const date = new Date(order.created_at).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-        });
+        const date = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         ordersByDay[date] = (ordersByDay[date] || 0) + 1;
         if (order.status === 'completed' || order.status === 'verified') {
           revenueByDay[date] = (revenueByDay[date] || 0) + (order.value_ngn || 0);
         }
       });
 
-      // Users by day (last 30 days)
+      // Users by day
+      const usersByDay = {};
       const { data: users } = await supabase
         .from('users')
         .select('created_at')
         .gte('created_at', thirtyDaysAgo.toISOString());
-
       users?.forEach(user => {
-        const date = new Date(user.created_at).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-        });
+        const date = new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         usersByDay[date] = (usersByDay[date] || 0) + 1;
       });
 
-      // Sort by date
+      // Sort dates
       const sortedDates = Object.keys(revenueByDay).sort((a, b) => {
         const dateA = new Date(a);
         const dateB = new Date(b);
         return dateA - dateB;
       });
 
-      // 3. Top Assets
+      // Top assets
       const assetMap = {};
       orders?.forEach(order => {
         if (order.status === 'completed' || order.status === 'verified') {
@@ -160,20 +169,20 @@ export default function AdminCharts() {
         totalUsers: totalUsers || 0,
         pendingOrders,
         revenueData: {
-          labels: sortedDates,
-          values: sortedDates.map(date => revenueByDay[date] || 0),
+          labels: sortedDates.slice(-14), // show last 14 days for cleaner chart
+          values: sortedDates.slice(-14).map(date => revenueByDay[date] || 0),
         },
         ordersData: {
-          labels: sortedDates,
-          values: sortedDates.map(date => ordersByDay[date] || 0),
+          labels: sortedDates.slice(-14),
+          values: sortedDates.slice(-14).map(date => ordersByDay[date] || 0),
         },
         usersData: {
           labels: Object.keys(usersByDay).sort((a, b) => {
             const dateA = new Date(a);
             const dateB = new Date(b);
             return dateA - dateB;
-          }),
-          values: Object.values(usersByDay),
+          }).slice(-14),
+          values: Object.values(usersByDay).slice(-14),
         },
         topAssets,
       });
@@ -192,71 +201,6 @@ export default function AdminCharts() {
       </div>
     );
   }
-
-  // Revenue Chart Data
-  const revenueChartData = {
-    labels: stats.revenueData.labels,
-    datasets: [
-      {
-        label: 'Revenue (₦)',
-        data: stats.revenueData.values,
-        borderColor: colors.orange,
-        backgroundColor: (context) => {
-          const ctx = context.chart.ctx;
-          const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-          gradient.addColorStop(0, 'rgba(255, 115, 0, 0.3)');
-          gradient.addColorStop(1, 'rgba(255, 115, 0, 0.01)');
-          return gradient;
-        },
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: colors.orange,
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-        pointRadius: 4,
-      },
-    ],
-  };
-
-  // Orders Chart Data
-  const ordersChartData = {
-    labels: stats.ordersData.labels,
-    datasets: [
-      {
-        label: 'Orders',
-        data: stats.ordersData.values,
-        backgroundColor: 'rgba(78, 31, 145, 0.6)',
-        borderColor: colors.purple,
-        borderWidth: 2,
-        borderRadius: 4,
-      },
-    ],
-  };
-
-  // Users Chart Data
-  const usersChartData = {
-    labels: stats.usersData.labels,
-    datasets: [
-      {
-        label: 'New Users',
-        data: stats.usersData.values,
-        borderColor: colors.green,
-        backgroundColor: (context) => {
-          const ctx = context.chart.ctx;
-          const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-          gradient.addColorStop(0, 'rgba(46, 204, 113, 0.3)');
-          gradient.addColorStop(1, 'rgba(46, 204, 113, 0.01)');
-          return gradient;
-        },
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: colors.green,
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-        pointRadius: 4,
-      },
-    ],
-  };
 
   return (
     <div className="space-y-6">
@@ -284,25 +228,40 @@ export default function AdminCharts() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Revenue Chart */}
         <div className="bg-bg-card rounded-2xl p-6 border border-border">
-          <h3 className="font-bold text-lg mb-2">Revenue (30 Days)</h3>
-          <div className="h-64">
-            <Line data={revenueChartData} options={chartOptions} />
+          <h3 className="font-bold text-lg mb-2">Revenue (Last 14 Days)</h3>
+          <div className="h-48">
+            <LineChart
+              data={stats.revenueData.values}
+              labels={stats.revenueData.labels}
+              color="#FF7300"
+              height={180}
+            />
           </div>
         </div>
 
         {/* Orders Chart */}
         <div className="bg-bg-card rounded-2xl p-6 border border-border">
-          <h3 className="font-bold text-lg mb-2">Orders (30 Days)</h3>
-          <div className="h-64">
-            <Bar data={ordersChartData} options={chartOptions} />
+          <h3 className="font-bold text-lg mb-2">Orders (Last 14 Days)</h3>
+          <div className="h-48">
+            <BarChart
+              data={stats.ordersData.values}
+              labels={stats.ordersData.labels}
+              color="#4E1F91"
+              height={180}
+            />
           </div>
         </div>
 
         {/* Users Chart */}
         <div className="bg-bg-card rounded-2xl p-6 border border-border">
-          <h3 className="font-bold text-lg mb-2">New Users (30 Days)</h3>
-          <div className="h-64">
-            <Line data={usersChartData} options={chartOptions} />
+          <h3 className="font-bold text-lg mb-2">New Users (Last 14 Days)</h3>
+          <div className="h-48">
+            <LineChart
+              data={stats.usersData.values}
+              labels={stats.usersData.labels}
+              color="#2ECC71"
+              height={180}
+            />
           </div>
         </div>
 
