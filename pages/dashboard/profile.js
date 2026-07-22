@@ -283,7 +283,7 @@ export default function Profile() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           account_number: accountNumber,
-          bank_code: selectedBank.code,
+          account_bank: selectedBank.code,
         }),
       });
       const data = await response.json();
