@@ -208,10 +208,10 @@ export default function DashboardLayout({ children }) {
               )}
             </button>
 
-            {/* Notification Dropdown - Solid Background */}
+            {/* Notification Dropdown - 100% Solid Background */}
             {showDropdown && (
-              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-bg-card border border-border rounded-xl shadow-2xl shadow-black/70 z-50 p-2">
-                <div className="flex justify-between items-center p-2 border-b border-border sticky top-0 bg-bg-card z-10 rounded-t-xl">
+              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-[#0B0815] border border-border rounded-xl shadow-2xl shadow-black/70 z-50 p-2" style={{ backdropFilter: 'none' }}>
+                <div className="flex justify-between items-center p-2 border-b border-border sticky top-0 bg-[#0B0815] z-10 rounded-t-xl">
                   <h3 className="font-bold text-sm">Notifications</h3>
                   {unreadCount > 0 && (
                     <button
