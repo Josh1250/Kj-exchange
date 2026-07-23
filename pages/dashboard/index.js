@@ -17,12 +17,29 @@ export default function DashboardOverview() {
   const [recentOrders, setRecentOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hideBalance, setHideBalance] = useState(false);
-  
-  // New state for premium features
+
+  // Currency / Wallet toggle
   const [selectedCurrency, setSelectedCurrency] = useState('NGN');
-  const [exchangeRates, setExchangeRates] = useState({ USD: 1550, GHS: 120 });
+  const [kycLevel, setKycLevel] = useState(1);
+
+  // Exchange rates for conversion (hardcoded or from API)
+  const [exchangeRates, setExchangeRates] = useState({ USD: 1500, GHS: 120 });
   const [quickStats, setQuickStats] = useState({ orders: 0, pending: 0, earned: 0 });
   const [sparklineData, setSparklineData] = useState([]);
+
+  // Fetch KYC level
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('users')
+        .select('kyc_level')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data) setKycLevel(data.kyc_level || 1);
+        });
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -36,45 +53,40 @@ export default function DashboardOverview() {
       fetchExchangeRates();
       fetchQuickStats();
       fetchSparklineData();
+      fetchGiftPoints();
     }
   }, [user]);
 
-  // Fetch exchange rates from API
   const fetchExchangeRates = async () => {
     try {
       const response = await fetch('https://api.exchangerate-api.com/v4/latest/NGN');
       const data = await response.json();
       if (data.rates) {
         setExchangeRates({
-          USD: data.rates.USD || 1550,
+          USD: data.rates.USD || 1500,
           GHS: data.rates.GHS || 120,
         });
       }
     } catch (error) {
       console.error('Error fetching exchange rates:', error);
-      // Fallback rates
-      setExchangeRates({ USD: 1550, GHS: 120 });
+      setExchangeRates({ USD: 1500, GHS: 120 });
     }
   };
 
-  // Fetch quick stats (orders count, pending withdrawals, total earned)
   const fetchQuickStats = async () => {
     if (!user) return;
     try {
-      // Total orders count
       const { count: ordersCount } = await supabase
         .from('orders')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
 
-      // Pending withdrawals count (assuming you have a status column)
       const { count: pendingCount } = await supabase
         .from('withdrawals')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('status', 'pending');
 
-      // Total earned (sum of completed transactions or bonus)
       const { data: earnedData } = await supabase
         .from('transactions')
         .select('amount')
@@ -94,7 +106,6 @@ export default function DashboardOverview() {
     }
   };
 
-  // Fetch data for sparkline (last 7 days balance history)
   const fetchSparklineData = async () => {
     if (!user) return;
     try {
@@ -108,18 +119,13 @@ export default function DashboardOverview() {
         .gte('created_at', sevenDaysAgo.toISOString())
         .order('created_at', { ascending: true });
 
-      // Process data to get daily balances
       const dailyData = [];
       const today = new Date();
       for (let i = 6; i >= 0; i--) {
         const date = new Date(today);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-        
-        const dayTransactions = transactions?.filter(t => 
-          t.created_at.startsWith(dateStr)
-        ) || [];
-        
+        const dayTransactions = transactions?.filter(t => t.created_at.startsWith(dateStr)) || [];
         const dayTotal = dayTransactions.reduce((sum, t) => sum + t.amount, 0);
         dailyData.push({
           date: dateStr,
@@ -127,7 +133,6 @@ export default function DashboardOverview() {
           day: date.toLocaleDateString('en-US', { weekday: 'short' })
         });
       }
-
       setSparklineData(dailyData);
     } catch (error) {
       console.error('Error fetching sparkline data:', error);
@@ -136,7 +141,6 @@ export default function DashboardOverview() {
 
   const fetchDashboardData = async () => {
     try {
-      // Get wallet
       const { data: wallet } = await supabase
         .from('wallets')
         .select('balance, bonus_balance, usd_balance, ghs_balance, gift_points')
@@ -148,10 +152,9 @@ export default function DashboardOverview() {
         setBonusBalance(wallet.bonus_balance || 0);
         setUsdBalance(wallet.usd_balance || 0);
         setGhsBalance(wallet.ghs_balance || 0);
-        setGiftPoints(wallet.gift_points || 0);
+        // Note: gift_points is in the wallet table, but we'll also fetch from gift_point_transactions for accurate total.
       }
 
-      // Get recent transactions
       const { data: txs } = await supabase
         .from('transactions')
         .select('*')
@@ -167,39 +170,50 @@ export default function DashboardOverview() {
     }
   };
 
-  // Get converted balance based on selected currency
-  const getConvertedBalance = () => {
-    const totalBalance = balance + bonusBalance;
-    switch (selectedCurrency) {
-      case 'USD':
-        return totalBalance / exchangeRates.USD;
-      case 'GHS':
-        return totalBalance / exchangeRates.GHS;
-      default:
-        return totalBalance;
+  const fetchGiftPoints = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('gift_point_transactions')
+        .select('amount')
+        .eq('user_id', user.id);
+      if (!error && data) {
+        const total = data.reduce((sum, t) => sum + t.amount, 0);
+        setGiftPoints(total);
+      }
+    } catch (e) {
+      console.error('Error fetching gift points:', e);
     }
   };
 
-  // Get currency symbol
+  // Convert balance based on selected currency
+  const getConvertedBalance = () => {
+    const totalBalance = balance + bonusBalance;
+    switch (selectedCurrency) {
+      case 'USD': return totalBalance / exchangeRates.USD;
+      case 'GHS': return totalBalance / exchangeRates.GHS;
+      case 'Gift Points': return giftPoints; // special case
+      default: return totalBalance;
+    }
+  };
+
   const getCurrencySymbol = () => {
     switch (selectedCurrency) {
       case 'USD': return '$';
       case 'GHS': return '₵';
+      case 'Gift Points': return '🎁';
       default: return '₦';
     }
   };
 
-  // Get formatted balance for sparkline
   const getSparklinePoints = () => {
     if (sparklineData.length === 0) return '';
     const max = Math.max(...sparklineData.map(d => d.balance));
     const min = Math.min(...sparklineData.map(d => d.balance));
     const range = max - min || 1;
-    
     const height = 40;
     const width = 120;
     const step = width / (sparklineData.length - 1);
-    
     return sparklineData.map((d, i) => {
       const x = i * step;
       const y = height - ((d.balance - min) / range) * height;
@@ -207,10 +221,31 @@ export default function DashboardOverview() {
     }).join(' ');
   };
 
+  // Determine which actions to show based on currency
+  const getActions = () => {
+    const isKycDone = kycLevel >= 2;
+    const actions = [];
+    if (selectedCurrency === 'Gift Points') {
+      actions.push({ label: 'Redeem', icon: 'fa-gift', href: '/dashboard/redeem-points' });
+      return actions;
+    }
+    // Fiat currencies
+    actions.push({ label: 'Withdraw', icon: 'fa-arrow-down', href: '/dashboard/withdraw' });
+    actions.push({ label: 'Top Up', icon: 'fa-arrow-up', href: '/dashboard/wallet' }); // fiat top-up
+    if (isKycDone) {
+      actions.push({ label: 'Convert', icon: 'fa-arrow-right-arrow-left', href: '/dashboard/convert' });
+    }
+    return actions;
+  };
+
   if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   if (!user) return null;
 
   const totalBalance = balance + bonusBalance;
+  const actions = getActions();
+  const isGiftPoints = selectedCurrency === 'Gift Points';
+  const displayBalance = getConvertedBalance();
+  const symbol = getCurrencySymbol();
 
   return (
     <>
@@ -244,17 +279,17 @@ export default function DashboardOverview() {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <p className="text-text-muted text-sm">Available Balance</p>
                 <div className="flex bg-black/30 rounded-full p-1 border border-border/50">
-                  {['NGN', 'USD', 'GHS'].map((currency) => (
+                  {['NGN', 'USD', 'GHS', 'Gift Points'].map((curr) => (
                     <button
-                      key={currency}
-                      onClick={() => setSelectedCurrency(currency)}
+                      key={curr}
+                      onClick={() => setSelectedCurrency(curr)}
                       className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
-                        selectedCurrency === currency
+                        selectedCurrency === curr
                           ? 'bg-orange text-white'
                           : 'text-text-muted hover:text-text-primary'
                       }`}
                     >
-                      {currency}
+                      {curr === 'Gift Points' ? '🎁 Points' : curr}
                     </button>
                   ))}
                 </div>
@@ -262,32 +297,23 @@ export default function DashboardOverview() {
 
               {/* Main Balance */}
               <p className="text-4xl font-bold mt-2">
-                {hideBalance ? '••••••' : `${getCurrencySymbol()}${getConvertedBalance().toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                {hideBalance ? '••••••' : `${symbol}${displayBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               </p>
 
-              {/* Equivalents */}
-              {!hideBalance && (
+              {/* Equivalents (only for fiat) */}
+              {!hideBalance && !isGiftPoints && (
                 <div className="flex flex-wrap gap-3 mt-1 text-sm text-text-muted">
-                  {selectedCurrency !== 'NGN' && (
-                    <span>≈ ₦{totalBalance.toLocaleString()}</span>
-                  )}
-                  {selectedCurrency !== 'USD' && (
-                    <>
-                      <span>•</span>
-                      <span>≈ ${(totalBalance / exchangeRates.USD).toFixed(2)}</span>
-                    </>
-                  )}
-                  {selectedCurrency !== 'GHS' && (
-                    <>
-                      <span>•</span>
-                      <span>≈ ₵{(totalBalance / exchangeRates.GHS).toFixed(2)}</span>
-                    </>
-                  )}
+                  {selectedCurrency !== 'NGN' && <span>≈ ₦{totalBalance.toLocaleString()}</span>}
+                  {selectedCurrency !== 'USD' && <><span>•</span><span>≈ ${(totalBalance / exchangeRates.USD).toFixed(2)}</span></>}
+                  {selectedCurrency !== 'GHS' && <><span>•</span><span>≈ ₵{(totalBalance / exchangeRates.GHS).toFixed(2)}</span></>}
                 </div>
               )}
+              {!hideBalance && isGiftPoints && (
+                <p className="text-xs text-text-muted mt-1">10 points = ₦1 (or equivalent)</p>
+              )}
 
-              {/* Sparkline Chart */}
-              {!hideBalance && sparklineData.length > 0 && (
+              {/* Sparkline (only for fiat) */}
+              {!hideBalance && !isGiftPoints && sparklineData.length > 0 && (
                 <div className="mt-3">
                   <svg width="120" height="40" className="opacity-80">
                     <polyline
@@ -305,84 +331,28 @@ export default function DashboardOverview() {
                 </div>
               )}
 
-              {bonusBalance > 0 && (
+              {bonusBalance > 0 && !isGiftPoints && (
                 <p className="text-sm text-green-400 mt-1">
                   🎁 Includes ₦{bonusBalance.toLocaleString()} welcome bonus
                 </p>
               )}
 
-              {/* Action Buttons - 4 Cards */}
+              {/* Action Buttons */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-                <Link
-                  href="/dashboard/withdraw"
-                  className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
-                >
-                  <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
-                    <i className="fa-solid fa-arrow-down"></i>
-                  </div>
-                  <p className="text-sm font-semibold mt-2">Withdraw</p>
-                </Link>
-                <Link
-                  href="/dashboard/wallet"
-                  className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
-                >
-                  <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
-                    <i className="fa-solid fa-arrow-up"></i>
-                  </div>
-                  <p className="text-sm font-semibold mt-2">Top Up</p>
-                </Link>
-                <Link
-                  href="/dashboard/convert"
-                  className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
-                >
-                  <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
-                    <i className="fa-solid fa-arrow-right-arrow-left"></i>
-                  </div>
-                  <p className="text-sm font-semibold mt-2">Convert</p>
-                </Link>
-                <Link
-                  href="/dashboard/sell-crypto"
-                  className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
-                >
-                  <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
-                    <i className="fa-solid fa-chart-line"></i>
-                  </div>
-                  <p className="text-sm font-semibold mt-2">Trade</p>
-                </Link>
+                {actions.map((action) => (
+                  <Link
+                    key={action.label}
+                    href={action.href}
+                    className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
+                  >
+                    <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
+                      <i className={`fa-solid ${action.icon}`}></i>
+                    </div>
+                    <p className="text-sm font-semibold mt-2">{action.label}</p>
+                  </Link>
+                ))}
               </div>
             </div>
-          </div>
-
-          {/* Gift Points Banner */}
-          <div className="glass rounded-2xl p-4 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg flex-shrink-0">
-                <i className="fa-solid fa-gift"></i>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-sm">Gift Points</p>
-                  <p className="text-2xl font-bold text-orange">
-                    {hideBalance ? '••••' : giftPoints.toLocaleString()}
-                  </p>
-                </div>
-                <div className="w-full bg-black/30 rounded-full h-2 mt-1">
-                  <div 
-                    className="bg-gradient-to-r from-orange to-purple-500 h-2 rounded-full transition-all"
-                    style={{ width: `${Math.min((giftPoints / 1000) * 100, 100)}%` }}
-                  ></div>
-                </div>
-                <p className="text-text-muted text-xs mt-0.5">
-                  {giftPoints >= 1000 ? '🎉 Reward unlocked!' : `${1000 - giftPoints} points to next reward`}
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/dashboard/referral"
-              className="border border-orange/30 text-orange hover:bg-orange/10 px-4 py-2 rounded-full text-sm font-semibold transition whitespace-nowrap"
-            >
-              View Rewards →
-            </Link>
           </div>
 
           {/* Quick Stats */}
@@ -403,6 +373,38 @@ export default function DashboardOverview() {
             </div>
           </div>
 
+          {/* Gift Points Banner (always visible) */}
+          <div className="glass rounded-2xl p-4 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg flex-shrink-0">
+                <i className="fa-solid fa-gift"></i>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-sm">Gift Points</p>
+                  <p className="text-2xl font-bold text-orange">
+                    {hideBalance ? '••••' : giftPoints.toLocaleString()}
+                  </p>
+                </div>
+                <div className="w-full bg-black/30 rounded-full h-2 mt-1">
+                  <div 
+                    className="bg-gradient-to-r from-orange to-purple-500 h-2 rounded-full transition-all"
+                    style={{ width: `${Math.min((giftPoints / 10000) * 100, 100)}%` }}
+                  ></div>
+                </div>
+                <p className="text-text-muted text-xs mt-0.5">
+                  {giftPoints >= 10000 ? '🎉 Ready to redeem!' : `${10000 - giftPoints} points to minimum redemption`}
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/redeem-points"
+              className="border border-orange/30 text-orange hover:bg-orange/10 px-4 py-2 rounded-full text-sm font-semibold transition whitespace-nowrap"
+            >
+              Redeem →
+            </Link>
+          </div>
+
           {/* Products */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -416,7 +418,7 @@ export default function DashboardOverview() {
                 </div>
                 <p className="text-sm font-semibold mt-2">Gift Cards</p>
               </Link>
-              <Link href="/dashboard/sell-crypto" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+              <Link href="/dashboard/sell" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-brands fa-bitcoin"></i>
                 </div>
