@@ -24,7 +24,7 @@ export default function DashboardLayout({ children }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Fetch initial notifications (only unread for count, but we'll fetch all when dropdown opens)
+  // Fetch unread count
   useEffect(() => {
     const fetchUnreadCount = async () => {
       if (!user) return;
@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }) {
     fetchUnreadCount();
   }, [user]);
 
-  // Real‑time subscription for new notifications
+  // Real‑time subscription
   useEffect(() => {
     if (!user) return;
 
@@ -55,7 +55,6 @@ export default function DashboardLayout({ children }) {
         (payload) => {
           setUnreadCount(prev => prev + 1);
           setNotifications(prev => [payload.new, ...prev]);
-          // If dropdown is open, refresh the list
           if (showDropdown) {
             fetchAllNotifications();
           }
@@ -68,7 +67,6 @@ export default function DashboardLayout({ children }) {
     };
   }, [user, showDropdown]);
 
-  // Fetch all notifications (for dropdown)
   const fetchAllNotifications = async () => {
     if (!user) return;
     const { data } = await supabase
@@ -84,7 +82,6 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  // Mark a single notification as read
   const markAsRead = async (notificationId) => {
     if (!user) return;
     const { error } = await supabase
@@ -99,7 +96,6 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  // Mark all as read
   const markAllAsRead = async () => {
     if (!user) return;
     const { error } = await supabase
@@ -113,7 +109,6 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  // Toggle dropdown and fetch notifications
   const toggleDropdown = async () => {
     if (!showDropdown) {
       await fetchAllNotifications();
@@ -121,7 +116,6 @@ export default function DashboardLayout({ children }) {
     setShowDropdown(!showDropdown);
   };
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -145,7 +139,6 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
-      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-bg-secondary border-r border-border transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="flex flex-col h-full p-4">
           <div className="mb-6">
@@ -211,8 +204,8 @@ export default function DashboardLayout({ children }) {
 
             {/* Notification Dropdown */}
             {showDropdown && (
-              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-bg-card border border-border rounded-xl shadow-2xl z-50 p-2">
-                <div className="flex justify-between items-center p-2 border-b border-border">
+              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-bg-secondary border border-border rounded-xl shadow-2xl shadow-black/50 z-50 p-2 backdrop-blur-sm">
+                <div className="flex justify-between items-center p-2 border-b border-border sticky top-0 bg-bg-secondary/90 backdrop-blur-sm z-10 rounded-t-xl">
                   <h3 className="font-bold text-sm">Notifications</h3>
                   {unreadCount > 0 && (
                     <button
@@ -228,7 +221,7 @@ export default function DashboardLayout({ children }) {
                     No notifications
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2 mt-2">
                     {notifications.map((n) => (
                       <div
                         key={n.id}
