@@ -5,7 +5,6 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
 import Link from 'next/link';
-import QRCode from 'qrcode.react';
 
 // ============================================
 // YOUR REAL WALLET ADDRESSES
@@ -178,6 +177,12 @@ export default function Deposit() {
     setError('');
     setSuccess('');
     setShowQR(false);
+  };
+
+  // ===== Simple QR Code Generator (No Library Required) =====
+  const generateQR = (text) => {
+    // This uses a free QR API service
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
   };
 
   const filteredCoins = COINS.filter((coin) =>
@@ -374,14 +379,13 @@ export default function Deposit() {
                 {showQR && walletAddress && walletAddress !== 'Address not available' && (
                   <div className="bg-black/20 rounded-xl p-4 border border-border text-center">
                     <p className="text-text-muted text-xs uppercase tracking-wider mb-2">Scan QR Code</p>
-                    <div className="inline-block p-3 bg-white rounded-xl">
-                      <QRCode
-                        value={walletAddress}
-                        size={160}
-                        bgColor="#ffffff"
-                        fgColor="#000000"
-                        level="H"
-                        includeMargin={true}
+                    <div className="inline-block p-2 bg-white rounded-xl">
+                      <img
+                        src={generateQR(walletAddress)}
+                        alt="QR Code"
+                        width="160"
+                        height="160"
+                        className="rounded-lg"
                       />
                     </div>
                     <p className="text-text-muted text-xs mt-2">Scan to copy address</p>
