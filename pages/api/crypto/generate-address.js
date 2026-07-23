@@ -1,6 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient';
 
-// Correct chain mapping for Tatum
 const getTatumChain = (coin, network) => {
   const map = {
     'BTC': { 'Bitcoin': 'BITCOIN' },
@@ -16,11 +15,8 @@ const getTatumChain = (coin, network) => {
     'LTC': { 'Litecoin': 'LITECOIN' },
     'BCH': { 'Bitcoin Cash': 'BITCOIN_CASH' },
   };
-
   const chain = map[coin]?.[network];
-  if (!chain) {
-    throw new Error(`Unsupported combination: ${coin} / ${network}`);
-  }
+  if (!chain) throw new Error(`Unsupported coin/network: ${coin} / ${network}`);
   return chain;
 };
 
@@ -32,24 +28,24 @@ export default async function handler(req, res) {
   try {
     const { userId, coin, network, usdAmount, rate, payout } = req.body;
 
-    if (!userId || !coin || !network || !usdAmount || !rate || !payout) {
+    if (!userId || !coin || !network) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const chain = getTatumChain(coin, network);
 
-    // Generate a new address via Tatum
-    const tatumRes = await fetch(
-      `https://api.tatum.io/v3/${chain.toLowerCase()}/address`,
-      {
-        method: 'POST',
-        headers: {
-          'x-api-key': process.env.TATUM_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      }
-    );
+    // Build the correct URL
+    const url = `https://api.tatum.io/v3/${chain.toLowerCase()}/address`;
+    console.log('Tatum URL:', url);
+
+    const tatumRes = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'x-api-key': process.env.TATUM_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
 
     const tatumData = await tatumRes.json();
 
@@ -63,7 +59,7 @@ export default async function handler(req, res) {
 
     const address = tatumData.address;
 
-    // Create order in database
+    // Save order
     const { data: order, error: dbError } = await supabase
       .from('crypto_orders')
       .insert({
@@ -71,9 +67,9 @@ export default async function handler(req, res) {
         coin,
         network,
         address,
-        usd_amount: usdAmount,
-        rate,
-        payout_ngn: payout,
+        usd_amount: usdAmount || 0,
+        rate: rate || 0,
+        payout_ngn: payout || 0,
         status: 'awaiting_deposit',
       })
       .select()
