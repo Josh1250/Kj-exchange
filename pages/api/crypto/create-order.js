@@ -8,38 +8,41 @@ export default async function handler(req, res) {
   try {
     const { userId, coin, network, usdAmount, cryptoAmount, rate, payout, walletAddress } = req.body;
 
-    if (!userId || !coin || !network || !usdAmount || !cryptoAmount || !rate || !payout) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+    console.log('📦 Creating order with:', { userId, coin, network, usdAmount, cryptoAmount, rate, payout, walletAddress });
 
-    const { data: order, error } = await supabase
+    const insertData = {
+      user_id: userId,
+      coin,
+      network,
+      address: walletAddress,
+      usd_amount: usdAmount,
+      crypto_amount: cryptoAmount,
+      rate,
+      payout_ngn: payout,
+      status: 'pending_confirmation',
+    };
+
+    const { data, error } = await supabase
       .from('crypto_orders')
-      .insert({
-        user_id: userId,
-        coin,
-        network,
-        address: walletAddress,
-        usd_amount: usdAmount,
-        crypto_amount: cryptoAmount,
-        rate,
-        payout_ngn: payout,
-        status: 'pending_confirmation',
-      })
+      .insert(insertData)
       .select()
       .single();
 
     if (error) {
-      console.error('DB error:', error);
-      return res.status(500).json({ error: 'Failed to create order' });
+      console.error('❌ Supabase error:', error);
+      return res.status(500).json({ 
+        error: 'Failed to create order: ' + error.message,
+        details: error,
+      });
     }
 
     res.status(200).json({
       success: true,
-      orderId: order.id,
+      orderId: data.id,
       message: 'Order created! Send crypto and wait for admin confirmation.',
     });
   } catch (error) {
-    console.error('Create order error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ Server error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 }
