@@ -4,12 +4,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Generate a Bitcoin wallet
+    // Generate a Bitcoin wallet using POST
     const response = await fetch('https://api.tatum.io/v3/bitcoin/wallet', {
-      method: 'GET',
+      method: 'POST',
       headers: {
         'x-api-key': process.env.TATUM_API_KEY,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({}), // you can optionally pass a mnemonic
     });
 
     const data = await response.json();
@@ -18,11 +20,10 @@ export default async function handler(req, res) {
       throw new Error(data.message || 'Failed to generate wallet');
     }
 
-    // Return the xpub (and mnemonic – keep it safe!)
     res.status(200).json({
       success: true,
       xpub: data.xpub,
-      mnemonic: data.mnemonic, // ⚠️ Store this securely, never expose to frontend!
+      mnemonic: data.mnemonic,
     });
   } catch (error) {
     console.error('Generate wallet error:', error);
