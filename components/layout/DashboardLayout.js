@@ -4,6 +4,7 @@ import { useAuth } from '../../pages/_app';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 const navItems = [
   { name: 'Home', href: '/dashboard', icon: 'fa-solid fa-house' },
@@ -23,6 +24,8 @@ export default function DashboardLayout({ children }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const bellRef = useRef(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
 
   // Fetch unread count AND notifications on mount
   useEffect(() => {
@@ -113,7 +116,19 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  const toggleDropdown = () => setShowDropdown(!showDropdown);
+  const toggleDropdown = () => {
+    if (!showDropdown) {
+      // Calculate position of bell
+      if (bellRef.current) {
+        const rect = bellRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 8,
+          right: window.innerWidth - rect.right,
+        });
+      }
+    }
+    setShowDropdown(!showDropdown);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -185,8 +200,9 @@ export default function DashboardLayout({ children }) {
           <button className="md:hidden p-2 rounded-lg hover:bg-white/10 transition" onClick={() => setIsSidebarOpen(true)}>
             <i className="fa-solid fa-bars text-xl text-text-primary"></i>
           </button>
-          <div className="flex items-center gap-4 relative" ref={dropdownRef}>
+          <div className="flex items-center gap-4">
             <button
+              ref={bellRef}
               onClick={toggleDropdown}
               className="relative p-2 rounded-full hover:bg-white/10 transition"
             >
@@ -198,65 +214,6 @@ export default function DashboardLayout({ children }) {
               )}
             </button>
 
-            {/* Notification Dropdown - 100% Solid with Inline Styles */}
-            {showDropdown && (
-              <div
-                className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto border border-border rounded-xl shadow-2xl shadow-black/70 z-50 p-2"
-                style={{
-                  backgroundColor: '#0B0815',
-                  backdropFilter: 'none',
-                  opacity: 1,
-                }}
-              >
-                <div
-                  className="flex justify-between items-center p-2 border-b border-border sticky top-0 z-10 rounded-t-xl"
-                  style={{ backgroundColor: '#0B0815' }}
-                >
-                  <h3 className="font-bold text-sm">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={markAllAsRead}
-                      className="text-xs text-orange hover:underline"
-                    >
-                      Mark all as read
-                    </button>
-                  )}
-                </div>
-                {notifications.length === 0 ? (
-                  <div className="text-center text-text-muted py-4 text-sm">No notifications</div>
-                ) : (
-                  <div className="space-y-2 mt-2">
-                    {notifications.map((n) => (
-                      <div
-                        key={n.id}
-                        className={`flex items-start justify-between p-2 rounded-lg transition ${
-                          n.read ? 'opacity-60' : 'bg-orange/5 border border-orange/10'
-                        }`}
-                      >
-                        <div className="flex-1 mr-2">
-                          <p className="text-sm text-text-primary">{n.message}</p>
-                          <p className="text-xs text-text-muted">{new Date(n.created_at).toLocaleDateString()}</p>
-                        </div>
-                        {!n.read && (
-                          <button
-                            onClick={() => markAsRead(n.id)}
-                            className="text-xs text-orange hover:underline whitespace-nowrap"
-                          >
-                            Mark read
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="p-2 border-t border-border mt-2 text-center">
-                  <Link href="/dashboard/notifications" className="text-xs text-orange hover:underline">
-                    View all notifications
-                  </Link>
-                </div>
-              </div>
-            )}
-
             <Link href="/dashboard/profile" className="flex items-center gap-2 hover:bg-white/10 rounded-full px-3 py-1 transition">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
                 {user?.email?.charAt(0).toUpperCase()}
@@ -267,6 +224,72 @@ export default function DashboardLayout({ children }) {
         </header>
         <main className="flex-1 p-6">{children}</main>
       </div>
+
+      {/* Notification Dropdown - Using Portal */}
+      {showDropdown && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed border border-border rounded-xl shadow-2xl shadow-black/70 z-[9999] p-2"
+          style={{
+            top: dropdownPosition.top,
+            right: dropdownPosition.right,
+            width: '320px',
+            maxHeight: '400px',
+            overflowY: 'auto',
+            backgroundColor: '#0B0815',
+            backdropFilter: 'none',
+            opacity: 1,
+          }}
+        >
+          <div
+            className="flex justify-between items-center p-2 border-b border-border sticky top-0 z-10 rounded-t-xl"
+            style={{ backgroundColor: '#0B0815' }}
+          >
+            <h3 className="font-bold text-sm">Notifications</h3>
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="text-xs text-orange hover:underline"
+              >
+                Mark all as read
+              </button>
+            )}
+          </div>
+          {notifications.length === 0 ? (
+            <div className="text-center text-text-muted py-4 text-sm">No notifications</div>
+          ) : (
+            <div className="space-y-2 mt-2">
+              {notifications.map((n) => (
+                <div
+                  key={n.id}
+                  className={`flex items-start justify-between p-2 rounded-lg transition ${
+                    n.read ? 'opacity-60' : 'bg-orange/5 border border-orange/10'
+                  }`}
+                >
+                  <div className="flex-1 mr-2">
+                    <p className="text-sm text-text-primary">{n.message}</p>
+                    <p className="text-xs text-text-muted">{new Date(n.created_at).toLocaleDateString()}</p>
+                  </div>
+                  {!n.read && (
+                    <button
+                      onClick={() => markAsRead(n.id)}
+                      className="text-xs text-orange hover:underline whitespace-nowrap"
+                    >
+                      Mark read
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="p-2 border-t border-border mt-2 text-center">
+            <Link href="/dashboard/notifications" className="text-xs text-orange hover:underline">
+              View all notifications
+            </Link>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
