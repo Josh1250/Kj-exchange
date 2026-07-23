@@ -65,6 +65,7 @@ export default function Deposit() {
   const [ngnRate, setNgnRate] = useState(1389);
   const [isLoadingRates, setIsLoadingRates] = useState(true);
   const [showQR, setShowQR] = useState(false);
+  const [autosell, setAutosell] = useState(false);
 
   // Fetch rates
   useEffect(() => {
@@ -147,6 +148,7 @@ export default function Deposit() {
           rate: ngnRate,
           payout: amount * ngnRate,
           walletAddress: getWalletAddress(),
+          autosell: autosell,
         }),
       });
 
@@ -171,6 +173,28 @@ export default function Deposit() {
     alert('✅ Address copied to clipboard!');
   };
 
+  const shareAddress = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: 'KJ Exchange Deposit Address',
+        text: `Send ${selectedCoin.name} to:\n${getWalletAddress()}`,
+      });
+    } else {
+      copyToClipboard(getWalletAddress());
+    }
+  };
+
+  const downloadQR = () => {
+    const address = getWalletAddress();
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(address)}`;
+    const link = document.createElement('a');
+    link.href = qrUrl;
+    link.download = `KJ_${selectedCoin.id}_QR.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleReset = () => {
     setStep('select');
     setOrder(null);
@@ -179,10 +203,8 @@ export default function Deposit() {
     setShowQR(false);
   };
 
-  // ===== Simple QR Code Generator (No Library Required) =====
-  const generateQR = (text) => {
-    // This uses a free QR API service
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
+  const handleDone = () => {
+    router.push('/dashboard');
   };
 
   const filteredCoins = COINS.filter((coin) =>
@@ -200,6 +222,9 @@ export default function Deposit() {
   const priceUsd = coinPrices[selectedCoin.id] || 0;
   const cryptoAmt = amount > 0 ? amount / priceUsd : 0;
   const walletAddress = getWalletAddress();
+  const truncatedAddress = walletAddress.length > 16
+    ? walletAddress.slice(0, 8) + '...' + walletAddress.slice(-8)
+    : walletAddress;
 
   return (
     <>
@@ -347,90 +372,93 @@ export default function Deposit() {
           ) : (
             <div className="glass rounded-2xl p-6 border border-border">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center text-green-400 text-xl">
-                  <i className="fa-regular fa-circle-check"></i>
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold">Deposit {selectedCoin.name}</h2>
-                  <p className="text-text-muted text-sm">Order #{order?.orderId}</p>
-                </div>
+                <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
+                <h2 className="text-xl font-bold">Deposit {selectedCoin.name}</h2>
               </div>
 
-              <div className="space-y-4">
-                <div className="bg-black/20 rounded-xl p-4 border border-border flex items-center justify-between">
-                  <span className="text-text-muted text-sm">Network</span>
-                  <span className="font-bold">{selectedNetwork}</span>
-                </div>
-
-                <div className="bg-black/20 rounded-xl p-4 border border-border">
-                  <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Wallet Address</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="font-mono text-sm break-all flex-1 text-orange">{walletAddress}</p>
-                    <button
-                      onClick={() => copyToClipboard(walletAddress)}
-                      className="bg-orange/20 hover:bg-orange/30 text-orange px-3 py-1.5 rounded-lg text-sm transition whitespace-nowrap flex items-center gap-1"
-                    >
-                      <i className="fa-regular fa-copy"></i> Copy
-                    </button>
-                  </div>
-                </div>
-
-                {/* QR Code */}
-                {showQR && walletAddress && walletAddress !== 'Address not available' && (
-                  <div className="bg-black/20 rounded-xl p-4 border border-border text-center">
-                    <p className="text-text-muted text-xs uppercase tracking-wider mb-2">Scan QR Code</p>
-                    <div className="inline-block p-2 bg-white rounded-xl">
-                      <img
-                        src={generateQR(walletAddress)}
-                        alt="QR Code"
-                        width="160"
-                        height="160"
-                        className="rounded-lg"
-                      />
-                    </div>
-                    <p className="text-text-muted text-xs mt-2">Scan to copy address</p>
-                  </div>
-                )}
-
-                <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-yellow-400 text-sm flex items-start gap-2">
-                  <i className="fa-solid fa-clock mt-0.5"></i>
-                  <div>
-                    <p className="font-semibold">Send exactly:</p>
-                    <p className="text-lg font-bold text-white">
-                      {cryptoAmount.toFixed(6)} {selectedCoin.id}
-                    </p>
-                    <p className="text-xs text-yellow-400/70 mt-1">
-                      Your wallet will be credited after admin confirmation.
-                    </p>
-                  </div>
-                </div>
-
-                {selectedCoin.id === 'USDT' && (
-                  <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
-                    <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
-                    <span>Send USDT only via <strong>{selectedNetwork}</strong> network.</span>
-                  </div>
-                )}
-
-                <div className="bg-black/20 rounded-xl p-3 border border-border text-center text-text-muted text-xs">
-                  Minimum deposit: $1.00 • Lower amounts may not be processed.
-                </div>
+              <div className="bg-black/20 rounded-xl p-4 border border-border text-center">
+                <p className="text-2xl font-mono font-bold text-orange tracking-wider">
+                  {truncatedAddress}
+                </p>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="flex flex-wrap gap-3 mt-4">
                 <button
-                  onClick={handleReset}
-                  className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition flex items-center justify-center gap-2"
+                  onClick={() => copyToClipboard(walletAddress)}
+                  className="flex-1 bg-orange/10 hover:bg-orange/20 text-orange px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
                 >
-                  <i className="fa-solid fa-arrow-left"></i> Back
+                  <i className="fa-regular fa-copy"></i> Copy
                 </button>
-                <Link
-                  href="/dashboard/orders"
-                  className="flex-1 bg-orange text-white font-bold py-2.5 rounded-xl hover:bg-orange-600 transition text-center flex items-center justify-center gap-2"
+                <button
+                  onClick={downloadQR}
+                  className="flex-1 bg-orange/10 hover:bg-orange/20 text-orange px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
                 >
-                  <i className="fa-solid fa-list"></i> View Orders
-                </Link>
+                  <i className="fa-solid fa-download"></i> Download QR
+                </button>
+                <button
+                  onClick={shareAddress}
+                  className="flex-1 bg-orange/10 hover:bg-orange/20 text-orange px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-share-nodes"></i> Share
+                </button>
               </div>
+
+              <div className="mt-4 bg-black/20 rounded-xl p-3 border border-border flex items-center justify-between">
+                <span className="text-text-muted text-sm">Network</span>
+                <span className="font-bold">{selectedNetwork}</span>
+              </div>
+
+              {showQR && walletAddress && walletAddress !== 'Address not available' && (
+                <div className="mt-4 bg-black/20 rounded-xl p-4 border border-border text-center">
+                  <p className="text-text-muted text-xs uppercase tracking-wider mb-2">SCAN QR CODE</p>
+                  <div className="inline-block p-2 bg-white rounded-xl">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(walletAddress)}`}
+                      alt="QR Code"
+                      width="180"
+                      height="180"
+                      className="rounded-lg"
+                    />
+                  </div>
+                  <p className="text-text-muted text-xs mt-2">Scan to copy address</p>
+                </div>
+              )}
+
+              <div className="mt-4 flex items-center justify-between bg-black/20 rounded-xl p-3 border border-border">
+                <span className="text-sm font-medium">Turn on autosell for {selectedCoin.id}</span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autosell}
+                    onChange={() => setAutosell(!autosell)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-orange rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange"></div>
+                </label>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-yellow-400 text-sm flex items-start gap-2">
+                  <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
+                  <div>
+                    <p>Minimum deposit is $1.00 ({cryptoAmount.toFixed(6)} {selectedCoin.id}). Lower amounts may not be processed.</p>
+                  </div>
+                </div>
+
+                <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
+                  <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
+                  <div>
+                    <p>This wallet address is exclusively for receiving {selectedCoin.id} on {selectedNetwork} chain. Sending any other cryptocurrency to this address will result in loss of assets.</p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleDone}
+                className="w-full mt-6 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition shadow-lg shadow-orange/20"
+              >
+                Done
+              </button>
             </div>
           )}
         </div>
@@ -465,8 +493,8 @@ export default function Deposit() {
               <div className="flex items-start gap-3">
                 <i className="fa-solid fa-clock text-yellow-400 mt-0.5"></i>
                 <div>
-                  <p className="font-semibold">Admin confirmation required</p>
-                  <p className="text-text-muted text-xs">Funds will be credited after our team confirms your deposit.</p>
+                  <p className="font-semibold">Crypto will be credited after 1 blockchain confirmation</p>
+                  <p className="text-text-muted text-xs">Your deposit will appear in your balance once the transaction is confirmed.</p>
                 </div>
               </div>
 
@@ -474,7 +502,7 @@ export default function Deposit() {
                 <i className="fa-solid fa-shield text-orange mt-0.5"></i>
                 <div>
                   <p className="font-semibold">Funds held in your crypto balance</p>
-                  <p className="text-text-muted text-xs">You can sell or keep your crypto anytime.</p>
+                  <p className="text-text-muted text-xs">You can sell or keep your crypto anytime after confirmation.</p>
                 </div>
               </div>
 
