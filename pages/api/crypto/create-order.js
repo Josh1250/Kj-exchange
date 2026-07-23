@@ -15,9 +15,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { userId, coin, network, usdAmount, cryptoAmount, rate, payout, walletAddress } = req.body;
+    const { userId, coin, network, usdAmount, cryptoAmount, rate, payout, walletAddress, autosell } = req.body;
 
-    console.log('📦 Creating order:', { userId, coin, network, usdAmount, cryptoAmount, rate, payout });
+    console.log('📦 Creating order:', { userId, coin, network, usdAmount, cryptoAmount, rate, payout, autosell });
 
     // Validate required fields
     if (!userId || !coin || !network || !usdAmount || !cryptoAmount || !rate || !payout) {
@@ -37,6 +37,7 @@ export default async function handler(req, res) {
         rate,
         payout_ngn: payout,
         status: 'pending_confirmation',
+        autosell: autosell || false,
       })
       .select()
       .single();
@@ -52,7 +53,7 @@ export default async function handler(req, res) {
     res.status(200).json({
       success: true,
       orderId: data.id,
-      message: 'Order created! Send crypto and wait for admin confirmation.',
+      message: 'Order created! Send crypto and wait for confirmation.',
     });
   } catch (error) {
     console.error('❌ Server error:', error);
