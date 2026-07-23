@@ -24,21 +24,48 @@ export default function DashboardLayout({ children }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Fetch unread count
+  // Fetch unread count AND notifications on mount (and when user changes)
   useEffect(() => {
-    const fetchUnreadCount = async () => {
-      if (!user) return;
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('read', false);
-      if (!error) setUnreadCount(data?.length || 0);
-    };
+    if (!user) return;
     fetchUnreadCount();
+    fetchAllNotifications();
   }, [user]);
 
-  // Real‑time subscription
+  const fetchUnreadCount = async () => {
+    if (!user) return;
+    try {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('read', false);
+      if (error) throw error;
+      setUnreadCount(count || 0);
+    } catch (err) {
+      console.error('Error fetching unread count:', err);
+    }
+  };
+
+  const fetchAllNotifications = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      setNotifications(data || []);
+      // update unread count based on fetched data
+      const unread = (data || []).filter(n => !n.read).length;
+      setUnreadCount(unread);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  // Real‑time subscription for new notifications
   useEffect(() => {
     if (!user) return;
 
@@ -53,11 +80,8 @@ export default function DashboardLayout({ children }) {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          setUnreadCount(prev => prev + 1);
           setNotifications(prev => [payload.new, ...prev]);
-          if (showDropdown) {
-            fetchAllNotifications();
-          }
+          setUnreadCount(prev => prev + 1);
         }
       )
       .subscribe();
@@ -65,22 +89,7 @@ export default function DashboardLayout({ children }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [user, showDropdown]);
-
-  const fetchAllNotifications = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (data) {
-      setNotifications(data);
-      const unread = data.filter(n => !n.read).length;
-      setUnreadCount(unread);
-    }
-  };
+  }, [user]);
 
   const markAsRead = async (notificationId) => {
     if (!user) return;
@@ -109,10 +118,7 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  const toggleDropdown = async () => {
-    if (!showDropdown) {
-      await fetchAllNotifications();
-    }
+  const toggleDropdown = () => {
     setShowDropdown(!showDropdown);
   };
 
@@ -139,6 +145,7 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
+      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-bg-secondary border-r border-border transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="flex flex-col h-full p-4">
           <div className="mb-6">
@@ -202,10 +209,10 @@ export default function DashboardLayout({ children }) {
               )}
             </button>
 
-            {/* Notification Dropdown */}
+            {/* Notification Dropdown - Solid Background */}
             {showDropdown && (
-              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-bg-secondary border border-border rounded-xl shadow-2xl shadow-black/50 z-50 p-2 backdrop-blur-sm">
-                <div className="flex justify-between items-center p-2 border-b border-border sticky top-0 bg-bg-secondary/90 backdrop-blur-sm z-10 rounded-t-xl">
+              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-[#0B0815] border border-border rounded-xl shadow-2xl shadow-black/50 z-50 p-2">
+                <div className="flex justify-between items-center p-2 border-b border-border sticky top-0 bg-[#0B0815]/90 z-10 rounded-t-xl">
                   <h3 className="font-bold text-sm">Notifications</h3>
                   {unreadCount > 0 && (
                     <button
