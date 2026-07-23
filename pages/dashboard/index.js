@@ -22,7 +22,7 @@ export default function DashboardOverview() {
   const [selectedCurrency, setSelectedCurrency] = useState('NGN');
   const [kycLevel, setKycLevel] = useState(1);
 
-  // Exchange rates for conversion (hardcoded or from API)
+  // Exchange rates
   const [exchangeRates, setExchangeRates] = useState({ USD: 1500, GHS: 120 });
   const [quickStats, setQuickStats] = useState({ orders: 0, pending: 0, earned: 0 });
   const [sparklineData, setSparklineData] = useState([]);
@@ -152,7 +152,6 @@ export default function DashboardOverview() {
         setBonusBalance(wallet.bonus_balance || 0);
         setUsdBalance(wallet.usd_balance || 0);
         setGhsBalance(wallet.ghs_balance || 0);
-        // Note: gift_points is in the wallet table, but we'll also fetch from gift_point_transactions for accurate total.
       }
 
       const { data: txs } = await supabase
@@ -186,13 +185,12 @@ export default function DashboardOverview() {
     }
   };
 
-  // Convert balance based on selected currency
   const getConvertedBalance = () => {
     const totalBalance = balance + bonusBalance;
     switch (selectedCurrency) {
       case 'USD': return totalBalance / exchangeRates.USD;
       case 'GHS': return totalBalance / exchangeRates.GHS;
-      case 'Gift Points': return giftPoints; // special case
+      case 'Gift Points': return giftPoints;
       default: return totalBalance;
     }
   };
@@ -221,20 +219,22 @@ export default function DashboardOverview() {
     }).join(' ');
   };
 
-  // Determine which actions to show based on currency
+  // Determine actions based on selected currency
   const getActions = () => {
     const isKycDone = kycLevel >= 2;
-    const actions = [];
     if (selectedCurrency === 'Gift Points') {
-      actions.push({ label: 'Redeem', icon: 'fa-gift', href: '/dashboard/redeem-points' });
-      return actions;
+      return [{ label: 'Redeem', icon: 'fa-gift', href: '/dashboard/redeem-points' }];
     }
-    // Fiat currencies
-    actions.push({ label: 'Withdraw', icon: 'fa-arrow-down', href: '/dashboard/withdraw' });
-    actions.push({ label: 'Top Up', icon: 'fa-arrow-up', href: '/dashboard/wallet' }); // fiat top-up
+    // Fiat currencies: always show Withdraw, Top Up, Convert (if KYC), Deposit Crypto
+    const actions = [
+      { label: 'Withdraw', icon: 'fa-arrow-down', href: '/dashboard/withdraw' },
+      { label: 'Top Up', icon: 'fa-arrow-up', href: '/dashboard/wallet' },
+    ];
     if (isKycDone) {
       actions.push({ label: 'Convert', icon: 'fa-arrow-right-arrow-left', href: '/dashboard/convert' });
     }
+    // Always show Deposit Crypto (even if KYC not done)
+    actions.push({ label: 'Deposit', icon: 'fa-arrow-down', href: '/dashboard/deposit' });
     return actions;
   };
 
@@ -275,7 +275,6 @@ export default function DashboardOverview() {
             <div className="absolute bottom-0 left-0 w-40 h-40 bg-orange-500/20 rounded-full blur-3xl"></div>
 
             <div className="relative z-10">
-              {/* Currency Toggle */}
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <p className="text-text-muted text-sm">Available Balance</p>
                 <div className="flex bg-black/30 rounded-full p-1 border border-border/50">
@@ -295,12 +294,10 @@ export default function DashboardOverview() {
                 </div>
               </div>
 
-              {/* Main Balance */}
               <p className="text-4xl font-bold mt-2">
                 {hideBalance ? '••••••' : `${symbol}${displayBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               </p>
 
-              {/* Equivalents (only for fiat) */}
               {!hideBalance && !isGiftPoints && (
                 <div className="flex flex-wrap gap-3 mt-1 text-sm text-text-muted">
                   {selectedCurrency !== 'NGN' && <span>≈ ₦{totalBalance.toLocaleString()}</span>}
@@ -312,7 +309,6 @@ export default function DashboardOverview() {
                 <p className="text-xs text-text-muted mt-1">10 points = ₦1 (or equivalent)</p>
               )}
 
-              {/* Sparkline (only for fiat) */}
               {!hideBalance && !isGiftPoints && sparklineData.length > 0 && (
                 <div className="mt-3">
                   <svg width="120" height="40" className="opacity-80">
@@ -338,7 +334,7 @@ export default function DashboardOverview() {
               )}
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+              <div className={`grid ${actions.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' : 'grid-cols-2 md:grid-cols-4'} gap-3 mt-6`}>
                 {actions.map((action) => (
                   <Link
                     key={action.label}
@@ -355,8 +351,8 @@ export default function DashboardOverview() {
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Quick Stats - 4 Boxes */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="glass rounded-2xl p-4 text-center border border-border">
               <p className="text-text-muted text-xs uppercase tracking-wider">Total Orders</p>
               <p className="text-2xl font-bold">{quickStats.orders}</p>
@@ -371,9 +367,15 @@ export default function DashboardOverview() {
                 {hideBalance ? '••••' : `₦${quickStats.earned.toLocaleString()}`}
               </p>
             </div>
+            <div className="glass rounded-2xl p-4 text-center border border-border">
+              <p className="text-text-muted text-xs uppercase tracking-wider">Gift Points</p>
+              <p className="text-2xl font-bold text-orange">
+                {hideBalance ? '••••' : giftPoints.toLocaleString()}
+              </p>
+            </div>
           </div>
 
-          {/* Gift Points Banner (always visible) */}
+          {/* Gift Points Banner */}
           <div className="glass rounded-2xl p-4 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg flex-shrink-0">
