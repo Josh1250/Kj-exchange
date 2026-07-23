@@ -18,7 +18,7 @@ const COINS = [
     name: 'Tether',
     icon: 'fa-solid fa-coins',
     color: '#26a17b',
-    networks: ['TRC-20', 'ERC-20', 'BEP-20', 'Solana', 'Base'],
+    networks: ['TRC-20', 'ERC-20', 'BEP-20'],
     defaultNetwork: 'TRC-20',
   },
   { id: 'SOL', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF', networks: ['Solana'] },
@@ -28,7 +28,6 @@ const COINS = [
   { id: 'BCH', name: 'Bitcoin Cash', icon: 'fa-brands fa-bitcoin', color: '#8dc351', networks: ['Bitcoin Cash'] },
 ];
 
-// Spreads (from your Dtunes numbers)
 const SPREADS = {
   BTC: { low: 0.0286, high: 0.0142, fee: 0.01 },
   ETH: { low: 0.0287, high: 0.0143, fee: 0.01 },
@@ -40,15 +39,10 @@ const SPREADS = {
   BCH: { low: 0.1079, high: 0.0143, fee: 0.01 },
 };
 
-// ============================================
-// COMPONENT
-// ============================================
-
 export default function SellCrypto() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  // ===== State =====
   const [selectedCoin, setSelectedCoin] = useState(COINS[0]);
   const [selectedNetwork, setSelectedNetwork] = useState(COINS[0].networks[0]);
   const [usdAmount, setUsdAmount] = useState('');
@@ -59,13 +53,17 @@ export default function SellCrypto() {
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
 
+  // Agreement modal
+  const [showAgreement, setShowAgreement] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+
   // Rates
   const [ngnRate, setNgnRate] = useState(1389);
   const [coinPrices, setCoinPrices] = useState({});
   const [rates, setRates] = useState({});
   const [isLoadingRates, setIsLoadingRates] = useState(true);
 
-  // ===== Fetch Rates =====
+  // Fetch rates
   useEffect(() => {
     const fetchRates = async () => {
       try {
@@ -91,10 +89,8 @@ export default function SellCrypto() {
           BCH: cryptoData['bitcoin-cash']?.usd || 0,
         });
 
-        // Calculate rates with spreads
         const calculatedRates = {};
         for (const coin of COINS) {
-          const priceUsd = cryptoData[coin.id.toLowerCase()]?.usd || 0;
           const spread = SPREADS[coin.id];
           if (spread) {
             const lowRate = ngn * (1 - spread.low);
@@ -134,41 +130,47 @@ export default function SellCrypto() {
     return () => clearInterval(interval);
   }, []);
 
-  // ===== Helpers =====
-  const getRateForCoin = (coinId, usdAmount) => {
+  // Helpers
+  const getRateForCoin = (coinId, amount) => {
     const rate = rates[coinId];
     if (!rate) return 0;
-    const amount = parseFloat(usdAmount) || 0;
-    return amount <= 500 ? rate.low : rate.high;
+    const parsed = parseFloat(amount) || 0;
+    return parsed <= 500 ? rate.low : rate.high;
   };
 
-  const calculatePayout = (coinId, usdAmount) => {
-    const amount = parseFloat(usdAmount) || 0;
-    if (amount <= 0) return { rate: 0, fee: 0, netUsd: 0, payout: 0 };
+  const calculatePayout = (coinId, amount) => {
+    const parsed = parseFloat(amount) || 0;
+    if (parsed <= 0) return { rate: 0, fee: 0, netUsd: 0, payout: 0 };
 
-    const rate = getRateForCoin(coinId, amount);
+    const rate = getRateForCoin(coinId, parsed);
     const feePercent = SPREADS[coinId]?.fee || 0;
-    const fee = amount * feePercent;
-    const netUsd = amount - fee;
+    const fee = parsed * feePercent;
+    const netUsd = parsed - fee;
     const payout = netUsd * rate;
 
     return { rate, fee, netUsd, payout };
   };
 
-  // ===== Quick Amount Buttons =====
+  // Quick amount buttons
   const setQuickAmount = (pct) => {
-    const maxAmount = 1000; // You can replace this with actual user balance
+    const maxAmount = 1000;
     const amount = (maxAmount * pct) / 100;
     setUsdAmount(amount.toFixed(2));
   };
 
   const setSellAll = () => {
-    const maxAmount = 1000; // You can replace this with actual user balance
-    setUsdAmount(maxAmount.toFixed(2));
+    setUsdAmount('1000');
   };
 
-  // ===== Handle Submit =====
-  const handleGenerateAddress = async () => {
+  // Handle "I agree" → generate address
+  const handleAgreeAndGenerate = async () => {
+    setAgreed(true);
+    setShowAgreement(false);
+    await generateAddress();
+  };
+
+  // Generate address
+  const generateAddress = async () => {
     const amount = parseFloat(usdAmount);
     if (!amount || amount <= 0) {
       setError('Please enter a valid amount');
@@ -215,27 +217,40 @@ export default function SellCrypto() {
     }
   };
 
+  // Handle "Continue" click → show agreement modal
+  const handleContinueClick = () => {
+    const amount = parseFloat(usdAmount);
+    if (!amount || amount <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+    if (amount < 1) {
+      setError('Minimum amount is $1.00');
+      return;
+    }
+    setShowAgreement(true);
+    setError('');
+  };
+
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     alert('✅ Address copied to clipboard!');
   };
 
-  // ===== Reset =====
   const handleReset = () => {
     setStep('select');
     setOrder(null);
     setUsdAmount('');
     setError('');
     setSuccess('');
+    setAgreed(false);
   };
 
-  // ===== Filtered Coins =====
   const filteredCoins = COINS.filter((coin) =>
     coin.name.toLowerCase().includes(search.toLowerCase()) ||
     coin.id.toLowerCase().includes(search.toLowerCase())
   );
 
-  // ===== Loading =====
   if (loading) return <div>Loading...</div>;
   if (!user) {
     router.push('/auth/login');
@@ -244,8 +259,8 @@ export default function SellCrypto() {
 
   const amount = parseFloat(usdAmount) || 0;
   const { rate, fee, netUsd, payout } = calculatePayout(selectedCoin.id, amount);
+  const showRate = amount > 0;
 
-  // ===== Render =====
   return (
     <>
       <Head>
@@ -269,7 +284,7 @@ export default function SellCrypto() {
 
           {step === 'select' ? (
             // ============================================
-            // STEP 1: SELECT ASSET + AMOUNT
+            // SELECT ASSET + AMOUNT
             // ============================================
             <div className="space-y-6">
               {/* Search */}
@@ -310,12 +325,8 @@ export default function SellCrypto() {
                         <span className="font-bold text-sm">{coin.id}</span>
                       </div>
                       <p className="text-text-muted text-xs mt-1">{coin.name}</p>
-                      <p className="text-sm font-semibold mt-1">
-                        ${price.toFixed(2)}
-                      </p>
-                      <p className="text-xs text-text-muted">
-                        ₦{coinRate.toFixed(0)}/$
-                      </p>
+                      <p className="text-sm font-semibold mt-1">${price.toFixed(2)}</p>
+                      <p className="text-xs text-text-muted">₦{coinRate.toFixed(0)}/$</p>
                     </button>
                   );
                 })}
@@ -331,7 +342,7 @@ export default function SellCrypto() {
                   </div>
                 </div>
 
-                {/* Network Selection (for multi-network coins) */}
+                {/* Network Selection */}
                 {selectedCoin.networks.length > 1 && (
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-text-secondary mb-1.5">
@@ -352,29 +363,31 @@ export default function SellCrypto() {
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs text-text-muted mt-1">
-                      {selectedCoin.id === 'USDT' && selectedNetwork === 'TRC-20' && '✅ Recommended — lowest fees'}
-                    </p>
+                    {selectedCoin.id === 'USDT' && selectedNetwork === 'TRC-20' && (
+                      <p className="text-xs text-green-400 mt-1">✅ Recommended — lowest fees</p>
+                    )}
                   </div>
                 )}
 
-                {/* Rate Display */}
-                <div className="bg-black/20 rounded-xl p-4 mb-4 border border-border/50">
-                  <div className="flex justify-between items-center">
-                    <span className="text-text-muted text-sm">Rate</span>
-                    <span className="font-bold text-green-400">
-                      1 USD = ₦{rate.toFixed(2)}
-                    </span>
+                {/* Rate Display – Only show if amount > 0 */}
+                {showRate && (
+                  <div className="bg-black/20 rounded-xl p-4 mb-4 border border-border/50">
+                    <div className="flex justify-between items-center">
+                      <span className="text-text-muted text-sm">Rate</span>
+                      <span className="font-bold text-green-400">
+                        1 USD = ₦{rate.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-text-muted text-sm">Fee</span>
+                      <span className="text-text-muted text-sm">
+                        {SPREADS[selectedCoin.id]?.fee === 0 ? '0%' : '1%'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-text-muted text-sm">Fee</span>
-                    <span className="text-text-muted text-sm">
-                      {SPREADS[selectedCoin.id]?.fee === 0 ? '0%' : '1%'}
-                    </span>
-                  </div>
-                </div>
+                )}
 
-                {/* Amount Input with Quick Buttons */}
+                {/* Amount Input */}
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1.5">
                     Amount (USD)
@@ -418,8 +431,8 @@ export default function SellCrypto() {
                   </p>
                 </div>
 
-                {/* You Receive */}
-                {amount > 0 && (
+                {/* You Receive – Only show if amount > 0 */}
+                {showRate && (
                   <div className="mt-4 bg-orange/5 border border-orange/20 rounded-xl p-4">
                     <div className="flex justify-between items-center">
                       <span className="text-text-muted text-sm">You Receive</span>
@@ -436,37 +449,25 @@ export default function SellCrypto() {
                   </div>
                 )}
 
-                {/* Error / Success */}
                 {error && (
                   <div className="mt-4 bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
                     <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <span>{error}</span>
                   </div>
                 )}
-                {success && (
-                  <div className="mt-4 bg-green-400/10 border border-green-400/20 rounded-xl p-3 text-green-400 text-sm flex items-start gap-2">
-                    <i className="fa-regular fa-circle-check mt-0.5"></i>
-                    <span>{success}</span>
-                  </div>
-                )}
 
-                {/* Continue Button */}
                 <button
-                  onClick={handleGenerateAddress}
+                  onClick={handleContinueClick}
                   disabled={loadingOrder || !usdAmount || parseFloat(usdAmount) <= 0}
                   className="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
                 >
-                  {loadingOrder ? (
-                    <><i className="fa-solid fa-spinner fa-spin"></i> Generating...</>
-                  ) : (
-                    <><i className="fa-solid fa-paper-plane"></i> Continue ➤</>
-                  )}
+                  <i className="fa-solid fa-paper-plane"></i> Continue ➤
                 </button>
               </div>
             </div>
           ) : (
             // ============================================
-            // STEP 2: DEPOSIT ADDRESS
+            // DEPOSIT ADDRESS
             // ============================================
             <div className="space-y-6">
               <div className="glass rounded-2xl p-6 border border-border">
@@ -508,7 +509,7 @@ export default function SellCrypto() {
                     </span>
                   </div>
 
-                  {selectedCoin.id === 'USDT' && selectedNetwork === 'TRC-20' && (
+                  {selectedCoin.id === 'USDT' && (
                     <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
                       <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
                       <span>Send USDT only via {selectedNetwork} network.</span>
@@ -535,6 +536,93 @@ export default function SellCrypto() {
           )}
         </div>
       </DashboardLayout>
+
+      {/* ===== Agreement Modal ===== */}
+      {showAgreement && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <i className="fa-solid fa-triangle-exclamation text-orange"></i>
+                Before you deposit...
+              </h2>
+              <button
+                onClick={() => setShowAgreement(false)}
+                className="text-text-muted hover:text-text-primary transition text-xl"
+              >
+                <i className="fa-regular fa-xmark"></i>
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div className="flex items-start gap-3">
+                <i className="fa-regular fa-circle-check text-green-400 mt-0.5"></i>
+                <div>
+                  <p className="font-semibold">Minimum deposit is $1.00</p>
+                  <p className="text-text-muted text-xs">
+                    Lower amounts may not be processed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <i className="fa-solid fa-clock text-yellow-400 mt-0.5"></i>
+                <div>
+                  <p className="font-semibold">Crypto will only be sold after 1 blockchain confirmation</p>
+                  <p className="text-text-muted text-xs">
+                    This ensures the transaction is secure and irreversible.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <i className="fa-solid fa-shield text-orange mt-0.5"></i>
+                <div>
+                  <p className="font-semibold">KYC Level 2 required for withdrawals</p>
+                  <p className="text-text-muted text-xs">
+                    To withdraw cash, please complete your KYC verification in your profile.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-black/20 rounded-xl p-3 border border-border text-text-muted text-xs">
+                By proceeding, you agree to these terms and acknowledge that KJ Exchange is not liable for issues arising from non-compliance.
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowAgreement(false)}
+                className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAgreeAndGenerate}
+                className="flex-1 bg-orange text-white font-bold py-2.5 rounded-xl hover:bg-orange-600 transition flex items-center justify-center gap-2"
+              >
+                <i className="fa-regular fa-check-circle"></i> I Agree
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Loading / Generating Wallet Overlay ===== */}
+      {loadingOrder && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="text-center text-white">
+            <i className="fa-solid fa-spinner fa-spin text-5xl text-orange"></i>
+            <h3 className="text-xl font-bold mt-4">Generating Your Wallet...</h3>
+            <p className="text-text-muted text-sm mt-2 max-w-xs">
+              Sit tight while we set things up securely for you.
+            </p>
+            <p className="text-text-muted text-xs mt-1">
+              This usually takes a few seconds.
+            </p>
+          </div>
+        </div>
+      )}
     </>
   );
 }
