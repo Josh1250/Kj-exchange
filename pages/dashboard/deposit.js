@@ -7,7 +7,26 @@ import Head from 'next/head';
 import Link from 'next/link';
 
 // ============================================
-// CONFIGURATION
+// YOUR REAL WALLET ADDRESSES
+// ============================================
+
+const WALLETS = {
+  BTC: 'bc1qacxpfqr7huu0qgw2xyhd2gd0k78a4z2fz3w0rf',
+  ETH: '0xD866089A82223C520A8503f7315BeF0Ff2e531A2',
+  USDT: {
+    'TRC-20': 'TWEbVbemQUQR98TYBFMAWyjMhLgQyubF6g',
+    'ERC-20': '0xD866089A82223C520A8503f7315BeF0Ff2e531A2',
+    'BEP-20': '0xD866089A82223C520A8503f7315BeF0Ff2e531A2',
+  },
+  SOL: 'FJ6CRFLWiFV2zfY2c5E147BvQVDVqKXNHAb8NNuGZUnZ',
+  BNB: '0xD866089A82223C520A8503f7315BeF0Ff2e531A2',
+  TRX: 'TWEbVbemQUQR98TYBFMAWyjMhLgQyubF6g',
+  LTC: 'ltc1qyx7j563wzd99wpl77xchd5kt7x2zuwavsgqz20',
+  BCH: 'qrsluzh9r24sa7306l9qpzwhd58ewerq0qnh47qjqh',
+};
+
+// ============================================
+// COIN CONFIG
 // ============================================
 
 const COINS = [
@@ -34,19 +53,17 @@ export default function Deposit() {
 
   const [selectedCoin, setSelectedCoin] = useState(COINS[0]);
   const [selectedNetwork, setSelectedNetwork] = useState(COINS[0].networks[0]);
+  const [usdAmount, setUsdAmount] = useState('');
+  const [cryptoAmount, setCryptoAmount] = useState(0);
   const [search, setSearch] = useState('');
-  const [step, setStep] = useState('select'); // 'select' | 'deposit'
+  const [step, setStep] = useState('select'); // 'select' | 'generating' | 'deposit'
   const [order, setOrder] = useState(null);
-  const [loadingOrder, setLoadingOrder] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showAgreement, setShowAgreement] = useState(false);
-  const [autosell, setAutosell] = useState(false);
-
-  // Rates for display (not used for deposit, but good to show)
-  const [ngnRate, setNgnRate] = useState(1389);
-  const [coinPrices, setCoinPrices] = useState({});
   const [rates, setRates] = useState({});
+  const [coinPrices, setCoinPrices] = useState({});
+  const [ngnRate, setNgnRate] = useState(1389);
   const [isLoadingRates, setIsLoadingRates] = useState(true);
 
   // Fetch rates
@@ -76,16 +93,6 @@ export default function Deposit() {
         });
       } catch (error) {
         console.warn('⚠️ Rate fetch failed', error);
-        setCoinPrices({
-          BTC: 67000,
-          ETH: 3500,
-          USDT: 1,
-          SOL: 180,
-          BNB: 600,
-          TRX: 0.12,
-          LTC: 85,
-          BCH: 350,
-        });
       } finally {
         setIsLoadingRates(false);
       }
@@ -96,40 +103,68 @@ export default function Deposit() {
     return () => clearInterval(interval);
   }, []);
 
-  // Agreement → Generate
+  // Get wallet address
+  const getWalletAddress = () => {
+    const coin = selectedCoin.id;
+    if (coin === 'USDT') {
+      return WALLETS.USDT[selectedNetwork] || 'Address not available';
+    }
+    return WALLETS[coin] || 'Address not available';
+  };
+
+  // Handle agreement → simulate wallet generation
   const handleAgreeAndGenerate = async () => {
     setShowAgreement(false);
-    setLoadingOrder(true);
-    setError('');
-    setSuccess('');
+    setStep('generating');
+
+    // Simulate 2-3 second loading animation
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
+    const amount = parseFloat(usdAmount);
+    if (!amount || amount <= 0) {
+      setError('Please enter a valid amount');
+      setStep('select');
+      return;
+    }
+
+    const priceUsd = coinPrices[selectedCoin.id] || 0;
+    if (priceUsd <= 0) {
+      setError('Unable to fetch current price. Please try again.');
+      setStep('select');
+      return;
+    }
+
+    const calculatedCryptoAmount = amount / priceUsd;
+    setCryptoAmount(calculatedCryptoAmount);
 
     try {
-      const response = await fetch('/api/crypto/generate-address', {
+      const response = await fetch('/api/crypto/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
           coin: selectedCoin.id,
           network: selectedNetwork,
-          usdAmount: 0, // deposit only, no amount needed
-          rate: 0,
-          payout: 0,
+          usdAmount: amount,
+          cryptoAmount: calculatedCryptoAmount,
+          rate: ngnRate,
+          payout: amount * ngnRate,
+          walletAddress: getWalletAddress(),
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to generate address');
+        throw new Error(data.error || 'Failed to create order');
       }
 
       setOrder(data);
       setStep('deposit');
-      setSuccess('✅ Wallet address generated! Send crypto to the address below.');
+      setSuccess('✅ Wallet generated! Send crypto to the address below.');
     } catch (err) {
-      setError(err.message || 'Failed to generate address. Please try again.');
-    } finally {
-      setLoadingOrder(false);
+      setError(err.message || 'Failed to create order. Please try again.');
+      setStep('select');
     }
   };
 
@@ -156,7 +191,10 @@ export default function Deposit() {
     return null;
   }
 
-  const currentPrice = coinPrices[selectedCoin.id] || 0;
+  const amount = parseFloat(usdAmount) || 0;
+  const priceUsd = coinPrices[selectedCoin.id] || 0;
+  const cryptoAmt = amount > 0 ? amount / priceUsd : 0;
+  const walletAddress = getWalletAddress();
 
   return (
     <>
@@ -178,7 +216,7 @@ export default function Deposit() {
 
           {step === 'select' ? (
             // ============================================
-            // SELECT ASSET
+            // SELECT ASSET + AMOUNT
             // ============================================
             <div className="space-y-6">
               {/* Search */}
@@ -205,6 +243,7 @@ export default function Deposit() {
                       onClick={() => {
                         setSelectedCoin(coin);
                         setSelectedNetwork(coin.networks[0]);
+                        setUsdAmount('');
                       }}
                       className={`p-4 rounded-2xl border transition-all duration-200 text-left ${
                         isSelected
@@ -223,22 +262,20 @@ export default function Deposit() {
                 })}
               </div>
 
-              {/* Selected Coin Details */}
+              {/* Coin Detail */}
               <div className="glass rounded-2xl p-6 border border-border">
                 <div className="flex items-center gap-3 mb-4">
                   <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
                   <div>
                     <h2 className="text-xl font-bold">Deposit {selectedCoin.name}</h2>
-                    <p className="text-text-muted text-sm">Current price: ${currentPrice.toFixed(2)}</p>
+                    <p className="text-text-muted text-sm">Price: ${priceUsd.toFixed(2)}</p>
                   </div>
                 </div>
 
                 {/* Network Selection */}
                 {selectedCoin.networks.length > 1 && (
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                      Select Network
-                    </label>
+                    <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Network</label>
                     <div className="flex gap-2 flex-wrap">
                       {selectedCoin.networks.map((net) => (
                         <button
@@ -260,13 +297,31 @@ export default function Deposit() {
                   </div>
                 )}
 
-                <div className="bg-black/20 rounded-xl p-4 border border-border/50 mb-4">
-                  <p className="text-text-muted text-sm">Minimum deposit: $1.00</p>
-                  <p className="text-text-muted text-sm">Funds credited after 1 blockchain confirmation</p>
+                {/* Amount Input */}
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">Amount (USD)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={usdAmount}
+                      onChange={(e) => setUsdAmount(e.target.value)}
+                      className="w-full bg-black/40 border border-border rounded-xl px-5 py-4 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-2xl font-bold placeholder:text-text-muted/50"
+                      placeholder="0.00"
+                      min="1"
+                      step="0.01"
+                    />
+                    <div className="absolute right-5 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">USD</div>
+                  </div>
+                  {amount > 0 && priceUsd > 0 && (
+                    <p className="text-text-muted text-sm mt-2">
+                      ≈ {cryptoAmt.toFixed(6)} {selectedCoin.id}
+                    </p>
+                  )}
+                  <p className="text-text-muted text-xs mt-1">Minimum deposit: $1.00</p>
                 </div>
 
                 {error && (
-                  <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
+                  <div className="mt-4 bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
                     <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <span>{error}</span>
                   </div>
@@ -274,78 +329,90 @@ export default function Deposit() {
 
                 <button
                   onClick={() => setShowAgreement(true)}
-                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
+                  disabled={!usdAmount || parseFloat(usdAmount) <= 0}
+                  className="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
                 >
                   <i className="fa-solid fa-arrow-down"></i> Continue ➤
                 </button>
               </div>
             </div>
+          ) : step === 'generating' ? (
+            // ============================================
+            // GENERATING WALLET ANIMATION
+            // ============================================
+            <div className="glass rounded-2xl p-12 border border-border text-center">
+              <div className="relative w-24 h-24 mx-auto">
+                <div className="absolute inset-0 border-4 border-orange/20 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-orange rounded-full animate-spin border-t-transparent"></div>
+              </div>
+              <h2 className="text-2xl font-bold mt-6">Generating Your Wallet...</h2>
+              <p className="text-text-muted mt-3 max-w-sm mx-auto">
+                Sit tight while we set things up securely for you.
+              </p>
+              <p className="text-text-muted text-xs mt-2">This usually takes a few seconds.</p>
+            </div>
           ) : (
             // ============================================
-            // DEPOSIT ADDRESS
+            // DEPOSIT ADDRESS (Premium Dtunes Style)
             // ============================================
             <div className="glass rounded-2xl p-6 border border-border">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-full bg-green-400/10 flex items-center justify-center text-green-400">
+                <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center text-green-400 text-xl">
                   <i className="fa-regular fa-circle-check"></i>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">Send {selectedCoin.name}</h2>
+                  <h2 className="text-xl font-bold">Deposit {selectedCoin.name}</h2>
                   <p className="text-text-muted text-sm">Order #{order?.orderId}</p>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div className="bg-black/20 rounded-xl p-4 border border-border">
-                  <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Network</p>
-                  <p className="font-bold">{selectedNetwork}</p>
+                {/* Network */}
+                <div className="bg-black/20 rounded-xl p-4 border border-border flex items-center justify-between">
+                  <span className="text-text-muted text-sm">Network</span>
+                  <span className="font-bold">{selectedNetwork}</span>
                 </div>
 
+                {/* Wallet Address */}
                 <div className="bg-black/20 rounded-xl p-4 border border-border">
                   <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Wallet Address</p>
-                  <div className="flex items-center gap-2">
-                    <p className="font-mono text-sm break-all flex-1 text-orange">
-                      {order?.address || 'Loading...'}
-                    </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="font-mono text-sm break-all flex-1 text-orange">{walletAddress}</p>
                     <button
-                      onClick={() => copyToClipboard(order?.address)}
-                      className="bg-orange/20 hover:bg-orange/30 text-orange px-3 py-1.5 rounded-lg text-sm transition whitespace-nowrap"
+                      onClick={() => copyToClipboard(walletAddress)}
+                      className="bg-orange/20 hover:bg-orange/30 text-orange px-3 py-1.5 rounded-lg text-sm transition whitespace-nowrap flex items-center gap-1"
                     >
-                      <i className="fa-regular fa-copy mr-1"></i>Copy
+                      <i className="fa-regular fa-copy"></i> Copy
                     </button>
                   </div>
                 </div>
 
-                {/* Autosell Toggle */}
-                <div className="flex items-center justify-between bg-black/20 rounded-xl p-4 border border-border">
-                  <div>
-                    <p className="font-semibold text-sm">Turn on autosell</p>
-                    <p className="text-text-muted text-xs">Sell automatically when crypto arrives</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autosell}
-                      onChange={() => setAutosell(!autosell)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-orange rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange"></div>
-                  </label>
-                </div>
-
+                {/* Deposit Info */}
                 <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-yellow-400 text-sm flex items-start gap-2">
                   <i className="fa-solid fa-clock mt-0.5"></i>
-                  <span>
-                    Send crypto to this address. Your wallet will be credited after 1 blockchain confirmation.
-                  </span>
+                  <div>
+                    <p className="font-semibold">Send exactly:</p>
+                    <p className="text-lg font-bold text-white">
+                      {cryptoAmount.toFixed(6)} {selectedCoin.id}
+                    </p>
+                    <p className="text-xs text-yellow-400/70 mt-1">
+                      Your wallet will be credited after admin confirmation.
+                    </p>
+                  </div>
                 </div>
 
+                {/* Network Warning */}
                 {selectedCoin.id === 'USDT' && (
                   <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
                     <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
-                    <span>Send USDT only via {selectedNetwork} network.</span>
+                    <span>Send USDT only via <strong>{selectedNetwork}</strong> network.</span>
                   </div>
                 )}
+
+                {/* Minimum Deposit */}
+                <div className="bg-black/20 rounded-xl p-3 border border-border text-center text-text-muted text-xs">
+                  Minimum deposit: $1.00 • Lower amounts may not be processed.
+                </div>
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -367,7 +434,7 @@ export default function Deposit() {
         </div>
       </DashboardLayout>
 
-      {/* ===== Agreement Modal ===== */}
+      {/* ===== Agreement Modal (Premium Dtunes Style) ===== */}
       {showAgreement && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
@@ -396,16 +463,16 @@ export default function Deposit() {
               <div className="flex items-start gap-3">
                 <i className="fa-solid fa-clock text-yellow-400 mt-0.5"></i>
                 <div>
-                  <p className="font-semibold">1 blockchain confirmation required</p>
-                  <p className="text-text-muted text-xs">Funds credited after 1 confirmation.</p>
+                  <p className="font-semibold">Admin confirmation required</p>
+                  <p className="text-text-muted text-xs">Funds will be credited after our team confirms your deposit.</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
                 <i className="fa-solid fa-shield text-orange mt-0.5"></i>
                 <div>
-                  <p className="font-semibold">KYC Level 2 required for withdrawals</p>
-                  <p className="text-text-muted text-xs">Complete KYC in your profile to withdraw.</p>
+                  <p className="font-semibold">Funds held in your crypto balance</p>
+                  <p className="text-text-muted text-xs">You can sell or keep your crypto anytime.</p>
                 </div>
               </div>
 
@@ -428,20 +495,6 @@ export default function Deposit() {
                 <i className="fa-regular fa-check-circle"></i> I Agree
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===== Loading Overlay ===== */}
-      {loadingOrder && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="text-center text-white">
-            <i className="fa-solid fa-spinner fa-spin text-5xl text-orange"></i>
-            <h3 className="text-xl font-bold mt-4">Generating Your Wallet...</h3>
-            <p className="text-text-muted text-sm mt-2 max-w-xs">
-              Sit tight while we set things up securely for you.
-            </p>
-            <p className="text-text-muted text-xs mt-1">This usually takes a few seconds.</p>
           </div>
         </div>
       )}
