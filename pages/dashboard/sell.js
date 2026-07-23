@@ -6,10 +6,6 @@ import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
 import Link from 'next/link';
 
-// ============================================
-// CONFIGURATION (same as deposit)
-// ============================================
-
 const COINS = [
   { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a' },
   { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea' },
@@ -38,19 +34,20 @@ export default function Sell() {
 
   const [selectedCoin, setSelectedCoin] = useState(COINS[0]);
   const [usdAmount, setUsdAmount] = useState('');
-  const [availableBalance, setAvailableBalance] = useState(0); // in USD equivalent
+  const [availableBalance, setAvailableBalance] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
+  const [showAgreement, setShowAgreement] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [lastPayout, setLastPayout] = useState(0);
 
-  // Rates
   const [ngnRate, setNgnRate] = useState(1389);
   const [coinPrices, setCoinPrices] = useState({});
   const [rates, setRates] = useState({});
   const [isLoadingRates, setIsLoadingRates] = useState(true);
 
-  // Fetch rates and balance
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -88,11 +85,9 @@ export default function Sell() {
         }
         setRates(calculatedRates);
 
-        // Fetch user's available crypto balance (simplified – we'll use a static value for now)
-        // In production, you'd query a crypto_balances table.
-        // For now, we'll set a dummy balance of 0.5 BTC equivalent.
-        const balanceUsd = 0.5 * (cryptoData.bitcoin?.usd || 0);
-        setAvailableBalance(balanceUsd);
+        // TODO: Fetch real crypto balance from database
+        // For now, set a dummy balance
+        setAvailableBalance(0.5 * (cryptoData.bitcoin?.usd || 0));
       } catch (error) {
         console.warn('⚠️ Data fetch failed', error);
         setAvailableBalance(0);
@@ -106,7 +101,6 @@ export default function Sell() {
     return () => clearInterval(interval);
   }, [user]);
 
-  // Helpers
   const getRateForCoin = (coinId, amount) => {
     const rate = rates[coinId];
     if (!rate) return 0;
@@ -127,7 +121,6 @@ export default function Sell() {
     return { rate, fee, netUsd, payout };
   };
 
-  // Quick amounts (10%, 25%, 50%, Sell All)
   const setQuickAmount = (pct) => {
     const amount = (availableBalance * pct) / 100;
     setUsdAmount(amount.toFixed(2));
@@ -137,25 +130,29 @@ export default function Sell() {
     setUsdAmount(availableBalance.toFixed(2));
   };
 
-  // Submit sell
-  const handleSell = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setSubmitting(true);
-
+  // Open agreement modal
+  const handleContinue = () => {
     const amount = parseFloat(usdAmount);
     if (!amount || amount <= 0) {
       setError('Please enter a valid amount');
-      setSubmitting(false);
       return;
     }
     if (amount > availableBalance) {
       setError('Amount exceeds your available balance. Please enter a lower amount.');
-      setSubmitting(false);
       return;
     }
+    setError('');
+    setShowAgreement(true);
+  };
 
+  // Execute sell after agreement
+  const handleSell = async () => {
+    setShowAgreement(false);
+    setSubmitting(true);
+    setError('');
+    setSuccess('');
+
+    const amount = parseFloat(usdAmount);
     const { rate, fee, netUsd, payout } = calculatePayout(selectedCoin.id, amount);
 
     try {
@@ -168,7 +165,7 @@ export default function Sell() {
           amountUsd: amount,
           rate,
           payout,
-          network: 'Default', // network can be added later
+          network: 'Default',
         }),
       });
 
@@ -178,7 +175,8 @@ export default function Sell() {
         throw new Error(data.error || 'Failed to sell');
       }
 
-      setSuccess(data.message);
+      setLastPayout(payout);
+      setShowSuccessModal(true);
       setAvailableBalance(availableBalance - amount);
       setUsdAmount('');
     } catch (err) {
@@ -210,7 +208,6 @@ export default function Sell() {
       </Head>
       <DashboardLayout>
         <div className="max-w-4xl mx-auto px-4 py-6">
-          {/* Header */}
           <div className="flex items-center gap-2 mb-6">
             <Link href="/dashboard" className="text-text-muted hover:text-text-primary transition group">
               <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
@@ -221,7 +218,6 @@ export default function Sell() {
             </h1>
           </div>
 
-          {/* Asset Selection */}
           <div className="space-y-6">
             <div className="relative">
               <input
@@ -263,7 +259,6 @@ export default function Sell() {
               })}
             </div>
 
-            {/* Sell Form */}
             <div className="glass rounded-2xl p-6 border border-border">
               <div className="flex items-center gap-3 mb-4">
                 <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
@@ -275,7 +270,6 @@ export default function Sell() {
                 </div>
               </div>
 
-              {/* Rate Display */}
               {showRate && (
                 <div className="bg-black/20 rounded-xl p-4 mb-4 border border-border/50">
                   <div className="flex justify-between items-center">
@@ -293,98 +287,194 @@ export default function Sell() {
                 </div>
               )}
 
-              <form onSubmit={handleSell}>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                    Amount (USD)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={usdAmount}
-                      onChange={(e) => setUsdAmount(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-5 py-4 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-2xl font-bold placeholder:text-text-muted/50"
-                      placeholder="0.00"
-                      min="0.01"
-                      step="0.01"
-                    />
-                    <div className="absolute right-5 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">
-                      USD
-                    </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                  Amount (USD)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={usdAmount}
+                    onChange={(e) => setUsdAmount(e.target.value)}
+                    className="w-full bg-black/40 border border-border rounded-xl px-5 py-4 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-2xl font-bold placeholder:text-text-muted/50"
+                    placeholder="0.00"
+                    min="0.01"
+                    step="0.01"
+                  />
+                  <div className="absolute right-5 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">
+                    USD
                   </div>
-
-                  {/* Quick Amount Buttons */}
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    {[10, 25, 50, 100].map((pct) => (
-                      <button
-                        key={pct}
-                        type="button"
-                        onClick={() => setQuickAmount(pct)}
-                        className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-border hover:border-orange/50 hover:text-orange"
-                      >
-                        {pct}%
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={setSellAll}
-                      className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-orange/30 text-orange hover:bg-orange/10"
-                    >
-                      Sell All
-                    </button>
-                  </div>
-
-                  <p className="text-text-muted text-xs mt-2">
-                    Minimum sell: $1.00
-                  </p>
                 </div>
 
-                {showRate && (
-                  <div className="mt-4 bg-orange/5 border border-orange/20 rounded-xl p-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-text-muted text-sm">You Receive</span>
-                      <span className="text-2xl font-bold text-green-400">
-                        ₦{payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  {[10, 25, 50, 100].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setQuickAmount(pct)}
+                      className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-border hover:border-orange/50 hover:text-orange"
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={setSellAll}
+                    className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-orange/30 text-orange hover:bg-orange/10"
+                  >
+                    Sell All
+                  </button>
+                </div>
+
+                <p className="text-text-muted text-xs mt-2">
+                  Minimum sell: $1.00
+                </p>
+              </div>
+
+              {showRate && (
+                <div className="mt-4 bg-orange/5 border border-orange/20 rounded-xl p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-text-muted text-sm">You Receive</span>
+                    <span className="text-2xl font-bold text-green-400">
+                      ₦{payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {fee > 0 && (
+                    <div className="flex justify-between items-center mt-1 text-xs text-text-muted">
+                      <span>Fee deducted</span>
+                      <span>-${fee.toFixed(2)}</span>
                     </div>
-                    {fee > 0 && (
-                      <div className="flex justify-between items-center mt-1 text-xs text-text-muted">
-                        <span>Fee deducted</span>
-                        <span>-${fee.toFixed(2)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {error && (
-                  <div className="mt-4 bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
-                    <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
-                    <span>{error}</span>
-                  </div>
-                )}
-                {success && (
-                  <div className="mt-4 bg-green-400/10 border border-green-400/20 rounded-xl p-3 text-green-400 text-sm flex items-start gap-2">
-                    <i className="fa-regular fa-circle-check mt-0.5"></i>
-                    <span>{success}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={submitting || !usdAmount || parseFloat(usdAmount) <= 0}
-                  className="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
-                >
-                  {submitting ? (
-                    <><i className="fa-solid fa-spinner fa-spin"></i> Processing...</>
-                  ) : (
-                    <><i className="fa-solid fa-paper-plane"></i> Sell Now</>
                   )}
-                </button>
-              </form>
+                </div>
+              )}
+
+              {error && (
+                <div className="mt-4 bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
+                  <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <button
+                onClick={handleContinue}
+                disabled={submitting || !usdAmount || parseFloat(usdAmount) <= 0}
+                className="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
+              >
+                <i className="fa-solid fa-paper-plane"></i> Continue ➤
+              </button>
             </div>
           </div>
         </div>
       </DashboardLayout>
+
+      {/* ===== Agreement Modal ===== */}
+      {showAgreement && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <i className="fa-solid fa-triangle-exclamation text-orange"></i>
+                Before you sell...
+              </h2>
+              <button
+                onClick={() => setShowAgreement(false)}
+                className="text-text-muted hover:text-text-primary transition text-xl"
+              >
+                <i className="fa-regular fa-xmark"></i>
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div className="flex items-start gap-3">
+                <i className="fa-regular fa-circle-check text-green-400 mt-0.5"></i>
+                <div>
+                  <p className="font-semibold">Minimum sell is $1.00</p>
+                  <p className="text-text-muted text-xs">
+                    Amounts below $1.00 will not be processed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <i className="fa-solid fa-percent text-yellow-400 mt-0.5"></i>
+                <div>
+                  <p className="font-semibold">Transaction fee: {SPREADS[selectedCoin.id]?.fee === 0 ? '0%' : '1%'}</p>
+                  <p className="text-text-muted text-xs">
+                    Fee is deducted from your sale amount.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <i className="fa-solid fa-shield text-orange mt-0.5"></i>
+                <div>
+                  <p className="font-semibold">Instant credit</p>
+                  <p className="text-text-muted text-xs">
+                    Your Naira wallet will be credited immediately.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-black/20 rounded-xl p-3 border border-border text-text-muted text-xs">
+                By proceeding, you agree to these terms and acknowledge that KJ Exchange is not liable for issues arising from non-compliance.
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowAgreement(false)}
+                className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSell}
+                className="flex-1 bg-orange text-white font-bold py-2.5 rounded-xl hover:bg-orange-600 transition flex items-center justify-center gap-2"
+              >
+                <i className="fa-regular fa-check-circle"></i> I Agree
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Success Modal ===== */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl max-w-md w-full p-6 border border-border text-center">
+            <div className="w-16 h-16 rounded-full bg-green-400/20 flex items-center justify-center text-green-400 text-3xl mx-auto">
+              <i className="fa-regular fa-circle-check"></i>
+            </div>
+            <h2 className="text-2xl font-bold mt-4">Sale Completed! 🎉</h2>
+            <p className="text-text-muted mt-2">
+              You have successfully sold {selectedCoin.name} for
+            </p>
+            <p className="text-3xl font-bold text-green-400 mt-1">
+              ₦{lastPayout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+            <p className="text-text-muted text-xs mt-2">
+              Funds have been credited to your Naira wallet.
+            </p>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  setSuccess('');
+                }}
+                className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition"
+              >
+                Close
+              </button>
+              <Link
+                href="/dashboard/wallet"
+                className="flex-1 bg-orange text-white font-bold py-2.5 rounded-xl hover:bg-orange-600 transition text-center"
+              >
+                View Wallet
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
