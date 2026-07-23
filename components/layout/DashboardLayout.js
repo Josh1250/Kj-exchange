@@ -67,7 +67,6 @@ export default function DashboardLayout({ children }) {
   // Real‑time subscription
   useEffect(() => {
     if (!user) return;
-
     const subscription = supabase
       .channel('notifications-channel')
       .on(
@@ -84,10 +83,7 @@ export default function DashboardLayout({ children }) {
         }
       )
       .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, [user]);
 
   const markAsRead = async (notificationId) => {
@@ -117,9 +113,7 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  const toggleDropdown = () => {
-    setShowDropdown(!showDropdown);
-  };
+  const toggleDropdown = () => setShowDropdown(!showDropdown);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -144,7 +138,6 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
-      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-bg-secondary border-r border-border transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="flex flex-col h-full p-4">
           <div className="mb-6">
@@ -168,9 +161,7 @@ export default function DashboardLayout({ children }) {
                 >
                   <i className={`${item.icon} text-lg w-6 text-center`}></i>
                   <span>{item.name}</span>
-                  {isActive && (
-                    <span className="ml-auto w-1.5 h-8 rounded-full bg-orange"></span>
-                  )}
+                  {isActive && <span className="ml-auto w-1.5 h-8 rounded-full bg-orange"></span>}
                 </Link>
               );
             })}
@@ -195,7 +186,6 @@ export default function DashboardLayout({ children }) {
             <i className="fa-solid fa-bars text-xl text-text-primary"></i>
           </button>
           <div className="flex items-center gap-4 relative" ref={dropdownRef}>
-            {/* Notification Bell */}
             <button
               onClick={toggleDropdown}
               className="relative p-2 rounded-full hover:bg-white/10 transition"
@@ -208,10 +198,20 @@ export default function DashboardLayout({ children }) {
               )}
             </button>
 
-            {/* Notification Dropdown - 100% Solid Background */}
+            {/* Notification Dropdown - 100% Solid with Inline Styles */}
             {showDropdown && (
-              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-[#0B0815] border border-border rounded-xl shadow-2xl shadow-black/70 z-50 p-2" style={{ backdropFilter: 'none' }}>
-                <div className="flex justify-between items-center p-2 border-b border-border sticky top-0 bg-[#0B0815] z-10 rounded-t-xl">
+              <div
+                className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto border border-border rounded-xl shadow-2xl shadow-black/70 z-50 p-2"
+                style={{
+                  backgroundColor: '#0B0815',
+                  backdropFilter: 'none',
+                  opacity: 1,
+                }}
+              >
+                <div
+                  className="flex justify-between items-center p-2 border-b border-border sticky top-0 z-10 rounded-t-xl"
+                  style={{ backgroundColor: '#0B0815' }}
+                >
                   <h3 className="font-bold text-sm">Notifications</h3>
                   {unreadCount > 0 && (
                     <button
@@ -223,9 +223,7 @@ export default function DashboardLayout({ children }) {
                   )}
                 </div>
                 {notifications.length === 0 ? (
-                  <div className="text-center text-text-muted py-4 text-sm">
-                    No notifications
-                  </div>
+                  <div className="text-center text-text-muted py-4 text-sm">No notifications</div>
                 ) : (
                   <div className="space-y-2 mt-2">
                     {notifications.map((n) => (
