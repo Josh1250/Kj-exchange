@@ -1,4 +1,10 @@
-import { supabase } from '../../../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false } }
+);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -13,7 +19,7 @@ export default async function handler(req, res) {
     }
 
     // 1. Get the order
-    const { data: order, error: orderError } = await supabase
+    const { data: order, error: orderError } = await supabaseAdmin
       .from('crypto_orders')
       .select('*')
       .eq('id', orderId)
@@ -27,8 +33,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Order already processed' });
     }
 
-    // 2. Credit user's Naira wallet
-    const { data: wallet, error: walletError } = await supabase
+    // 2. Check if autosell was enabled
+    const isAutosell = order.autosell || false;
+
+    // 3. Credit user's Naira wallet
+    const { data: wallet, error: walletError } = await supabaseAdmin
       .from('wallets')
       .select('balance')
       .eq('user_id', order.user_id)
@@ -41,7 +50,7 @@ export default async function handler(req, res) {
 
     const newBalance = (wallet?.balance || 0) + order.payout_ngn;
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await supabaseAdmin
       .from('wallets')
       .update({ balance: newBalance })
       .eq('user_id', order.user_id);
@@ -51,32 +60,34 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to update wallet' });
     }
 
-    // 3. Add to crypto_balances (so user can keep coins)
-    const { data: existingBalance } = await supabase
-      .from('crypto_balances')
-      .select('balance')
-      .eq('user_id', order.user_id)
-      .eq('coin', order.coin)
-      .maybeSingle();
-
-    if (existingBalance) {
-      await supabase
+    // 4. If NOT autosell → add to crypto_balances (hold crypto)
+    if (!isAutosell) {
+      const { data: existingBalance } = await supabaseAdmin
         .from('crypto_balances')
-        .update({ balance: existingBalance.balance + order.crypto_amount })
+        .select('balance')
         .eq('user_id', order.user_id)
-        .eq('coin', order.coin);
-    } else {
-      await supabase
-        .from('crypto_balances')
-        .insert({
-          user_id: order.user_id,
-          coin: order.coin,
-          balance: order.crypto_amount || 0,
-        });
+        .eq('coin', order.coin)
+        .maybeSingle();
+
+      if (existingBalance) {
+        await supabaseAdmin
+          .from('crypto_balances')
+          .update({ balance: existingBalance.balance + order.crypto_amount })
+          .eq('user_id', order.user_id)
+          .eq('coin', order.coin);
+      } else {
+        await supabaseAdmin
+          .from('crypto_balances')
+          .insert({
+            user_id: order.user_id,
+            coin: order.coin,
+            balance: order.crypto_amount || 0,
+          });
+      }
     }
 
-    // 4. Update order status
-    await supabase
+    // 5. Update order status
+    await supabaseAdmin
       .from('crypto_orders')
       .update({
         status: 'completed',
@@ -85,12 +96,17 @@ export default async function handler(req, res) {
       })
       .eq('id', orderId);
 
-    // 5. Create transaction record
-    await supabase
+    // 6. Create transaction record
+    const txType = isAutosell ? 'crypto_sale' : 'crypto_deposit';
+    const txMessage = isAutosell
+      ? `✅ Your ${order.coin} was auto-sold for ₦${order.payout_ngn.toLocaleString()}`
+      : `✅ Your ${order.coin} deposit of ₦${order.payout_ngn.toLocaleString()} has been confirmed!`;
+
+    await supabaseAdmin
       .from('transactions')
       .insert({
         user_id: order.user_id,
-        type: 'crypto_deposit',
+        type: txType,
         amount: order.payout_ngn,
         currency: 'NGN',
         status: 'completed',
@@ -101,20 +117,23 @@ export default async function handler(req, res) {
           rate: order.rate,
           order_id: order.id,
           crypto_amount: order.crypto_amount,
+          autosell: isAutosell,
         },
       });
 
-    // 6. Send notification
-    await supabase
+    // 7. Send notification
+    await supabaseAdmin
       .from('notifications')
       .insert({
         user_id: order.user_id,
-        message: `✅ Your ${order.coin} deposit of ₦${order.payout_ngn.toLocaleString()} has been confirmed!`,
+        message: txMessage,
       });
 
     res.status(200).json({
       success: true,
-      message: `Deposit approved! User credited ₦${order.payout_ngn.toLocaleString()}`,
+      message: isAutosell
+        ? `Deposit auto-sold! User credited ₦${order.payout_ngn.toLocaleString()}`
+        : `Deposit approved! User credited ₦${order.payout_ngn.toLocaleString()} (crypto held)`,
     });
   } catch (error) {
     console.error('Approve deposit error:', error);
