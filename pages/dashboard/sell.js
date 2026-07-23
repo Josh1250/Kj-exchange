@@ -1,0 +1,390 @@
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { useAuth } from '../_app';
+import DashboardLayout from '../../components/layout/DashboardLayout';
+import { supabase } from '../../lib/supabaseClient';
+import Head from 'next/head';
+import Link from 'next/link';
+
+// ============================================
+// CONFIGURATION (same as deposit)
+// ============================================
+
+const COINS = [
+  { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a' },
+  { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea' },
+  { id: 'USDT', name: 'Tether', icon: 'fa-solid fa-coins', color: '#26a17b' },
+  { id: 'SOL', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF' },
+  { id: 'BNB', name: 'BNB', icon: 'fa-solid fa-cube', color: '#F3BA2F' },
+  { id: 'TRX', name: 'Tron', icon: 'fa-solid fa-bolt', color: '#EF0027' },
+  { id: 'LTC', name: 'Litecoin', icon: 'fa-brands fa-litecoin', color: '#345d9d' },
+  { id: 'BCH', name: 'Bitcoin Cash', icon: 'fa-brands fa-bitcoin', color: '#8dc351' },
+];
+
+const SPREADS = {
+  BTC: { low: 0.0286, high: 0.0142, fee: 0.01 },
+  ETH: { low: 0.0287, high: 0.0143, fee: 0.01 },
+  USDT: { low: 0.0106, high: 0.0034, fee: 0 },
+  SOL: { low: 0.0286, high: 0.0142, fee: 0.01 },
+  BNB: { low: 0.0286, high: 0.0142, fee: 0.01 },
+  TRX: { low: 0.0358, high: 0.0142, fee: 0.01 },
+  LTC: { low: 0.0286, high: 0.0142, fee: 0.01 },
+  BCH: { low: 0.1079, high: 0.0143, fee: 0.01 },
+};
+
+export default function Sell() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  const [selectedCoin, setSelectedCoin] = useState(COINS[0]);
+  const [usdAmount, setUsdAmount] = useState('');
+  const [availableBalance, setAvailableBalance] = useState(0); // in USD equivalent
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [search, setSearch] = useState('');
+
+  // Rates
+  const [ngnRate, setNgnRate] = useState(1389);
+  const [coinPrices, setCoinPrices] = useState({});
+  const [rates, setRates] = useState({});
+  const [isLoadingRates, setIsLoadingRates] = useState(true);
+
+  // Fetch rates and balance
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoadingRates(true);
+        const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
+        const data = await res.json();
+        const ngn = data.rates?.NGN || 1389;
+        setNgnRate(ngn);
+
+        const cryptoRes = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,binancecoin,tron,litecoin,bitcoin-cash&vs_currencies=usd'
+        );
+        const cryptoData = await cryptoRes.json();
+
+        setCoinPrices({
+          BTC: cryptoData.bitcoin?.usd || 0,
+          ETH: cryptoData.ethereum?.usd || 0,
+          USDT: cryptoData.tether?.usd || 1,
+          SOL: cryptoData.solana?.usd || 0,
+          BNB: cryptoData.binancecoin?.usd || 0,
+          TRX: cryptoData.tron?.usd || 0,
+          LTC: cryptoData.litecoin?.usd || 0,
+          BCH: cryptoData['bitcoin-cash']?.usd || 0,
+        });
+
+        const calculatedRates = {};
+        for (const coin of COINS) {
+          const spread = SPREADS[coin.id];
+          if (spread) {
+            calculatedRates[coin.id] = {
+              low: ngn * (1 - spread.low),
+              high: ngn * (1 - spread.high),
+            };
+          }
+        }
+        setRates(calculatedRates);
+
+        // Fetch user's available crypto balance (simplified – we'll use a static value for now)
+        // In production, you'd query a crypto_balances table.
+        // For now, we'll set a dummy balance of 0.5 BTC equivalent.
+        const balanceUsd = 0.5 * (cryptoData.bitcoin?.usd || 0);
+        setAvailableBalance(balanceUsd);
+      } catch (error) {
+        console.warn('⚠️ Data fetch failed', error);
+        setAvailableBalance(0);
+      } finally {
+        setIsLoadingRates(false);
+      }
+    };
+
+    if (user) fetchData();
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Helpers
+  const getRateForCoin = (coinId, amount) => {
+    const rate = rates[coinId];
+    if (!rate) return 0;
+    const parsed = parseFloat(amount) || 0;
+    return parsed <= 500 ? rate.low : rate.high;
+  };
+
+  const calculatePayout = (coinId, amount) => {
+    const parsed = parseFloat(amount) || 0;
+    if (parsed <= 0) return { rate: 0, fee: 0, netUsd: 0, payout: 0 };
+
+    const rate = getRateForCoin(coinId, parsed);
+    const feePercent = SPREADS[coinId]?.fee || 0;
+    const fee = parsed * feePercent;
+    const netUsd = parsed - fee;
+    const payout = netUsd * rate;
+
+    return { rate, fee, netUsd, payout };
+  };
+
+  // Quick amounts (10%, 25%, 50%, Sell All)
+  const setQuickAmount = (pct) => {
+    const amount = (availableBalance * pct) / 100;
+    setUsdAmount(amount.toFixed(2));
+  };
+
+  const setSellAll = () => {
+    setUsdAmount(availableBalance.toFixed(2));
+  };
+
+  // Submit sell
+  const handleSell = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setSubmitting(true);
+
+    const amount = parseFloat(usdAmount);
+    if (!amount || amount <= 0) {
+      setError('Please enter a valid amount');
+      setSubmitting(false);
+      return;
+    }
+    if (amount > availableBalance) {
+      setError('Amount exceeds your available balance. Please enter a lower amount.');
+      setSubmitting(false);
+      return;
+    }
+
+    const { rate, fee, netUsd, payout } = calculatePayout(selectedCoin.id, amount);
+
+    try {
+      const response = await fetch('/api/crypto/sell', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          coin: selectedCoin.id,
+          amountUsd: amount,
+          rate,
+          payout,
+          network: 'Default', // network can be added later
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to sell');
+      }
+
+      setSuccess(data.message);
+      setAvailableBalance(availableBalance - amount);
+      setUsdAmount('');
+    } catch (err) {
+      setError(err.message || 'Failed to sell. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const filteredCoins = COINS.filter((coin) =>
+    coin.name.toLowerCase().includes(search.toLowerCase()) ||
+    coin.id.toLowerCase().includes(search.toLowerCase())
+  );
+
+  if (loading) return <div>Loading...</div>;
+  if (!user) {
+    router.push('/auth/login');
+    return null;
+  }
+
+  const amount = parseFloat(usdAmount) || 0;
+  const { rate, fee, netUsd, payout } = calculatePayout(selectedCoin.id, amount);
+  const showRate = amount > 0;
+
+  return (
+    <>
+      <Head>
+        <title>Sell Crypto · KJ Exchange</title>
+      </Head>
+      <DashboardLayout>
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-6">
+            <Link href="/dashboard" className="text-text-muted hover:text-text-primary transition group">
+              <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
+            </Link>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <i className="fa-solid fa-arrow-up text-orange"></i>
+              Sell Crypto
+            </h1>
+          </div>
+
+          {/* Asset Selection */}
+          <div className="space-y-6">
+            <div className="relative">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 pl-12 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
+                placeholder="Search supported asset"
+              />
+              <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-text-muted"></i>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {filteredCoins.map((coin) => {
+                const isSelected = selectedCoin.id === coin.id;
+                const price = coinPrices[coin.id] || 0;
+
+                return (
+                  <button
+                    key={coin.id}
+                    onClick={() => {
+                      setSelectedCoin(coin);
+                      setUsdAmount('');
+                    }}
+                    className={`p-4 rounded-2xl border transition-all duration-200 text-left ${
+                      isSelected
+                        ? 'border-orange bg-orange/10 shadow-lg shadow-orange/10 scale-[1.02]'
+                        : 'border-border bg-black/20 hover:border-orange/50 hover:bg-black/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <i className={`${coin.icon} text-xl`} style={{ color: coin.color }}></i>
+                      <span className="font-bold text-sm">{coin.id}</span>
+                    </div>
+                    <p className="text-text-muted text-xs mt-1">{coin.name}</p>
+                    <p className="text-sm font-semibold mt-1">${price.toFixed(2)}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Sell Form */}
+            <div className="glass rounded-2xl p-6 border border-border">
+              <div className="flex items-center gap-3 mb-4">
+                <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
+                <div>
+                  <h2 className="text-xl font-bold">Sell {selectedCoin.name}</h2>
+                  <p className="text-text-muted text-sm">
+                    Available: {availableBalance.toFixed(4)} {selectedCoin.id} (~${availableBalance.toFixed(2)} USD)
+                  </p>
+                </div>
+              </div>
+
+              {/* Rate Display */}
+              {showRate && (
+                <div className="bg-black/20 rounded-xl p-4 mb-4 border border-border/50">
+                  <div className="flex justify-between items-center">
+                    <span className="text-text-muted text-sm">Rate</span>
+                    <span className="font-bold text-green-400">
+                      1 USD = ₦{rate.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-text-muted text-sm">Fee</span>
+                    <span className="text-text-muted text-sm">
+                      {SPREADS[selectedCoin.id]?.fee === 0 ? '0%' : '1%'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleSell}>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Amount (USD)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={usdAmount}
+                      onChange={(e) => setUsdAmount(e.target.value)}
+                      className="w-full bg-black/40 border border-border rounded-xl px-5 py-4 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-2xl font-bold placeholder:text-text-muted/50"
+                      placeholder="0.00"
+                      min="0.01"
+                      step="0.01"
+                    />
+                    <div className="absolute right-5 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">
+                      USD
+                    </div>
+                  </div>
+
+                  {/* Quick Amount Buttons */}
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {[10, 25, 50, 100].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setQuickAmount(pct)}
+                        className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-border hover:border-orange/50 hover:text-orange"
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={setSellAll}
+                      className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-orange/30 text-orange hover:bg-orange/10"
+                    >
+                      Sell All
+                    </button>
+                  </div>
+
+                  <p className="text-text-muted text-xs mt-2">
+                    Minimum sell: $1.00
+                  </p>
+                </div>
+
+                {showRate && (
+                  <div className="mt-4 bg-orange/5 border border-orange/20 rounded-xl p-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-text-muted text-sm">You Receive</span>
+                      <span className="text-2xl font-bold text-green-400">
+                        ₦{payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    {fee > 0 && (
+                      <div className="flex justify-between items-center mt-1 text-xs text-text-muted">
+                        <span>Fee deducted</span>
+                        <span>-${fee.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {error && (
+                  <div className="mt-4 bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
+                    <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
+                    <span>{error}</span>
+                  </div>
+                )}
+                {success && (
+                  <div className="mt-4 bg-green-400/10 border border-green-400/20 rounded-xl p-3 text-green-400 text-sm flex items-start gap-2">
+                    <i className="fa-regular fa-circle-check mt-0.5"></i>
+                    <span>{success}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={submitting || !usdAmount || parseFloat(usdAmount) <= 0}
+                  className="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
+                >
+                  {submitting ? (
+                    <><i className="fa-solid fa-spinner fa-spin"></i> Processing...</>
+                  ) : (
+                    <><i className="fa-solid fa-paper-plane"></i> Sell Now</>
+                  )}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    </>
+  );
+}
