@@ -24,7 +24,7 @@ export default function DashboardLayout({ children }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Fetch unread count AND notifications on mount (and when user changes)
+  // Fetch unread count AND notifications on mount
   useEffect(() => {
     if (!user) return;
     fetchUnreadCount();
@@ -57,7 +57,6 @@ export default function DashboardLayout({ children }) {
         .limit(20);
       if (error) throw error;
       setNotifications(data || []);
-      // update unread count based on fetched data
       const unread = (data || []).filter(n => !n.read).length;
       setUnreadCount(unread);
     } catch (err) {
@@ -65,7 +64,7 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  // Real‑time subscription for new notifications
+  // Real‑time subscription
   useEffect(() => {
     if (!user) return;
 
@@ -211,8 +210,8 @@ export default function DashboardLayout({ children }) {
 
             {/* Notification Dropdown - Solid Background */}
             {showDropdown && (
-              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-[#0B0815] border border-border rounded-xl shadow-2xl shadow-black/50 z-50 p-2">
-                <div className="flex justify-between items-center p-2 border-b border-border sticky top-0 bg-[#0B0815]/90 z-10 rounded-t-xl">
+              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-bg-card border border-border rounded-xl shadow-2xl shadow-black/70 z-50 p-2">
+                <div className="flex justify-between items-center p-2 border-b border-border sticky top-0 bg-bg-card z-10 rounded-t-xl">
                   <h3 className="font-bold text-sm">Notifications</h3>
                   {unreadCount > 0 && (
                     <button
