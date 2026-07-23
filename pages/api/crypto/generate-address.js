@@ -1,6 +1,6 @@
 import { supabase } from '../../../lib/supabaseClient';
 
-// Map your coin + network to Tatum chain ID
+// Correct chain mapping for Tatum
 const getTatumChain = (coin, network) => {
   const map = {
     'BTC': { 'Bitcoin': 'BITCOIN' },
@@ -9,8 +9,6 @@ const getTatumChain = (coin, network) => {
       'TRC-20': 'TRON',
       'ERC-20': 'ETHEREUM',
       'BEP-20': 'BSC',
-      'Solana': 'SOLANA',
-      'Base': 'BASE',
     },
     'SOL': { 'Solana': 'SOLANA' },
     'BNB': { 'BSC': 'BSC' },
@@ -20,7 +18,9 @@ const getTatumChain = (coin, network) => {
   };
 
   const chain = map[coin]?.[network];
-  if (!chain) throw new Error(`Unsupported coin/network: ${coin} / ${network}`);
+  if (!chain) {
+    throw new Error(`Unsupported combination: ${coin} / ${network}`);
+  }
   return chain;
 };
 
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
     const chain = getTatumChain(coin, network);
 
-    // 1. Generate a new address via Tatum
+    // Generate a new address via Tatum
     const tatumRes = await fetch(
       `https://api.tatum.io/v3/${chain.toLowerCase()}/address`,
       {
@@ -54,13 +54,16 @@ export default async function handler(req, res) {
     const tatumData = await tatumRes.json();
 
     if (!tatumRes.ok || !tatumData.address) {
-      console.error('Tatum address generation error:', tatumData);
-      return res.status(500).json({ error: 'Failed to generate address' });
+      console.error('Tatum error:', tatumData);
+      return res.status(500).json({
+        error: `Tatum API error: ${tatumData.message || 'Failed to generate address'}`,
+        details: tatumData,
+      });
     }
 
     const address = tatumData.address;
 
-    // 2. Create order in database
+    // Create order in database
     const { data: order, error: dbError } = await supabase
       .from('crypto_orders')
       .insert({
