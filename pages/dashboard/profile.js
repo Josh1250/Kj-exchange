@@ -16,6 +16,7 @@ export default function Profile() {
   const [kycLevel, setKycLevel] = useState(1);
   const [kycStatus, setKycStatus] = useState('Not Submitted');
   const [bvn, setBvn] = useState('');
+  const [nin, setNin] = useState('');
   const [idFile, setIdFile] = useState(null);
 
   // ===== My Banks =====
@@ -48,7 +49,7 @@ export default function Profile() {
     try {
       const { data } = await supabase
         .from('users')
-        .select('full_name, username, phone, kyc_level, kyc_status, bvn')
+        .select('full_name, username, phone, kyc_level, kyc_status, bvn, nin')
         .eq('id', user.id)
         .single();
       if (data) {
@@ -58,6 +59,7 @@ export default function Profile() {
         setKycLevel(data.kyc_level || 1);
         setKycStatus(data.kyc_status || 'Not Submitted');
         setBvn(data.bvn || '');
+        setNin(data.nin || '');
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -112,7 +114,6 @@ export default function Profile() {
     setMessage('');
     setMessageType('');
 
-    // Validate username
     if (username) {
       const available = await checkUsername(username);
       if (!available) {
@@ -148,8 +149,20 @@ export default function Profile() {
   // ===== KYC Submit =====
   const handleKycSubmit = async (e) => {
     e.preventDefault();
-    if (!bvn || bvn.length !== 11) {
-      setMessage('Please enter a valid 11-digit BVN.');
+
+    // Validate: either BVN or NIN must be provided
+    if (!bvn && !nin) {
+      setMessage('Please enter either BVN or NIN.');
+      setMessageType('error');
+      return;
+    }
+    if (bvn && bvn.length !== 11) {
+      setMessage('BVN must be 11 digits.');
+      setMessageType('error');
+      return;
+    }
+    if (nin && nin.length !== 11) {
+      setMessage('NIN must be 11 digits.');
       setMessageType('error');
       return;
     }
@@ -164,12 +177,28 @@ export default function Profile() {
     setMessageType('');
 
     try {
-      // In production, upload file to Supabase Storage first
+      // 1. Upload file to Supabase Storage
+      const fileExt = idFile.name.split('.').pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('kyc-documents')
+        .upload(fileName, idFile);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('kyc-documents')
+        .getPublicUrl(fileName);
+
+      // 3. Update user profile with BVN, NIN, and document URL
       const { error } = await supabase
         .from('users')
         .update({
-          bvn: bvn,
+          bvn: bvn || null,
+          nin: nin || null,
           kyc_status: 'Pending',
+          kyc_document_url: publicUrl,
         })
         .eq('id', user.id);
 
@@ -200,7 +229,6 @@ export default function Profile() {
     setMessageType('');
 
     try {
-      // Check if this is the first bank – set as default
       const isFirst = banks.length === 0;
 
       const { error } = await supabase
@@ -220,7 +248,6 @@ export default function Profile() {
       setMessageType('success');
       setShowAddBankModal(false);
       fetchBanks();
-      // Reset form
       setSelectedBank(null);
       setBankSearch('');
       setAccountNumber('');
@@ -487,7 +514,9 @@ export default function Profile() {
               <i className="fa-solid fa-shield-check text-orange"></i>
               KYC Verification
             </h2>
-            <p className="text-text-muted text-sm mb-4">Level 2 required for withdrawals above ₦50,000 and instant withdrawals.</p>
+            <p className="text-text-muted text-sm mb-4">
+              Level 2 required for withdrawals above ₦50,000 and instant withdrawals.
+            </p>
 
             <form onSubmit={handleKycSubmit} className="space-y-4">
               <div>
@@ -503,12 +532,24 @@ export default function Profile() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Upload ID (Passport, Driver's License, or NIN)</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">NIN (11 digits)</label>
+                <input
+                  type="text"
+                  value={nin}
+                  onChange={(e) => setNin(e.target.value)}
+                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
+                  placeholder="Enter your NIN"
+                  maxLength="11"
+                  pattern="[0-9]{11}"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Upload ID (Passport, Driver's License, or NIN Slip)</label>
                 <input
                   type="file"
                   accept="image/*,.pdf"
                   onChange={(e) => setIdFile(e.target.files[0])}
-                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
                 />
                 <p className="text-xs text-text-muted mt-1">Supported formats: JPG, PNG, PDF (max 5MB)</p>
               </div>
@@ -641,7 +682,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* Account Name (auto-filled) */}
+              {/* Account Name */}
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">Account Name</label>
                 <input
