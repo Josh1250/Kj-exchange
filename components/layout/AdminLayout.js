@@ -8,6 +8,8 @@ const navItems = [
   { name: 'Dashboard', href: '/admin', icon: 'fa-solid fa-gauge-high' },
   { name: 'Orders', href: '/admin/orders', icon: 'fa-solid fa-list' },
   { name: 'Users', href: '/admin/users', icon: 'fa-solid fa-users' },
+  { name: 'KYC Review', href: '/admin/kyc-review', icon: 'fa-solid fa-shield-check' },
+  { name: 'Pending Deposits', href: '/admin/pending-deposits', icon: 'fa-solid fa-coins' },
   { name: 'Top-Ups', href: '/admin/topups', icon: 'fa-solid fa-arrow-up' },
   { name: 'Withdrawals', href: '/admin/withdrawals', icon: 'fa-solid fa-arrow-down' },
   { name: 'Settings', href: '/admin/settings', icon: 'fa-solid fa-gear' },
