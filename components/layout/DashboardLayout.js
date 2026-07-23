@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { useAuth } from '../../pages/_app';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const navItems = [
   { name: 'Home', href: '/dashboard', icon: 'fa-solid fa-house' },
@@ -21,24 +21,21 @@ export default function DashboardLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
 
-  // Fetch initial notifications
+  // Fetch initial notifications (only unread for count, but we'll fetch all when dropdown opens)
   useEffect(() => {
-    const fetchNotifications = async () => {
+    const fetchUnreadCount = async () => {
       if (!user) return;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('notifications')
-        .select('*')
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .eq('read', false)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      if (data) {
-        setNotifications(data);
-        setUnreadCount(data.length);
-      }
+        .eq('read', false);
+      if (!error) setUnreadCount(data?.length || 0);
     };
-    fetchNotifications();
+    fetchUnreadCount();
   }, [user]);
 
   // Real‑time subscription for new notifications
@@ -57,9 +54,11 @@ export default function DashboardLayout({ children }) {
         },
         (payload) => {
           setUnreadCount(prev => prev + 1);
-          setNotifications(prev => [payload.new, ...prev].slice(0, 5));
-          // Optional: You can add a toast notification here
-          console.log('🔔 New notification:', payload.new.message);
+          setNotifications(prev => [payload.new, ...prev]);
+          // If dropdown is open, refresh the list
+          if (showDropdown) {
+            fetchAllNotifications();
+          }
         }
       )
       .subscribe();
@@ -67,7 +66,71 @@ export default function DashboardLayout({ children }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [user]);
+  }, [user, showDropdown]);
+
+  // Fetch all notifications (for dropdown)
+  const fetchAllNotifications = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (data) {
+      setNotifications(data);
+      const unread = data.filter(n => !n.read).length;
+      setUnreadCount(unread);
+    }
+  };
+
+  // Mark a single notification as read
+  const markAsRead = async (notificationId) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', notificationId);
+    if (!error) {
+      setNotifications(prev => prev.map(n =>
+        n.id === notificationId ? { ...n, read: true } : n
+      ));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    }
+  };
+
+  // Mark all as read
+  const markAllAsRead = async () => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('read', false);
+    if (!error) {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    }
+  };
+
+  // Toggle dropdown and fetch notifications
+  const toggleDropdown = async () => {
+    if (!showDropdown) {
+      await fetchAllNotifications();
+    }
+    setShowDropdown(!showDropdown);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -82,6 +145,7 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
+      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-bg-secondary border-r border-border transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="flex flex-col h-full p-4">
           <div className="mb-6">
@@ -131,15 +195,71 @@ export default function DashboardLayout({ children }) {
           <button className="md:hidden p-2 rounded-lg hover:bg-white/10 transition" onClick={() => setIsSidebarOpen(true)}>
             <i className="fa-solid fa-bars text-xl text-text-primary"></i>
           </button>
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard/notifications" className="relative p-2 rounded-full hover:bg-white/10 transition">
-              <i className="fa-regular fa-bell text-xl text-text-muted"></i>
+          <div className="flex items-center gap-4 relative" ref={dropdownRef}>
+            {/* Notification Bell */}
+            <button
+              onClick={toggleDropdown}
+              className="relative p-2 rounded-full hover:bg-white/10 transition"
+            >
+              <i className={`fa-regular fa-bell text-xl text-text-muted ${unreadCount > 0 ? 'animate-wiggle' : ''}`}></i>
               {unreadCount > 0 && (
                 <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
                   {unreadCount}
                 </span>
               )}
-            </Link>
+            </button>
+
+            {/* Notification Dropdown */}
+            {showDropdown && (
+              <div className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto bg-bg-card border border-border rounded-xl shadow-2xl z-50 p-2">
+                <div className="flex justify-between items-center p-2 border-b border-border">
+                  <h3 className="font-bold text-sm">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      className="text-xs text-orange hover:underline"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                </div>
+                {notifications.length === 0 ? (
+                  <div className="text-center text-text-muted py-4 text-sm">
+                    No notifications
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`flex items-start justify-between p-2 rounded-lg transition ${
+                          n.read ? 'opacity-60' : 'bg-orange/5 border border-orange/10'
+                        }`}
+                      >
+                        <div className="flex-1 mr-2">
+                          <p className="text-sm text-text-primary">{n.message}</p>
+                          <p className="text-xs text-text-muted">{new Date(n.created_at).toLocaleDateString()}</p>
+                        </div>
+                        {!n.read && (
+                          <button
+                            onClick={() => markAsRead(n.id)}
+                            className="text-xs text-orange hover:underline whitespace-nowrap"
+                          >
+                            Mark read
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="p-2 border-t border-border mt-2 text-center">
+                  <Link href="/dashboard/notifications" className="text-xs text-orange hover:underline">
+                    View all notifications
+                  </Link>
+                </div>
+              </div>
+            )}
+
             <Link href="/dashboard/profile" className="flex items-center gap-2 hover:bg-white/10 rounded-full px-3 py-1 transition">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
                 {user?.email?.charAt(0).toUpperCase()}
