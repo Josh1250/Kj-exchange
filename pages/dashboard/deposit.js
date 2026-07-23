@@ -5,6 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
 import Link from 'next/link';
+import QRCode from 'qrcode.react';
 
 // ============================================
 // YOUR REAL WALLET ADDRESSES
@@ -56,15 +57,15 @@ export default function Deposit() {
   const [usdAmount, setUsdAmount] = useState('');
   const [cryptoAmount, setCryptoAmount] = useState(0);
   const [search, setSearch] = useState('');
-  const [step, setStep] = useState('select'); // 'select' | 'generating' | 'deposit'
+  const [step, setStep] = useState('select');
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showAgreement, setShowAgreement] = useState(false);
-  const [rates, setRates] = useState({});
   const [coinPrices, setCoinPrices] = useState({});
   const [ngnRate, setNgnRate] = useState(1389);
   const [isLoadingRates, setIsLoadingRates] = useState(true);
+  const [showQR, setShowQR] = useState(false);
 
   // Fetch rates
   useEffect(() => {
@@ -103,7 +104,6 @@ export default function Deposit() {
     return () => clearInterval(interval);
   }, []);
 
-  // Get wallet address
   const getWalletAddress = () => {
     const coin = selectedCoin.id;
     if (coin === 'USDT') {
@@ -112,12 +112,10 @@ export default function Deposit() {
     return WALLETS[coin] || 'Address not available';
   };
 
-  // Handle agreement → simulate wallet generation
   const handleAgreeAndGenerate = async () => {
     setShowAgreement(false);
     setStep('generating');
 
-    // Simulate 2-3 second loading animation
     await new Promise((resolve) => setTimeout(resolve, 2500));
 
     const amount = parseFloat(usdAmount);
@@ -162,6 +160,7 @@ export default function Deposit() {
       setOrder(data);
       setStep('deposit');
       setSuccess('✅ Wallet generated! Send crypto to the address below.');
+      setShowQR(true);
     } catch (err) {
       setError(err.message || 'Failed to create order. Please try again.');
       setStep('select');
@@ -178,6 +177,7 @@ export default function Deposit() {
     setOrder(null);
     setError('');
     setSuccess('');
+    setShowQR(false);
   };
 
   const filteredCoins = COINS.filter((coin) =>
@@ -203,7 +203,6 @@ export default function Deposit() {
       </Head>
       <DashboardLayout>
         <div className="max-w-4xl mx-auto px-4 py-6">
-          {/* Header */}
           <div className="flex items-center gap-2 mb-6">
             <Link href="/dashboard" className="text-text-muted hover:text-text-primary transition group">
               <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
@@ -215,11 +214,7 @@ export default function Deposit() {
           </div>
 
           {step === 'select' ? (
-            // ============================================
-            // SELECT ASSET + AMOUNT
-            // ============================================
             <div className="space-y-6">
-              {/* Search */}
               <div className="relative">
                 <input
                   type="text"
@@ -231,7 +226,6 @@ export default function Deposit() {
                 <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-text-muted"></i>
               </div>
 
-              {/* Asset Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {filteredCoins.map((coin) => {
                   const isSelected = selectedCoin.id === coin.id;
@@ -262,7 +256,6 @@ export default function Deposit() {
                 })}
               </div>
 
-              {/* Coin Detail */}
               <div className="glass rounded-2xl p-6 border border-border">
                 <div className="flex items-center gap-3 mb-4">
                   <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
@@ -272,7 +265,6 @@ export default function Deposit() {
                   </div>
                 </div>
 
-                {/* Network Selection */}
                 {selectedCoin.networks.length > 1 && (
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Network</label>
@@ -297,7 +289,6 @@ export default function Deposit() {
                   </div>
                 )}
 
-                {/* Amount Input */}
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1.5">Amount (USD)</label>
                   <div className="relative">
@@ -337,9 +328,6 @@ export default function Deposit() {
               </div>
             </div>
           ) : step === 'generating' ? (
-            // ============================================
-            // GENERATING WALLET ANIMATION
-            // ============================================
             <div className="glass rounded-2xl p-12 border border-border text-center">
               <div className="relative w-24 h-24 mx-auto">
                 <div className="absolute inset-0 border-4 border-orange/20 rounded-full"></div>
@@ -352,9 +340,6 @@ export default function Deposit() {
               <p className="text-text-muted text-xs mt-2">This usually takes a few seconds.</p>
             </div>
           ) : (
-            // ============================================
-            // DEPOSIT ADDRESS (Premium Dtunes Style)
-            // ============================================
             <div className="glass rounded-2xl p-6 border border-border">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center text-green-400 text-xl">
@@ -367,13 +352,11 @@ export default function Deposit() {
               </div>
 
               <div className="space-y-4">
-                {/* Network */}
                 <div className="bg-black/20 rounded-xl p-4 border border-border flex items-center justify-between">
                   <span className="text-text-muted text-sm">Network</span>
                   <span className="font-bold">{selectedNetwork}</span>
                 </div>
 
-                {/* Wallet Address */}
                 <div className="bg-black/20 rounded-xl p-4 border border-border">
                   <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Wallet Address</p>
                   <div className="flex items-center gap-2 mt-1">
@@ -387,7 +370,24 @@ export default function Deposit() {
                   </div>
                 </div>
 
-                {/* Deposit Info */}
+                {/* QR Code */}
+                {showQR && walletAddress && walletAddress !== 'Address not available' && (
+                  <div className="bg-black/20 rounded-xl p-4 border border-border text-center">
+                    <p className="text-text-muted text-xs uppercase tracking-wider mb-2">Scan QR Code</p>
+                    <div className="inline-block p-3 bg-white rounded-xl">
+                      <QRCode
+                        value={walletAddress}
+                        size={160}
+                        bgColor="#ffffff"
+                        fgColor="#000000"
+                        level="H"
+                        includeMargin={true}
+                      />
+                    </div>
+                    <p className="text-text-muted text-xs mt-2">Scan to copy address</p>
+                  </div>
+                )}
+
                 <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-yellow-400 text-sm flex items-start gap-2">
                   <i className="fa-solid fa-clock mt-0.5"></i>
                   <div>
@@ -401,7 +401,6 @@ export default function Deposit() {
                   </div>
                 </div>
 
-                {/* Network Warning */}
                 {selectedCoin.id === 'USDT' && (
                   <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
                     <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
@@ -409,7 +408,6 @@ export default function Deposit() {
                   </div>
                 )}
 
-                {/* Minimum Deposit */}
                 <div className="bg-black/20 rounded-xl p-3 border border-border text-center text-text-muted text-xs">
                   Minimum deposit: $1.00 • Lower amounts may not be processed.
                 </div>
@@ -434,7 +432,7 @@ export default function Deposit() {
         </div>
       </DashboardLayout>
 
-      {/* ===== Agreement Modal (Premium Dtunes Style) ===== */}
+      {/* ===== Agreement Modal ===== */}
       {showAgreement && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
