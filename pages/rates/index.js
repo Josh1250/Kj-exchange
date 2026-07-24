@@ -57,6 +57,7 @@ export default function Rates() {
   const [activeTab, setActiveTab] = useState('crypto');
   const [openFaq, setOpenFaq] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [displayRate, setDisplayRate] = useState(0); // rate per USD for display
 
   // Crypto assets (8 coins)
   const cryptoAssets = [
@@ -70,28 +71,31 @@ export default function Rates() {
     { id: 'BCH', name: 'Bitcoin Cash', icon: 'fa-brands fa-bitcoin', color: '#8dc351' },
   ];
 
-  // Build gift card list from config
+  // Build top 8 gift cards with highest rate (based on $100 rate or best available)
   useEffect(() => {
     const cards = [];
     Object.keys(GIFT_CARD_RATES).forEach((brandId) => {
       const brand = GIFT_CARD_RATES[brandId];
       const countryData = brand.countries?.USA || {};
       const physicalRates = countryData.physical || {};
-      const ratesArray = Object.values(physicalRates);
-      // Use the highest rate for this brand (most favorable to user)
-      const bestRate = ratesArray.length > 0 ? Math.max(...ratesArray) : 0;
-      if (bestRate > 0) {
-        cards.push({
-          id: brandId,
-          name: brand.name,
-          icon: brand.icon,
-          rate: bestRate,
-        });
+      // Try to get rate for $100 first (most common)
+      let rate = 0;
+      const keys = Object.keys(physicalRates);
+      // find rate for $100 or similar
+      const exact100 = keys.find(k => k.includes('100') || k.includes('$100'));
+      if (exact100) {
+        rate = physicalRates[exact100];
+      } else if (keys.length > 0) {
+        // fallback to the highest rate
+        rate = Math.max(...Object.values(physicalRates));
+      }
+      if (rate > 0) {
+        cards.push({ id: brandId, name: brand.name, icon: brand.icon, rate });
       }
     });
-    // Sort by highest rate first
+    // Sort by highest rate and take top 8
     cards.sort((a, b) => b.rate - a.rate);
-    setGiftCardRates(cards);
+    setGiftCardRates(cards.slice(0, 8));
   }, []);
 
   useEffect(() => {
@@ -108,13 +112,12 @@ export default function Rates() {
         );
         const cryptoData = await cryptoRes.json();
 
-        // Calculate YOUR rates with spread applied
         const calculateUserRate = (usdPrice, spread, ngn) => {
           const marketNgn = usdPrice * ngn;
           return marketNgn * (1 - spread);
         };
 
-        // For the rates page, we use the "low" tier spread (0-100 USD) to show the most favorable rate
+        // For rates page we use the low tier spread (best rate for small amounts)
         setRates({
           BTC: calculateUserRate(cryptoData.bitcoin?.usd || 0, SPREADS.BTC.low, ngn),
           ETH: calculateUserRate(cryptoData.ethereum?.usd || 0, SPREADS.ETH.low, ngn),
@@ -147,24 +150,77 @@ export default function Rates() {
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate payout using your rate
+  // Calculate payout and display rate
   useEffect(() => {
-    let rate = 0;
+    let ratePerUsd = 0;
     if (activeTab === 'crypto') {
-      rate = rates[selectedAsset] || 0;
+      const ngnRatePerCoin = rates[selectedAsset] || 0;
+      // The rate in NGN per USD is: ratePerCoin / (asset price in USD)
+      // We need the USD price of the asset to calculate rate per USD
+      // Instead, we can compute rate per USD as: ngnRate * (1 - spread)
+      // Actually, for crypto, the user rate per USD is simply ngnRate * (1 - spread) for that asset
+      // But we have already calculated ngn rate per coin. To get per USD rate, we divide by the USD price of the asset.
+      // Since we don't have USD price separately, we use the market USD price from the cryptoRes.
+      // We'll fetch USD prices separately or use the stored rate to derive.
+      // For simplicity, we can compute using ngnRate and spread.
+      // Actually, the rates object already has the NGN per coin. To get NGN per USD, we do:
+      // ratePerUsd = ratePerCoin / usdPriceOfCoin.
+      // We don't have usdPriceOfCoin stored. We can fetch it again or compute from the market.
+      // Since we want the display rate "1 USD = ₦X", we can just show the NGN/USD exchange rate * (1 - spread).
+      // That's the user rate for USDT (since USDT is $1). For other coins, it's different.
+      // However, for simplicity, we'll compute it as: ngnRate * (1 - spread) where spread is the asset's spread.
+      // That yields the rate per USD for that asset (because 1 USD = 1 USD, regardless of asset).
+      // Actually, the user rate per USD for any asset is: ngnRate * (1 - spread) where spread is the asset's spread.
+      // Because the user sells USD worth of the asset, the rate they get is the NGN per USD after spread.
+      // So we can set displayRate = ngnRate * (1 - spread).
+      // We have ngnRate and the spread per asset from SPREADS.
+      const spread = SPREADS[selectedAsset]?.low || 0;
+      ratePerUsd = ngnRate * (1 - spread);
     } else {
+      // For gift cards, we already have rate per USD in the card's rate (e.g., 1180 NGN/USD)
       const card = giftCardRates.find(c => c.id === selectedGiftCard);
-      if (card) rate = card.rate || 0;
+      if (card) ratePerUsd = card.rate;
     }
+    setDisplayRate(ratePerUsd);
+
+    // Payout: USD amount * ratePerUsd
     const usdValue = parseFloat(amount) || 0;
-    setPayout(usdValue * (rate / (ngnRate || 1)));
+    setPayout(usdValue * ratePerUsd);
   }, [amount, selectedAsset, selectedGiftCard, rates, giftCardRates, ngnRate, activeTab]);
 
   const getCryptoRate = (id) => rates[id] || 0;
 
-  const filteredGiftCards = giftCardRates.filter(card =>
-    card.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Get USD price of each crypto for the table (we'll compute from rate / spread)
+  // We can compute USD price = rate / (ngnRate * (1 - spread))
+  // But we don't need USD price for crypto table as we show rate (NGN) and rate (USD) per coin.
+  // We'll compute USD per coin = rate / (ngnRate * (1 - spread))? Actually we can just show rate in NGN and the USD equivalent.
+  // For the crypto table, we show "Rate (NGN)" and "Rate (USD)" where rate (USD) is the market price? 
+  // We decided to show your rate in NGN and the equivalent USD price. We can compute USD price = rate / displayRate? That gives the number of USD per coin.
+  // But for clarity, we can just show the NGN rate and the USD market price (the raw USD price from CoinGecko).
+  // We'll use the USD market price from the original fetch. We'll store it in state.
+  const [cryptoUsdPrices, setCryptoUsdPrices] = useState({});
+
+  useEffect(() => {
+    const fetchCryptoUsd = async () => {
+      try {
+        const res = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,binancecoin,tron,litecoin,bitcoin-cash&vs_currencies=usd'
+        );
+        const data = await res.json();
+        setCryptoUsdPrices({
+          BTC: data.bitcoin?.usd || 0,
+          ETH: data.ethereum?.usd || 0,
+          USDT: data.tether?.usd || 1,
+          SOL: data.solana?.usd || 0,
+          BNB: data.binancecoin?.usd || 0,
+          TRX: data.tron?.usd || 0,
+          LTC: data.litecoin?.usd || 0,
+          BCH: data['bitcoin-cash']?.usd || 0,
+        });
+      } catch (e) {}
+    };
+    fetchCryptoUsd();
+  }, []);
 
   return (
     <>
@@ -239,40 +295,32 @@ export default function Rates() {
                         })}
                       </div>
                     ) : (
-                      <div>
-                        <input
-                          type="text"
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full bg-black/40 border border-border rounded-xl px-4 py-2.5 text-text-primary focus:border-orange focus:outline-none mb-2"
-                          placeholder="Search gift cards..."
-                        />
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                          {filteredGiftCards.map((card, index) => {
-                            const isSelected = selectedGiftCard === card.id;
-                            const isTop = index < 3;
-                            return (
-                              <button
-                                key={card.id}
-                                type="button"
-                                onClick={() => setSelectedGiftCard(card.id)}
-                                className={`p-2 rounded-xl border transition text-center relative ${
-                                  isSelected 
-                                    ? 'border-orange bg-orange/10 shadow-lg shadow-orange/10' 
-                                    : 'border-border bg-black/20 hover:border-orange/50'
-                                }`}
-                              >
-                                {isTop && (
-                                  <span className="absolute -top-1 -right-1 text-[10px] bg-orange text-white px-1.5 py-0.5 rounded-full font-bold">
-                                    🔥
-                                  </span>
-                                )}
-                                <i className={`${card.icon} text-xl text-orange block`}></i>
-                                <p className="text-xs font-semibold mt-0.5 truncate">{card.name}</p>
-                              </button>
-                            );
-                          })}
-                        </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {giftCardRates.slice(0, 8).map((card) => {
+                          const isSelected = selectedGiftCard === card.id;
+                          return (
+                            <button
+                              key={card.id}
+                              type="button"
+                              onClick={() => setSelectedGiftCard(card.id)}
+                              className={`p-2 rounded-xl border transition text-center relative ${
+                                isSelected 
+                                  ? 'border-orange bg-orange/10 shadow-lg shadow-orange/10' 
+                                  : 'border-border bg-black/20 hover:border-orange/50'
+                              }`}
+                            >
+                              <i className={`${card.icon} text-xl text-orange block`}></i>
+                              <p className="text-xs font-semibold mt-0.5 truncate">{card.name}</p>
+                            </button>
+                          );
+                        })}
+                        <Link
+                          href="/dashboard/sell-gift-card"
+                          className="p-2 rounded-xl border border-dashed border-border bg-black/10 flex flex-col items-center justify-center text-center hover:border-orange transition"
+                        >
+                          <i className="fa-solid fa-arrow-right text-orange text-xl"></i>
+                          <p className="text-[10px] text-text-muted mt-1">View All</p>
+                        </Link>
                       </div>
                     )}
                   </div>
@@ -298,13 +346,23 @@ export default function Rates() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-2xl"></div>
                 <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl"></div>
                 <div className="relative z-10 text-center">
-                  <p className="text-text-muted text-sm uppercase tracking-wider">You'll receive</p>
                   {isLoading ? (
-                    <p className="text-2xl font-bold text-green-400 animate-pulse">Loading...</p>
+                    <>
+                      <p className="text-text-muted text-sm animate-pulse">Loading rates...</p>
+                      <p className="text-2xl font-bold text-green-400 animate-pulse">Loading...</p>
+                    </>
+                  ) : displayRate > 0 ? (
+                    <>
+                      <p className="text-text-muted text-sm">Rate</p>
+                      <p className="text-2xl font-bold text-orange">1 USD = ₦{displayRate.toFixed(2)}</p>
+                      <div className="w-16 h-0.5 bg-orange/30 mx-auto my-3"></div>
+                      <p className="text-text-muted text-sm uppercase tracking-wider">You'll receive</p>
+                      <p className="text-4xl font-extrabold text-green-400">
+                        ₦{payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </>
                   ) : (
-                    <p className="text-4xl font-extrabold text-green-400">
-                      ₦{payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
+                    <p className="text-text-muted text-sm">Select an asset to see rate</p>
                   )}
                   <Link
                     href={activeTab === 'crypto' ? '/dashboard/sell' : '/dashboard/sell-gift-card'}
@@ -317,7 +375,7 @@ export default function Rates() {
             </div>
           </div>
 
-          {/* Table Section: Crypto Rates (Your Rate only) */}
+          {/* Table Section: Crypto Rates */}
           <div className="mb-10">
             <h2 className="text-2xl font-bold mb-4">Crypto Rates</h2>
             <div className="glass rounded-2xl border border-border overflow-hidden shadow-lg shadow-purple/5">
@@ -327,13 +385,13 @@ export default function Rates() {
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Asset</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Rate (NGN)</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Rate (USD)</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">USD Price</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
                     {cryptoAssets.map((asset) => {
                       const rateNgn = getCryptoRate(asset.id);
-                      const rateUsd = ngnRate > 0 ? rateNgn / ngnRate : 0;
+                      const usdPrice = cryptoUsdPrices[asset.id] || 0;
                       return (
                         <tr key={asset.id} className="hover:bg-white/5 transition">
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -343,7 +401,7 @@ export default function Rates() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-medium">{formatRate(rateNgn)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-text-muted">${rateUsd.toFixed(2)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-text-muted">${usdPrice.toFixed(2)}</td>
                         </tr>
                       );
                     })}
@@ -353,9 +411,12 @@ export default function Rates() {
             </div>
           </div>
 
-          {/* Table Section: Gift Card Rates (Sorted by highest rate, with 🔥 badge) */}
+          {/* Table Section: Top Gift Card Rates */}
           <div className="mb-10">
-            <h2 className="text-2xl font-bold mb-4">Gift Card Rates</h2>
+            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+              Top Gift Card Rates
+              <span className="text-sm font-normal text-text-muted">(based on $100 amount)</span>
+            </h2>
             <div className="glass rounded-2xl border border-border overflow-hidden shadow-lg shadow-purple/5">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -395,6 +456,11 @@ export default function Rates() {
                     })}
                   </tbody>
                 </table>
+              </div>
+              <div className="p-4 text-center border-t border-border">
+                <Link href="/dashboard/sell-gift-card" className="text-orange hover:underline text-sm font-semibold">
+                  View all gift cards →
+                </Link>
               </div>
             </div>
           </div>
