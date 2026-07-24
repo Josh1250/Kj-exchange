@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
@@ -6,16 +6,35 @@ import Head from 'next/head';
 import Image from 'next/image';
 
 export default function Signup() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [referrerName, setReferrerName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const router = useRouter();
+
+  // Capture referral code from URL query
+  useEffect(() => {
+    const { ref } = router.query;
+    if (ref) {
+      setReferralCode(ref);
+      // Fetch referrer's name (optional)
+      supabase
+        .from('users')
+        .select('full_name')
+        .eq('referral_code', ref)
+        .single()
+        .then(({ data }) => {
+          if (data) setReferrerName(data.full_name || 'a friend');
+        });
+    }
+  }, [router.query]);
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -50,13 +69,42 @@ export default function Signup() {
 
     if (error) {
       setError(error.message);
-    } else {
-      setSuccess(true);
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-      setFullName('');
+      setLoading(false);
+      return;
     }
+
+    // If signup successful, create referral record if referralCode exists
+    if (data.user && referralCode) {
+      try {
+        // Find referrer by their referral code
+        const { data: referrer, error: refError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('referral_code', referralCode)
+          .single();
+
+        if (!refError && referrer) {
+          // Insert referral record
+          await supabase
+            .from('referrals')
+            .insert({
+              referrer_id: referrer.id,
+              referred_email: email,
+              referred_user_id: data.user.id,
+              status: 'pending',
+            });
+        }
+      } catch (refErr) {
+        console.error('Referral creation failed:', refErr);
+        // Don't block signup flow – referral is non‑critical
+      }
+    }
+
+    setSuccess(true);
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setFullName('');
     setLoading(false);
   };
 
@@ -97,6 +145,16 @@ export default function Signup() {
             <p className="text-text-muted text-center text-sm mt-1">
               Start trading crypto & gift cards today
             </p>
+
+            {/* Referral Banner */}
+            {referralCode && referrerName && (
+              <div className="mt-4 p-3 bg-orange/10 border border-orange/20 rounded-xl text-center text-sm">
+                <i className="fa-solid fa-gift text-orange mr-1"></i>
+                You were referred by <span className="font-semibold text-orange">{referrerName}</span>! 🎁
+                <br />
+                <span className="text-text-muted text-xs">You'll both earn 1,000 gift points when you complete your first trade.</span>
+              </div>
+            )}
 
             {success ? (
               <div className="mt-6 p-4 bg-green-400/10 border border-green-400/20 rounded-xl text-center">
