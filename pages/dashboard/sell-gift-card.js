@@ -5,6 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
 import { GIFT_CARD_RATES } from '../../config/giftCardRates';
+import Image from 'next/image';
 
 export default function SellGiftCard() {
   const { user, loading } = useAuth();
@@ -14,9 +15,10 @@ export default function SellGiftCard() {
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [selectedCountry, setSelectedCountry] = useState('USA');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
-  const [cardType, setCardType] = useState('physical'); // 'physical' | 'ecode'
+  const [cardType, setCardType] = useState('physical');
   const [amount, setAmount] = useState('');
   const [comment, setComment] = useState('');
+  const [uploadedFile, setUploadedFile] = useState(null);
   const [frontFile, setFrontFile] = useState(null);
   const [backFile, setBackFile] = useState(null);
   const [chimeName, setChimeName] = useState('');
@@ -27,12 +29,13 @@ export default function SellGiftCard() {
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [ngnRate, setNgnRate] = useState(1410); // fallback
+  const [ngnRate, setNgnRate] = useState(1410);
 
+  const fileInputRef = useRef(null);
   const frontInputRef = useRef(null);
   const backInputRef = useRef(null);
 
-  // ===== Fetch live NGN rate (for reference) =====
+  // ===== Fetch live NGN rate =====
   useEffect(() => {
     const fetchRate = async () => {
       try {
@@ -137,38 +140,66 @@ export default function SellGiftCard() {
       setSubmitting(false);
       return;
     }
-    if (!frontFile && !backFile) {
-      setError('Please upload both front and back images of the card');
-      setSubmitting(false);
-      return;
+
+    // File validation
+    if (isGreenDot) {
+      if (!frontFile || !backFile) {
+        setError('Please upload both front and back images of the card');
+        setSubmitting(false);
+        return;
+      }
+    } else {
+      if (!uploadedFile) {
+        setError('Please upload an image of the gift card');
+        setSubmitting(false);
+        return;
+      }
     }
 
     try {
-      // Upload files
-      let frontUrl = null, backUrl = null;
-      if (frontFile) {
-        const ext = frontFile.name.split('.').pop();
-        const fileName = `${user.id}_${Date.now()}_front.${ext}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('gift-card-images')
-          .upload(fileName, frontFile);
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage
-          .from('gift-card-images')
-          .getPublicUrl(fileName);
-        frontUrl = publicUrl;
-      }
-      if (backFile) {
-        const ext = backFile.name.split('.').pop();
-        const fileName = `${user.id}_${Date.now()}_back.${ext}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('gift-card-images')
-          .upload(fileName, backFile);
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage
-          .from('gift-card-images')
-          .getPublicUrl(fileName);
-        backUrl = publicUrl;
+      let frontUrl = null, backUrl = null, fileUrl = null;
+
+      if (isGreenDot) {
+        // Upload front
+        if (frontFile) {
+          const ext = frontFile.name.split('.').pop();
+          const fileName = `${user.id}_${Date.now()}_front.${ext}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('gift-card-images')
+            .upload(fileName, frontFile);
+          if (uploadError) throw uploadError;
+          const { data: { publicUrl } } = supabase.storage
+            .from('gift-card-images')
+            .getPublicUrl(fileName);
+          frontUrl = publicUrl;
+        }
+        // Upload back
+        if (backFile) {
+          const ext = backFile.name.split('.').pop();
+          const fileName = `${user.id}_${Date.now()}_back.${ext}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('gift-card-images')
+            .upload(fileName, backFile);
+          if (uploadError) throw uploadError;
+          const { data: { publicUrl } } = supabase.storage
+            .from('gift-card-images')
+            .getPublicUrl(fileName);
+          backUrl = publicUrl;
+        }
+      } else {
+        // Single upload for all other cards
+        if (uploadedFile) {
+          const ext = uploadedFile.name.split('.').pop();
+          const fileName = `${user.id}_${Date.now()}.${ext}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('gift-card-images')
+            .upload(fileName, uploadedFile);
+          if (uploadError) throw uploadError;
+          const { data: { publicUrl } } = supabase.storage
+            .from('gift-card-images')
+            .getPublicUrl(fileName);
+          fileUrl = publicUrl;
+        }
       }
 
       // Insert order
@@ -193,6 +224,7 @@ export default function SellGiftCard() {
             moneypak_code: isMoneyPak ? moneypakCode : null,
             front_image: frontUrl,
             back_image: backUrl,
+            file_image: fileUrl,
             fee_usd: feeUsd,
           },
         })
@@ -213,9 +245,9 @@ export default function SellGiftCard() {
       }
 
       setSuccess(`✅ Order submitted! You'll receive ₦${finalPayout.toLocaleString()} after verification.`);
-      // Reset form
       setAmount('');
       setComment('');
+      setUploadedFile(null);
       setFrontFile(null);
       setBackFile(null);
       setChimeName('');
@@ -224,11 +256,20 @@ export default function SellGiftCard() {
       setSelectedBrand(null);
       setSelectedSubcategory('');
       setSearchTerm('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (frontInputRef.current) frontInputRef.current.value = '';
+      if (backInputRef.current) backInputRef.current.value = '';
     } catch (err) {
       setError('Failed to submit order. Please try again.');
       console.error(err);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setUploadedFile(e.target.files[0]);
     }
   };
 
@@ -248,9 +289,12 @@ export default function SellGiftCard() {
     if (type === 'front') {
       setFrontFile(null);
       if (frontInputRef.current) frontInputRef.current.value = '';
-    } else {
+    } else if (type === 'back') {
       setBackFile(null);
       if (backInputRef.current) backInputRef.current.value = '';
+    } else {
+      setUploadedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -302,26 +346,43 @@ export default function SellGiftCard() {
                       {filteredBrands.length === 0 ? (
                         <div className="px-4 py-6 text-center text-text-muted">No gift cards found.</div>
                       ) : (
-                        filteredBrands.map((brand) => (
-                          <div
-                            key={brand.id}
-                            className={`px-4 py-3 hover:bg-bg-hover cursor-pointer flex items-center justify-between transition border-b border-border last:border-0 ${
-                              selectedBrand === brand.id ? 'bg-orange/10 border-l-2 border-orange' : ''
-                            }`}
-                            onClick={() => {
-                              setSelectedBrand(brand.id);
-                              setSearchTerm(brand.name);
-                              setShowDropdown(false);
-                              setSelectedCountry('USA');
-                              setSelectedSubcategory('');
-                            }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <i className={`${brand.icon} text-xl text-orange w-6 text-center`}></i>
-                              <span className="font-medium">{brand.name}</span>
+                        filteredBrands.map((brand) => {
+                          // Try to load card image
+                          const cardImage = `/images/cards/${brand.id}.png`;
+                          return (
+                            <div
+                              key={brand.id}
+                              className={`px-4 py-3 hover:bg-bg-hover cursor-pointer flex items-center justify-between transition border-b border-border last:border-0 ${
+                                selectedBrand === brand.id ? 'bg-orange/10 border-l-2 border-orange' : ''
+                              }`}
+                              onClick={() => {
+                                setSelectedBrand(brand.id);
+                                setSearchTerm(brand.name);
+                                setShowDropdown(false);
+                                setSelectedCountry('USA');
+                                setSelectedSubcategory('');
+                              }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-black/20 flex items-center justify-center overflow-hidden">
+                                  <img
+                                    src={cardImage}
+                                    alt={brand.name}
+                                    className="w-8 h-8 object-contain"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.parentElement.innerHTML = `<i class="${brand.icon} text-xl text-orange"></i>`;
+                                    }}
+                                  />
+                                </div>
+                                <span className="font-medium">{brand.name}</span>
+                              </div>
+                              {selectedBrand === brand.id && (
+                                <i className="fa-regular fa-circle-check text-orange"></i>
+                              )}
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   )}
@@ -514,72 +575,106 @@ export default function SellGiftCard() {
                     </div>
                   )}
 
-                  {/* File Upload */}
+                  {/* File Upload - Conditional */}
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-2">
-                      Upload Card Images
+                      {isGreenDot ? 'Upload Card Images (Front & Back)' : 'Upload Gift Card Image'}
                     </label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Front */}
-                      <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-orange/30 transition bg-black/20">
+
+                    {isGreenDot ? (
+                      // GreenDot: Front + Back
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-orange/30 transition bg-black/20">
+                          <input
+                            ref={frontInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFrontUpload}
+                            className="hidden"
+                          />
+                          {frontFile ? (
+                            <div className="space-y-2">
+                              <i className="fa-regular fa-file-image text-2xl text-green-400"></i>
+                              <p className="text-sm text-text-primary">{frontFile.name}</p>
+                              <button
+                                type="button"
+                                onClick={() => removeFile('front')}
+                                className="text-red-400 text-xs hover:underline"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <div onClick={() => frontInputRef.current.click()} className="cursor-pointer">
+                              <i className="fa-solid fa-cloud-upload-alt text-2xl text-text-muted"></i>
+                              <p className="text-sm text-text-secondary mt-1">Upload Front</p>
+                              <p className="text-xs text-text-muted">Click to select</p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-orange/30 transition bg-black/20">
+                          <input
+                            ref={backInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleBackUpload}
+                            className="hidden"
+                          />
+                          {backFile ? (
+                            <div className="space-y-2">
+                              <i className="fa-regular fa-file-image text-2xl text-green-400"></i>
+                              <p className="text-sm text-text-primary">{backFile.name}</p>
+                              <button
+                                type="button"
+                                onClick={() => removeFile('back')}
+                                className="text-red-400 text-xs hover:underline"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <div onClick={() => backInputRef.current.click()} className="cursor-pointer">
+                              <i className="fa-solid fa-cloud-upload-alt text-2xl text-text-muted"></i>
+                              <p className="text-sm text-text-secondary mt-1">Upload Back</p>
+                              <p className="text-xs text-text-muted">Click to select</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      // All other cards: Single upload
+                      <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-orange/30 transition bg-black/20">
                         <input
-                          ref={frontInputRef}
+                          ref={fileInputRef}
                           type="file"
                           accept="image/*"
-                          onChange={handleFrontUpload}
+                          onChange={handleFileUpload}
                           className="hidden"
                         />
-                        {frontFile ? (
+                        {uploadedFile ? (
                           <div className="space-y-2">
-                            <i className="fa-regular fa-file-image text-2xl text-green-400"></i>
-                            <p className="text-sm text-text-primary">{frontFile.name}</p>
+                            <i className="fa-regular fa-file-image text-3xl text-green-400"></i>
+                            <p className="text-sm text-text-primary">{uploadedFile.name}</p>
                             <button
                               type="button"
-                              onClick={() => removeFile('front')}
+                              onClick={() => removeFile('single')}
                               className="text-red-400 text-xs hover:underline"
                             >
                               Remove
                             </button>
                           </div>
                         ) : (
-                          <div onClick={() => frontInputRef.current.click()} className="cursor-pointer">
-                            <i className="fa-solid fa-cloud-upload-alt text-2xl text-text-muted"></i>
-                            <p className="text-sm text-text-secondary mt-1">Upload Front</p>
-                            <p className="text-xs text-text-muted">Click to select</p>
+                          <div onClick={() => fileInputRef.current.click()} className="cursor-pointer">
+                            <i className="fa-solid fa-cloud-upload-alt text-3xl text-text-muted"></i>
+                            <p className="text-sm text-text-secondary mt-2">Upload file or drag and drop</p>
+                            <p className="text-xs text-text-muted">You can upload multiple files (PNG, JPG, JPEG)</p>
                           </div>
                         )}
                       </div>
-                      {/* Back */}
-                      <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-orange/30 transition bg-black/20">
-                        <input
-                          ref={backInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleBackUpload}
-                          className="hidden"
-                        />
-                        {backFile ? (
-                          <div className="space-y-2">
-                            <i className="fa-regular fa-file-image text-2xl text-green-400"></i>
-                            <p className="text-sm text-text-primary">{backFile.name}</p>
-                            <button
-                              type="button"
-                              onClick={() => removeFile('back')}
-                              className="text-red-400 text-xs hover:underline"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ) : (
-                          <div onClick={() => backInputRef.current.click()} className="cursor-pointer">
-                            <i className="fa-solid fa-cloud-upload-alt text-2xl text-text-muted"></i>
-                            <p className="text-sm text-text-secondary mt-1">Upload Back</p>
-                            <p className="text-xs text-text-muted">Click to select</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-xs text-text-muted mt-2">Both front and back images are required.</p>
+                    )}
+                    <p className="text-xs text-text-muted mt-2">
+                      {isGreenDot ? 'Both front and back images are required for GreenDot cards.' : 'Upload a clear image of your gift card.'}
+                    </p>
                   </div>
 
                   {/* Comment */}
