@@ -82,16 +82,20 @@ export default function Footer() {
               <Image
                 src="/logo.png"
                 alt="KJ Exchange"
-                width={80}
-                height={80}
-                className="w-20 h-auto transition-transform group-hover:scale-105"
+                width={120}
+                height={120}
+                className="w-32 md:w-40 h-auto transition-transform group-hover:scale-105"
               />
             </Link>
+            {/* 👇 Company Description — tells visitors exactly what we do */}
             <p className="text-text-muted text-sm leading-relaxed max-w-xs">
-              Trade Smart. Trade Secure.
+              Nigeria's trusted platform for selling gift cards, crypto, and paying bills instantly. 
+              Get paid in Naira, USD, or Cedis.
             </p>
             <p className="text-text-muted text-sm leading-relaxed max-w-xs">
-              Your Ultimate Exchange Hub for crypto and gift cards.
+              <span className="text-orange font-semibold">Secure</span> · 
+              <span className="text-orange font-semibold"> Fast</span> · 
+              <span className="text-orange font-semibold"> 0% Hidden Fees</span>
             </p>
             <div className="flex flex-wrap gap-2 pt-2">
               <span className="inline-flex items-center gap-1.5 text-xs bg-green-400/10 text-green-400 border border-green-400/20 px-3 py-1 rounded-full">
@@ -144,7 +148,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Column 3: Services */}
+          {/* Column 3: Services — Bills & Airtime ACTIVE (no "Soon") */}
           <div>
             <h4 className="text-text-secondary font-semibold text-sm uppercase tracking-wider mb-4">Our Services</h4>
             <ul className="space-y-2.5">
@@ -160,17 +164,23 @@ export default function Footer() {
                   <i className="fa-brands fa-bitcoin text-orange w-4"></i> Crypto
                 </Link>
               </li>
-              <li className="text-text-muted text-sm flex items-center gap-2 opacity-60">
-                <span className="w-1 h-1 bg-orange rounded-full opacity-0"></span>
-                <i className="fa-regular fa-lightbulb w-4"></i> Pay Bills <span className="text-[10px] text-orange ml-1">Soon</span>
+              <li>
+                <Link href="#" className="text-text-muted hover:text-orange transition text-sm flex items-center gap-2 group">
+                  <span className="w-1 h-1 bg-orange rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
+                  <i className="fa-regular fa-lightbulb text-orange w-4"></i> Pay Bills
+                </Link>
               </li>
-              <li className="text-text-muted text-sm flex items-center gap-2 opacity-60">
-                <span className="w-1 h-1 bg-orange rounded-full opacity-0"></span>
-                <i className="fa-solid fa-mobile-screen w-4"></i> Buy Airtime <span className="text-[10px] text-orange ml-1">Soon</span>
+              <li>
+                <Link href="#" className="text-text-muted hover:text-orange transition text-sm flex items-center gap-2 group">
+                  <span className="w-1 h-1 bg-orange rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
+                  <i className="fa-solid fa-mobile-screen text-orange w-4"></i> Buy Airtime
+                </Link>
               </li>
-              <li className="text-text-muted text-sm flex items-center gap-2 opacity-60">
-                <span className="w-1 h-1 bg-orange rounded-full opacity-0"></span>
-                <i className="fa-solid fa-globe w-4"></i> eSIM <span className="text-[10px] text-orange ml-1">Soon</span>
+              <li>
+                <Link href="#" className="text-text-muted hover:text-orange transition text-sm flex items-center gap-2 group">
+                  <span className="w-1 h-1 bg-orange rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
+                  <i className="fa-solid fa-globe text-orange w-4"></i> eSIM <span className="text-[10px] text-orange ml-1">Soon</span>
+                </Link>
               </li>
             </ul>
           </div>
