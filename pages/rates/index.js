@@ -56,7 +56,6 @@ export default function Rates() {
   const [payout, setPayout] = useState(0);
   const [activeTab, setActiveTab] = useState('crypto');
   const [openFaq, setOpenFaq] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [displayRate, setDisplayRate] = useState(0);
   const [cryptoUsdPrices, setCryptoUsdPrices] = useState({});
 
@@ -258,19 +257,21 @@ export default function Rates() {
                                   : 'border-border bg-black/20 hover:border-orange/50'
                               }`}
                             >
-                              <img
-                                src={imagePath}
-                                alt={card.name}
-                                className="w-8 h-8 mx-auto object-contain"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  const parent = e.target.parentElement;
-                                  if (parent) {
-                                    parent.innerHTML = `<i class="${card.icon} text-xl text-orange block"></i>`;
-                                  }
-                                }}
-                              />
-                              <p className="text-xs font-semibold mt-0.5 truncate">{card.name}</p>
+                              <div className="w-8 h-8 mx-auto flex items-center justify-center">
+                                <img
+                                  src={imagePath}
+                                  alt={card.name}
+                                  className="w-full h-full object-contain"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    const parent = e.target.parentElement;
+                                    if (parent) {
+                                      parent.innerHTML = `<i class="${card.icon} text-xl text-orange"></i>`;
+                                    }
+                                  }}
+                                />
+                              </div>
+                              <p className="text-xs font-semibold mt-0.5 truncate text-text-primary">{card.name}</p>
                             </button>
                           );
                         })}
@@ -398,16 +399,21 @@ export default function Rates() {
                         <tr key={card.id} className="hover:bg-white/5 transition">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <img
-                                src={imagePath}
-                                alt={card.name}
-                                className="w-6 h-6 object-contain"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  e.target.parentElement.innerHTML = `<i class="${card.icon} text-xl text-orange"></i>`;
-                                }}
-                              />
-                              <span className="font-semibold">{card.name}</span>
+                              <div className="w-6 h-6 flex items-center justify-center">
+                                <img
+                                  src={imagePath}
+                                  alt={card.name}
+                                  className="w-full h-full object-contain"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    const parent = e.target.parentElement;
+                                    if (parent) {
+                                      parent.innerHTML = `<i class="${card.icon} text-lg text-orange"></i>`;
+                                    }
+                                  }}
+                                />
+                              </div>
+                              <span className="font-semibold text-text-primary">{card.name}</span>
                               {isTop && (
                                 <span className="text-[10px] bg-orange/20 text-orange px-2 py-0.5 rounded-full font-bold">
                                   🔥 High Rate
