@@ -5,7 +5,6 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
 import { GIFT_CARD_RATES } from '../../config/giftCardRates';
-import Image from 'next/image';
 
 export default function SellGiftCard() {
   const { user, loading } = useAuth();
@@ -15,8 +14,10 @@ export default function SellGiftCard() {
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [selectedCountry, setSelectedCountry] = useState('USA');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
-  const [cardType, setCardType] = useState('physical');
+  const [cardType, setCardType] = useState('physical'); // 'physical' | 'ecode'
   const [amount, setAmount] = useState('');
+  const [cardCode, setCardCode] = useState(''); // 🆕 Ecode field
+  const [pin, setPin] = useState(''); // 🆕 PIN field
   const [comment, setComment] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [frontFile, setFrontFile] = useState(null);
@@ -103,7 +104,6 @@ export default function SellGiftCard() {
   const payoutBeforeFee = usdAmount * rate;
   let feeUsd = 0;
   if (isGo2bank || isGreenDot) feeUsd = 5;
-  const totalDeductionUsd = feeUsd;
   const payoutNgn = payoutBeforeFee - (feeUsd * ngnRate);
   const finalPayout = payoutNgn > 0 ? payoutNgn : 0;
   const giftPoints = Math.floor(finalPayout / 60);
@@ -141,26 +141,35 @@ export default function SellGiftCard() {
       return;
     }
 
-    // File validation
-    if (isGreenDot) {
-      if (!frontFile || !backFile) {
-        setError('Please upload both front and back images of the card');
+    // Validation: Ecode requires card code, Physical requires image
+    if (cardType === 'ecode') {
+      if (!cardCode) {
+        setError('Please enter the gift card code');
         setSubmitting(false);
         return;
       }
     } else {
-      if (!uploadedFile) {
-        setError('Please upload an image of the gift card');
-        setSubmitting(false);
-        return;
+      // Physical: file upload required
+      if (isGreenDot) {
+        if (!frontFile || !backFile) {
+          setError('Please upload both front and back images of the card');
+          setSubmitting(false);
+          return;
+        }
+      } else {
+        if (!uploadedFile) {
+          setError('Please upload an image of the gift card');
+          setSubmitting(false);
+          return;
+        }
       }
     }
 
     try {
       let frontUrl = null, backUrl = null, fileUrl = null;
 
+      // Upload files (if any)
       if (isGreenDot) {
-        // Upload front
         if (frontFile) {
           const ext = frontFile.name.split('.').pop();
           const fileName = `${user.id}_${Date.now()}_front.${ext}`;
@@ -173,7 +182,6 @@ export default function SellGiftCard() {
             .getPublicUrl(fileName);
           frontUrl = publicUrl;
         }
-        // Upload back
         if (backFile) {
           const ext = backFile.name.split('.').pop();
           const fileName = `${user.id}_${Date.now()}_back.${ext}`;
@@ -186,20 +194,17 @@ export default function SellGiftCard() {
             .getPublicUrl(fileName);
           backUrl = publicUrl;
         }
-      } else {
-        // Single upload for all other cards
-        if (uploadedFile) {
-          const ext = uploadedFile.name.split('.').pop();
-          const fileName = `${user.id}_${Date.now()}.${ext}`;
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('gift-card-images')
-            .upload(fileName, uploadedFile);
-          if (uploadError) throw uploadError;
-          const { data: { publicUrl } } = supabase.storage
-            .from('gift-card-images')
-            .getPublicUrl(fileName);
-          fileUrl = publicUrl;
-        }
+      } else if (uploadedFile) {
+        const ext = uploadedFile.name.split('.').pop();
+        const fileName = `${user.id}_${Date.now()}.${ext}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('gift-card-images')
+          .upload(fileName, uploadedFile);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage
+          .from('gift-card-images')
+          .getPublicUrl(fileName);
+        fileUrl = publicUrl;
       }
 
       // Insert order
@@ -218,6 +223,8 @@ export default function SellGiftCard() {
             country: selectedCountry,
             card_type: cardType,
             subcategory: selectedSubcategory,
+            card_code: cardType === 'ecode' ? cardCode : null,
+            pin: pin || null,
             comment: comment || null,
             chime_name: isChime ? chimeName : null,
             chime_value: isChime ? chimeValue : null,
@@ -245,7 +252,10 @@ export default function SellGiftCard() {
       }
 
       setSuccess(`✅ Order submitted! You'll receive ₦${finalPayout.toLocaleString()} after verification.`);
+      // Reset form
       setAmount('');
+      setCardCode('');
+      setPin('');
       setComment('');
       setUploadedFile(null);
       setFrontFile(null);
@@ -347,7 +357,6 @@ export default function SellGiftCard() {
                         <div className="px-4 py-6 text-center text-text-muted">No gift cards found.</div>
                       ) : (
                         filteredBrands.map((brand) => {
-                          // Try to load card image
                           const cardImage = `/images/cards/${brand.id}.png`;
                           return (
                             <div
@@ -426,7 +435,7 @@ export default function SellGiftCard() {
                     <div className="flex gap-3">
                       <button
                         type="button"
-                        onClick={() => { setCardType('physical'); setSelectedSubcategory(''); }}
+                        onClick={() => { setCardType('physical'); setSelectedSubcategory(''); setCardCode(''); }}
                         className={`flex-1 p-3 rounded-xl border transition text-center ${
                           cardType === 'physical'
                             ? 'border-orange bg-orange/10 text-orange'
@@ -486,6 +495,41 @@ export default function SellGiftCard() {
                       step="any"
                     />
                   </div>
+
+                  {/* 🆕 Card Code / Ecode Field (visible when Ecode is selected) */}
+                  {cardType === 'ecode' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-text-secondary mb-2">
+                          Gift Card Code / Number
+                        </label>
+                        <input
+                          type="text"
+                          value={cardCode}
+                          onChange={(e) => setCardCode(e.target.value)}
+                          className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                          placeholder="Enter the gift card code or number"
+                          required
+                        />
+                        <p className="text-xs text-text-muted mt-1">
+                          <i className="fa-regular fa-circle-info mr-1"></i>
+                          This is the code on the back of the card or in the email.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-text-secondary mb-2">
+                          PIN (if required)
+                        </label>
+                        <input
+                          type="text"
+                          value={pin}
+                          onChange={(e) => setPin(e.target.value)}
+                          className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                          placeholder="Enter PIN if your card has one"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   {/* Chime Special Fields */}
                   {isChime && (
@@ -578,11 +622,11 @@ export default function SellGiftCard() {
                   {/* File Upload - Conditional */}
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-2">
-                      {isGreenDot ? 'Upload Card Images (Front & Back)' : 'Upload Gift Card Image'}
+                      {isGreenDot ? 'Upload Card Images (Front & Back)' : cardType === 'ecode' ? 'Upload Image (Optional)' : 'Upload Gift Card Image'}
                     </label>
 
                     {isGreenDot ? (
-                      // GreenDot: Front + Back
+                      // GreenDot: Front + Back (required)
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-orange/30 transition bg-black/20">
                           <input
@@ -642,7 +686,7 @@ export default function SellGiftCard() {
                         </div>
                       </div>
                     ) : (
-                      // All other cards: Single upload
+                      // All other cards: Single upload (optional for Ecode, required for Physical)
                       <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-orange/30 transition bg-black/20">
                         <input
                           ref={fileInputRef}
@@ -666,14 +710,18 @@ export default function SellGiftCard() {
                         ) : (
                           <div onClick={() => fileInputRef.current.click()} className="cursor-pointer">
                             <i className="fa-solid fa-cloud-upload-alt text-3xl text-text-muted"></i>
-                            <p className="text-sm text-text-secondary mt-2">Upload file or drag and drop</p>
-                            <p className="text-xs text-text-muted">You can upload multiple files (PNG, JPG, JPEG)</p>
+                            <p className="text-sm text-text-secondary mt-2">
+                              {cardType === 'ecode' ? 'Upload image (optional)' : 'Upload file or drag and drop'}
+                            </p>
+                            <p className="text-xs text-text-muted">PNG, JPG, JPEG</p>
                           </div>
                         )}
                       </div>
                     )}
                     <p className="text-xs text-text-muted mt-2">
-                      {isGreenDot ? 'Both front and back images are required for GreenDot cards.' : 'Upload a clear image of your gift card.'}
+                      {isGreenDot ? 'Both front and back images are required for GreenDot cards.' :
+                       cardType === 'ecode' ? 'Uploading an image is optional for Ecode sales.' :
+                       'Upload a clear image of your gift card.'}
                     </p>
                   </div>
 
