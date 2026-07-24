@@ -10,14 +10,13 @@ export default function SellGiftCard() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  // ===== State =====
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [selectedCountry, setSelectedCountry] = useState('USA');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
-  const [cardType, setCardType] = useState('physical'); // 'physical' | 'ecode'
+  const [cardType, setCardType] = useState('physical');
   const [amount, setAmount] = useState('');
-  const [cardCode, setCardCode] = useState(''); // 🆕 Ecode field
-  const [pin, setPin] = useState(''); // 🆕 PIN field
+  const [cardCode, setCardCode] = useState('');
+  const [pin, setPin] = useState('');
   const [comment, setComment] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [frontFile, setFrontFile] = useState(null);
@@ -31,12 +30,12 @@ export default function SellGiftCard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [ngnRate, setNgnRate] = useState(1410);
+  const [orderId, setOrderId] = useState(null);
 
   const fileInputRef = useRef(null);
   const frontInputRef = useRef(null);
   const backInputRef = useRef(null);
 
-  // ===== Fetch live NGN rate =====
   useEffect(() => {
     const fetchRate = async () => {
       try {
@@ -56,7 +55,6 @@ export default function SellGiftCard() {
     return null;
   }
 
-  // ===== Derived Data =====
   const brandKeys = Object.keys(GIFT_CARD_RATES);
   const brands = brandKeys.map(key => ({
     id: key,
@@ -108,7 +106,71 @@ export default function SellGiftCard() {
   const finalPayout = payoutNgn > 0 ? payoutNgn : 0;
   const giftPoints = Math.floor(finalPayout / 60);
 
-  // ===== Submit =====
+  // Image preview URLs
+  const [previewUrls, setPreviewUrls] = useState([]);
+
+  const handleFileUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploadedFile(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPreviewUrls([reader.result]);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFrontUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFrontFile(file);
+      // Preview for front
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPreviewUrls(prev => {
+          const newUrls = [...prev];
+          newUrls[0] = reader.result;
+          return newUrls;
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleBackUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setBackFile(file);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPreviewUrls(prev => {
+          const newUrls = [...prev];
+          newUrls[1] = reader.result;
+          return newUrls;
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeFile = (type) => {
+    if (type === 'front') {
+      setFrontFile(null);
+      if (frontInputRef.current) frontInputRef.current.value = '';
+      setPreviewUrls(prev => prev.filter((_, i) => i !== 0));
+    } else if (type === 'back') {
+      setBackFile(null);
+      if (backInputRef.current) backInputRef.current.value = '';
+      setPreviewUrls(prev => prev.filter((_, i) => i !== 1));
+    } else {
+      setUploadedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setPreviewUrls([]);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -141,7 +203,6 @@ export default function SellGiftCard() {
       return;
     }
 
-    // Validation: Ecode requires card code, Physical requires image
     if (cardType === 'ecode') {
       if (!cardCode) {
         setError('Please enter the gift card code');
@@ -149,10 +210,9 @@ export default function SellGiftCard() {
         return;
       }
     } else {
-      // Physical: file upload required
       if (isGreenDot) {
         if (!frontFile || !backFile) {
-          setError('Please upload both front and back images of the card');
+          setError('Please upload both front and back images');
           setSubmitting(false);
           return;
         }
@@ -168,7 +228,6 @@ export default function SellGiftCard() {
     try {
       let frontUrl = null, backUrl = null, fileUrl = null;
 
-      // Upload files (if any)
       if (isGreenDot) {
         if (frontFile) {
           const ext = frontFile.name.split('.').pop();
@@ -239,7 +298,10 @@ export default function SellGiftCard() {
 
       if (error) throw error;
 
-      // Add gift points
+      const newOrderId = data[0].id;
+      setOrderId(newOrderId);
+
+      // Gift points
       if (giftPoints > 0) {
         await supabase
           .from('gift_point_transactions')
@@ -247,12 +309,21 @@ export default function SellGiftCard() {
             user_id: user.id,
             amount: giftPoints,
             type: 'gift_card_sale',
-            metadata: { order_id: data[0].id },
+            metadata: { order_id: newOrderId },
           });
       }
 
-      setSuccess(`✅ Order submitted! You'll receive ₦${finalPayout.toLocaleString()} after verification.`);
-      // Reset form
+      // 🆕 Insert notification
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: user.id,
+          message: `🛒 Gift card order submitted: ${brandData.name} - ₦${finalPayout.toLocaleString()} (pending verification)`,
+        });
+
+      setSuccess(`✅ Order submitted! You'll receive ₦${finalPayout.toLocaleString()} after verification. Order #${newOrderId.slice(0,8)}`);
+      
+      // Reset form (keep selectedBrand to show success)
       setAmount('');
       setCardCode('');
       setPin('');
@@ -260,59 +331,26 @@ export default function SellGiftCard() {
       setUploadedFile(null);
       setFrontFile(null);
       setBackFile(null);
+      setPreviewUrls([]);
       setChimeName('');
       setChimeValue('');
       setMoneypakCode('');
-      setSelectedBrand(null);
       setSelectedSubcategory('');
-      setSearchTerm('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (frontInputRef.current) frontInputRef.current.value = '';
       if (backInputRef.current) backInputRef.current.value = '';
+
     } catch (err) {
-      setError('Failed to submit order. Please try again.');
-      console.error(err);
+      console.error('Submit error:', err);
+      setError('Failed to submit order: ' + err.message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleFileUpload = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadedFile(e.target.files[0]);
-    }
-  };
-
-  const handleFrontUpload = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setFrontFile(e.target.files[0]);
-    }
-  };
-
-  const handleBackUpload = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setBackFile(e.target.files[0]);
-    }
-  };
-
-  const removeFile = (type) => {
-    if (type === 'front') {
-      setFrontFile(null);
-      if (frontInputRef.current) frontInputRef.current.value = '';
-    } else if (type === 'back') {
-      setBackFile(null);
-      if (backInputRef.current) backInputRef.current.value = '';
-    } else {
-      setUploadedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
   return (
     <>
-      <Head>
-        <title>Sell Gift Card · KJ Exchange</title>
-      </Head>
+      <Head><title>Sell Gift Card · KJ Exchange</title></Head>
       <DashboardLayout>
         <div className="max-w-3xl mx-auto px-4 py-6">
           <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
@@ -322,6 +360,18 @@ export default function SellGiftCard() {
 
           <div className="glass rounded-2xl p-6 border border-border">
             <p className="text-text-muted text-sm mb-6">Kindly provide your gift card details.</p>
+
+            {/* Error / Success Messages (moved outside selectedBrand block) */}
+            {error && (
+              <div className="mb-6 bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm">
+                <i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}
+              </div>
+            )}
+            {success && (
+              <div className="mb-6 bg-green-400/10 border border-green-400/20 rounded-xl p-3 text-green-400 text-sm">
+                <i className="fa-regular fa-circle-check mr-2"></i>{success}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Gift Card Selection */}
@@ -496,7 +546,7 @@ export default function SellGiftCard() {
                     />
                   </div>
 
-                  {/* 🆕 Card Code / Ecode Field (visible when Ecode is selected) */}
+                  {/* Ecode fields */}
                   {cardType === 'ecode' && (
                     <>
                       <div>
@@ -511,10 +561,6 @@ export default function SellGiftCard() {
                           placeholder="Enter the gift card code or number"
                           required
                         />
-                        <p className="text-xs text-text-muted mt-1">
-                          <i className="fa-regular fa-circle-info mr-1"></i>
-                          This is the code on the back of the card or in the email.
-                        </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -531,7 +577,7 @@ export default function SellGiftCard() {
                     </>
                   )}
 
-                  {/* Chime Special Fields */}
+                  {/* Chime */}
                   {isChime && (
                     <div className="space-y-3 bg-black/20 rounded-xl p-4 border border-border">
                       <div>
@@ -569,7 +615,7 @@ export default function SellGiftCard() {
                     </div>
                   )}
 
-                  {/* MoneyPak Special Field */}
+                  {/* MoneyPak */}
                   {isMoneyPak && (
                     <div>
                       <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -585,7 +631,7 @@ export default function SellGiftCard() {
                     </div>
                   )}
 
-                  {/* Rate & Payout Display */}
+                  {/* Rate & Payout */}
                   {selectedSubcategory && rate > 0 && (
                     <div className="bg-black/20 rounded-xl p-4 border border-border space-y-2">
                       <div className="flex justify-between text-sm">
@@ -619,14 +665,13 @@ export default function SellGiftCard() {
                     </div>
                   )}
 
-                  {/* File Upload - Conditional */}
+                  {/* File Upload */}
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-2">
                       {isGreenDot ? 'Upload Card Images (Front & Back)' : cardType === 'ecode' ? 'Upload Image (Optional)' : 'Upload Gift Card Image'}
                     </label>
 
                     {isGreenDot ? (
-                      // GreenDot: Front + Back (required)
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-orange/30 transition bg-black/20">
                           <input
@@ -638,7 +683,9 @@ export default function SellGiftCard() {
                           />
                           {frontFile ? (
                             <div className="space-y-2">
-                              <i className="fa-regular fa-file-image text-2xl text-green-400"></i>
+                              {previewUrls[0] && (
+                                <img src={previewUrls[0]} alt="Front" className="w-full h-24 object-contain rounded" />
+                              )}
                               <p className="text-sm text-text-primary">{frontFile.name}</p>
                               <button
                                 type="button"
@@ -652,7 +699,6 @@ export default function SellGiftCard() {
                             <div onClick={() => frontInputRef.current.click()} className="cursor-pointer">
                               <i className="fa-solid fa-cloud-upload-alt text-2xl text-text-muted"></i>
                               <p className="text-sm text-text-secondary mt-1">Upload Front</p>
-                              <p className="text-xs text-text-muted">Click to select</p>
                             </div>
                           )}
                         </div>
@@ -666,7 +712,9 @@ export default function SellGiftCard() {
                           />
                           {backFile ? (
                             <div className="space-y-2">
-                              <i className="fa-regular fa-file-image text-2xl text-green-400"></i>
+                              {previewUrls[1] && (
+                                <img src={previewUrls[1]} alt="Back" className="w-full h-24 object-contain rounded" />
+                              )}
                               <p className="text-sm text-text-primary">{backFile.name}</p>
                               <button
                                 type="button"
@@ -680,13 +728,11 @@ export default function SellGiftCard() {
                             <div onClick={() => backInputRef.current.click()} className="cursor-pointer">
                               <i className="fa-solid fa-cloud-upload-alt text-2xl text-text-muted"></i>
                               <p className="text-sm text-text-secondary mt-1">Upload Back</p>
-                              <p className="text-xs text-text-muted">Click to select</p>
                             </div>
                           )}
                         </div>
                       </div>
                     ) : (
-                      // All other cards: Single upload (optional for Ecode, required for Physical)
                       <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-orange/30 transition bg-black/20">
                         <input
                           ref={fileInputRef}
@@ -697,7 +743,9 @@ export default function SellGiftCard() {
                         />
                         {uploadedFile ? (
                           <div className="space-y-2">
-                            <i className="fa-regular fa-file-image text-3xl text-green-400"></i>
+                            {previewUrls[0] && (
+                              <img src={previewUrls[0]} alt="Upload" className="max-h-32 mx-auto object-contain rounded" />
+                            )}
                             <p className="text-sm text-text-primary">{uploadedFile.name}</p>
                             <button
                               type="button"
@@ -739,19 +787,6 @@ export default function SellGiftCard() {
                     />
                   </div>
 
-                  {/* Error / Success */}
-                  {error && (
-                    <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm">
-                      <i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}
-                    </div>
-                  )}
-                  {success && (
-                    <div className="bg-green-400/10 border border-green-400/20 rounded-xl p-3 text-green-400 text-sm">
-                      <i className="fa-regular fa-circle-check mr-2"></i>{success}
-                    </div>
-                  )}
-
-                  {/* Submit */}
                   <button
                     type="submit"
                     disabled={submitting}
@@ -763,10 +798,6 @@ export default function SellGiftCard() {
                       <><i className="fa-solid fa-paper-plane"></i> Proceed</>
                     )}
                   </button>
-
-                  <p className="text-center text-xs text-text-muted">
-                    You must either upload a gift card image or add the code in comments.
-                  </p>
                 </>
               )}
             </form>
