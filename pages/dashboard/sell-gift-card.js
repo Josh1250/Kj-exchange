@@ -4,45 +4,39 @@ import { useAuth } from '../_app';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Head from 'next/head';
-
-// ============================================================
-// GIFT CARD DATA
-// ============================================================
-const GIFT_CARDS = [
-  { id: 'apple', name: 'Apple', icon: 'fa-brands fa-apple', category: 'Popular', rate: 850 },
-  { id: 'amazon', name: 'Amazon', icon: 'fa-brands fa-amazon', category: 'Popular', rate: 820 },
-  { id: 'google', name: 'Google Play', icon: 'fa-brands fa-google-play', category: 'Popular', rate: 800 },
-  { id: 'itunes', name: 'iTunes', icon: 'fa-solid fa-music', category: 'Popular', rate: 840 },
-  { id: 'steam', name: 'Steam', icon: 'fa-solid fa-gamepad', category: 'Gaming', rate: 750 },
-  { id: 'razer', name: 'Razer Gold', icon: 'fa-solid fa-dragon', category: 'Gaming', rate: 730 },
-  { id: 'sephora', name: 'Sephora', icon: 'fa-solid fa-spa', category: 'Shopping', rate: 780 },
-  { id: 'netflix', name: 'Netflix', icon: 'fa-solid fa-film', category: 'Entertainment', rate: 820 },
-];
+import { GIFT_CARD_RATES } from '../../config/giftCardRates';
 
 export default function SellGiftCard() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [selectedCard, setSelectedCard] = useState(null);
+
+  // ===== State =====
+  const [selectedBrand, setSelectedBrand] = useState(null);
+  const [selectedCountry, setSelectedCountry] = useState('USA');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('');
+  const [cardType, setCardType] = useState('physical'); // 'physical' | 'ecode'
   const [amount, setAmount] = useState('');
-  const [cardCode, setCardCode] = useState('');
-  const [pin, setPin] = useState('');
-  const [cardForm, setCardForm] = useState('');
+  const [comment, setComment] = useState('');
+  const [frontFile, setFrontFile] = useState(null);
+  const [backFile, setBackFile] = useState(null);
+  const [chimeName, setChimeName] = useState('');
+  const [chimeValue, setChimeValue] = useState('');
+  const [moneypakCode, setMoneypakCode] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [files, setFiles] = useState([]);
-  const [dragActive, setDragActive] = useState(false);
-  const [ngnRate, setNgnRate] = useState(1550);
+  const [ngnRate, setNgnRate] = useState(1410); // fallback
 
-  const fileInputRef = useRef(null);
+  const frontInputRef = useRef(null);
+  const backInputRef = useRef(null);
 
-  // Fetch live NGN rate
+  // ===== Fetch live NGN rate (for reference) =====
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const res = await fetch('https://api.exchangerate.fun/latest?base=USD');
+        const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
         const data = await res.json();
         if (data.rates?.NGN) setNgnRate(data.rates.NGN);
       } catch (e) {
@@ -52,123 +46,213 @@ export default function SellGiftCard() {
     fetchRate();
   }, []);
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
+  if (loading) return <div>Loading...</div>;
   if (!user) {
     router.push('/auth/login');
     return null;
   }
 
-  const filteredCards = GIFT_CARDS.filter(card =>
-    card.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    card.category.toLowerCase().includes(searchTerm.toLowerCase())
+  // ===== Derived Data =====
+  const brandKeys = Object.keys(GIFT_CARD_RATES);
+  const brands = brandKeys.map(key => ({
+    id: key,
+    ...GIFT_CARD_RATES[key],
+  }));
+
+  const filteredBrands = brands.filter(b =>
+    b.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const categories = [...new Set(GIFT_CARDS.map(card => card.category))];
+  const getCurrentBrand = () => {
+    if (!selectedBrand) return null;
+    return GIFT_CARD_RATES[selectedBrand] || null;
+  };
 
+  const brandData = getCurrentBrand();
+  const countryOptions = brandData ? Object.keys(brandData.countries) : [];
+  const isChime = selectedBrand === 'chime';
+  const isGo2bank = selectedBrand === 'go2bank';
+  const isGreenDot = selectedBrand === 'greendot';
+  const isMoneyPak = selectedBrand === 'moneypak';
+
+  const getSubcategories = () => {
+    if (!brandData || !selectedCountry) return [];
+    const countryData = brandData.countries[selectedCountry];
+    if (!countryData) return [];
+    const typeData = cardType === 'physical' ? countryData.physical : countryData.ecode;
+    if (!typeData) return [];
+    return Object.keys(typeData);
+  };
+
+  const subcategories = getSubcategories();
+
+  const getRate = () => {
+    if (!brandData || !selectedCountry || !selectedSubcategory) return 0;
+    const countryData = brandData.countries[selectedCountry];
+    if (!countryData) return 0;
+    const typeData = cardType === 'physical' ? countryData.physical : countryData.ecode;
+    if (!typeData) return 0;
+    return typeData[selectedSubcategory] || 0;
+  };
+
+  const rate = getRate();
+  const usdAmount = parseFloat(amount) || 0;
+  const payoutBeforeFee = usdAmount * rate;
+  let feeUsd = 0;
+  if (isGo2bank || isGreenDot) feeUsd = 5;
+  const totalDeductionUsd = feeUsd;
+  const payoutNgn = payoutBeforeFee - (feeUsd * ngnRate);
+  const finalPayout = payoutNgn > 0 ? payoutNgn : 0;
+  const giftPoints = Math.floor(finalPayout / 60);
+
+  // ===== Submit =====
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     setSubmitting(true);
 
-    if (!selectedCard) {
+    if (!selectedBrand) {
       setError('Please select a gift card');
       setSubmitting(false);
       return;
     }
-
-    const cardAmount = parseFloat(amount);
-    if (isNaN(cardAmount) || cardAmount <= 0) {
+    if (!selectedSubcategory) {
+      setError('Please select a subcategory');
+      setSubmitting(false);
+      return;
+    }
+    if (usdAmount <= 0) {
       setError('Please enter a valid amount');
       setSubmitting(false);
       return;
     }
-
-    if (!cardCode) {
-      setError('Please enter the card code');
+    if (isChime && !chimeName) {
+      setError('Please enter the Chime name');
+      setSubmitting(false);
+      return;
+    }
+    if (isMoneyPak && !moneypakCode) {
+      setError('Please enter the MoneyPak code');
+      setSubmitting(false);
+      return;
+    }
+    if (!frontFile && !backFile) {
+      setError('Please upload both front and back images of the card');
       setSubmitting(false);
       return;
     }
 
-    if (files.length === 0) {
-      setError('Please upload an image of the gift card');
-      setSubmitting(false);
-      return;
-    }
+    try {
+      // Upload files
+      let frontUrl = null, backUrl = null;
+      if (frontFile) {
+        const ext = frontFile.name.split('.').pop();
+        const fileName = `${user.id}_${Date.now()}_front.${ext}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('gift-card-images')
+          .upload(fileName, frontFile);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage
+          .from('gift-card-images')
+          .getPublicUrl(fileName);
+        frontUrl = publicUrl;
+      }
+      if (backFile) {
+        const ext = backFile.name.split('.').pop();
+        const fileName = `${user.id}_${Date.now()}_back.${ext}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('gift-card-images')
+          .upload(fileName, backFile);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage
+          .from('gift-card-images')
+          .getPublicUrl(fileName);
+        backUrl = publicUrl;
+      }
 
-    const valueNgn = cardAmount * selectedCard.rate;
-    const fileNames = files.map(f => f.name);
+      // Insert order
+      const { data, error } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user.id,
+          type: 'gift_card',
+          asset: `${brandData.name} - ${selectedSubcategory}`,
+          amount: usdAmount,
+          rate: rate,
+          value_ngn: finalPayout,
+          status: 'pending',
+          details: {
+            brand: selectedBrand,
+            country: selectedCountry,
+            card_type: cardType,
+            subcategory: selectedSubcategory,
+            comment: comment || null,
+            chime_name: isChime ? chimeName : null,
+            chime_value: isChime ? chimeValue : null,
+            moneypak_code: isMoneyPak ? moneypakCode : null,
+            front_image: frontUrl,
+            back_image: backUrl,
+            fee_usd: feeUsd,
+          },
+        })
+        .select();
 
-    const { data, error } = await supabase
-      .from('orders')
-      .insert({
-        user_id: user.id,
-        type: 'gift_card',
-        asset: selectedCard.name,
-        amount: cardAmount,
-        rate: selectedCard.rate,
-        value_ngn: valueNgn,
-        status: 'pending',
-        details: {
-          card_code: cardCode,
-          pin: pin || null,
-          card_form: cardForm || 'Not specified',
-          card_id: selectedCard.id,
-          files: fileNames,
-        },
-      })
-      .select();
+      if (error) throw error;
 
-    if (error) {
-      setError('Failed to submit order. Please try again.');
-      console.error(error);
-    } else {
-      setSuccess(`✅ Order submitted! You'll receive ₦${valueNgn.toLocaleString()} after verification.`);
+      // Add gift points
+      if (giftPoints > 0) {
+        await supabase
+          .from('gift_point_transactions')
+          .insert({
+            user_id: user.id,
+            amount: giftPoints,
+            type: 'gift_card_sale',
+            metadata: { order_id: data[0].id },
+          });
+      }
+
+      setSuccess(`✅ Order submitted! You'll receive ₦${finalPayout.toLocaleString()} after verification.`);
+      // Reset form
       setAmount('');
-      setCardCode('');
-      setPin('');
-      setCardForm('');
-      setFiles([]);
-      setSelectedCard(null);
+      setComment('');
+      setFrontFile(null);
+      setBackFile(null);
+      setChimeName('');
+      setChimeValue('');
+      setMoneypakCode('');
+      setSelectedBrand(null);
+      setSelectedSubcategory('');
       setSearchTerm('');
-    }
-    setSubmitting(false);
-  };
-
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
-    else if (e.type === 'dragleave') setDragActive(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)]);
+    } catch (err) {
+      setError('Failed to submit order. Please try again.');
+      console.error(err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFiles(prev => [...prev, ...Array.from(e.target.files)]);
+  const handleFrontUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setFrontFile(e.target.files[0]);
     }
   };
 
-  const removeFile = (index) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+  const handleBackUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setBackFile(e.target.files[0]);
+    }
   };
 
-  const getEstimatedPayout = () => {
-    if (!selectedCard || !amount) return null;
-    const cardAmount = parseFloat(amount);
-    if (isNaN(cardAmount) || cardAmount <= 0) return null;
-    return cardAmount * selectedCard.rate;
+  const removeFile = (type) => {
+    if (type === 'front') {
+      setFrontFile(null);
+      if (frontInputRef.current) frontInputRef.current.value = '';
+    } else {
+      setBackFile(null);
+      if (backInputRef.current) backInputRef.current.value = '';
+    }
   };
-
-  const estimatedPayout = getEstimatedPayout();
 
   return (
     <>
@@ -176,10 +260,13 @@ export default function SellGiftCard() {
         <title>Sell Gift Card · KJ Exchange</title>
       </Head>
       <DashboardLayout>
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Sell Gift Card</h1>
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <i className="fa-solid fa-gift text-orange"></i>
+            Sell Gift Card
+          </h1>
 
-          <div className="bg-bg-card rounded-2xl p-6 border border-border">
+          <div className="glass rounded-2xl p-6 border border-border">
             <p className="text-text-muted text-sm mb-6">Kindly provide your gift card details.</p>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -197,13 +284,13 @@ export default function SellGiftCard() {
                       value={searchTerm}
                       onChange={(e) => { setSearchTerm(e.target.value); setShowDropdown(true); }}
                       onFocus={() => setShowDropdown(true)}
-                      className="w-full bg-black/40 border border-border rounded-lg pl-12 pr-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                      className="w-full bg-black/40 border border-border rounded-xl pl-12 pr-4 py-3.5 text-text-primary focus:border-orange focus:outline-none"
                     />
-                    {selectedCard && (
+                    {selectedBrand && (
                       <button
                         type="button"
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-                        onClick={() => { setSelectedCard(null); setSearchTerm(''); }}
+                        onClick={() => { setSelectedBrand(null); setSelectedSubcategory(''); setSearchTerm(''); }}
                       >
                         <i className="fa-solid fa-xmark"></i>
                       </button>
@@ -211,235 +298,334 @@ export default function SellGiftCard() {
                   </div>
 
                   {showDropdown && (
-                    <div className="absolute z-20 w-full mt-2 bg-bg-card border border-border rounded-lg max-h-80 overflow-y-auto shadow-card">
-                      {filteredCards.length === 0 ? (
+                    <div className="absolute z-20 w-full mt-2 bg-bg-card border border-border rounded-xl max-h-60 overflow-y-auto shadow-2xl">
+                      {filteredBrands.length === 0 ? (
                         <div className="px-4 py-6 text-center text-text-muted">No gift cards found.</div>
                       ) : (
-                        categories.map((category) => {
-                          const cardsInCategory = filteredCards.filter(c => c.category === category);
-                          if (cardsInCategory.length === 0) return null;
-                          return (
-                            <div key={category}>
-                              <div className="px-4 py-2 bg-bg-secondary/50 text-xs uppercase tracking-wider text-text-muted font-semibold">
-                                {category}
-                              </div>
-                              {cardsInCategory.map((card) => (
-                                <div
-                                  key={card.id}
-                                  className={`px-4 py-3 hover:bg-bg-hover cursor-pointer flex items-center justify-between transition border-b border-border last:border-b-0 ${
-                                    selectedCard?.id === card.id ? 'bg-purple/20 border-l-2 border-orange' : ''
-                                  }`}
-                                  onClick={() => {
-                                    setSelectedCard(card);
-                                    setSearchTerm(card.name);
-                                    setShowDropdown(false);
-                                  }}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <i className={`${card.icon} text-xl text-orange w-6 text-center`}></i>
-                                    <span className="font-medium">{card.name}</span>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-sm font-semibold text-green-400">₦{card.rate}/$</p>
-                                  </div>
-                                </div>
-                              ))}
+                        filteredBrands.map((brand) => (
+                          <div
+                            key={brand.id}
+                            className={`px-4 py-3 hover:bg-bg-hover cursor-pointer flex items-center justify-between transition border-b border-border last:border-0 ${
+                              selectedBrand === brand.id ? 'bg-orange/10 border-l-2 border-orange' : ''
+                            }`}
+                            onClick={() => {
+                              setSelectedBrand(brand.id);
+                              setSearchTerm(brand.name);
+                              setShowDropdown(false);
+                              setSelectedCountry('USA');
+                              setSelectedSubcategory('');
+                            }}
+                          >
+                            <div className="flex items-center gap-3">
+                              <i className={`${brand.icon} text-xl text-orange w-6 text-center`}></i>
+                              <span className="font-medium">{brand.name}</span>
                             </div>
-                          );
-                        })
+                          </div>
+                        ))
                       )}
                     </div>
                   )}
                 </div>
+              </div>
 
-                {selectedCard && (
-                  <div className="mt-3 bg-black/20 rounded-lg p-3 flex items-center justify-between border border-border">
-                    <div className="flex items-center gap-3">
-                      <i className={`${selectedCard.icon} text-2xl text-orange`}></i>
+              {selectedBrand && (
+                <>
+                  {/* Country */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Gift Card Country
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {countryOptions.map((country) => (
+                        <button
+                          key={country}
+                          type="button"
+                          onClick={() => { setSelectedCountry(country); setSelectedSubcategory(''); }}
+                          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                            selectedCountry === country
+                              ? 'bg-orange text-white shadow-lg shadow-orange/20'
+                              : 'bg-black/20 border border-border text-text-muted hover:border-orange/50'
+                          }`}
+                        >
+                          {country === 'USA' && '🇺🇸 USA'}
+                          {country === 'CANADA' && '🇨🇦 Canada'}
+                          {country === 'EURO' && '🇪🇺 Euro'}
+                          {country === 'UK' && '🇬🇧 UK'}
+                          {country === 'OTHER' && '🌍 Other'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Card Type */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Gift Card Form
+                    </label>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => { setCardType('physical'); setSelectedSubcategory(''); }}
+                        className={`flex-1 p-3 rounded-xl border transition text-center ${
+                          cardType === 'physical'
+                            ? 'border-orange bg-orange/10 text-orange'
+                            : 'border-border bg-black/20 text-text-muted hover:border-orange/50'
+                        }`}
+                      >
+                        <p className="font-semibold">Physical Card</p>
+                        <p className="text-xs opacity-70">You have the card image</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setCardType('ecode'); setSelectedSubcategory(''); }}
+                        className={`flex-1 p-3 rounded-xl border transition text-center ${
+                          cardType === 'ecode'
+                            ? 'border-orange bg-orange/10 text-orange'
+                            : 'border-border bg-black/20 text-text-muted hover:border-orange/50'
+                        }`}
+                      >
+                        <p className="font-semibold">Ecode</p>
+                        <p className="text-xs opacity-70">You have the code only</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Subcategory */}
+                  {subcategories.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                        Subcategory
+                      </label>
+                      <select
+                        value={selectedSubcategory}
+                        onChange={(e) => setSelectedSubcategory(e.target.value)}
+                        className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                      >
+                        <option value="">Select subcategory</option>
+                        {subcategories.map((sub) => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Amount */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Total Gift Card Amount ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                      placeholder="Enter amount (e.g., 100)"
+                      required
+                      min="1"
+                      step="any"
+                    />
+                  </div>
+
+                  {/* Chime Special Fields */}
+                  {isChime && (
+                    <div className="space-y-3 bg-black/20 rounded-xl p-4 border border-border">
                       <div>
-                        <p className="font-semibold">{selectedCard.name}</p>
-                        <p className="text-xs text-text-muted">Rate: ₦{selectedCard.rate}/$</p>
+                        <label className="block text-sm font-medium text-text-secondary mb-1">
+                          Chime Name
+                        </label>
+                        <input
+                          type="text"
+                          value={chimeName}
+                          onChange={(e) => setChimeName(e.target.value)}
+                          className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                          placeholder="Enter the name on the Chime account"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-text-secondary mb-1">
+                          Chime Value
+                        </label>
+                        <input
+                          type="text"
+                          value={chimeValue}
+                          onChange={(e) => setChimeValue(e.target.value)}
+                          className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                          placeholder="Enter the Chime value"
+                        />
+                      </div>
+                      <div className="text-xs text-yellow-400">
+                        <p>Only accepts Chime email/tag. Please provide the exact value and your name before selling.</p>
+                        <p>Orders will be canceled if payment is not completed within 30 minutes.</p>
+                        {selectedSubcategory.includes('Tag') && (
+                          <p className="text-red-400">⚠️ If a topup results in an account suspension, you won't be credited.</p>
+                        )}
                       </div>
                     </div>
-                    <span className="text-green-400 font-bold text-sm">
-                      <i className="fa-regular fa-circle-check mr-1"></i>0% Fees
-                    </span>
-                  </div>
-                )}
-              </div>
+                  )}
 
-              {/* Card Form (Physical / Ecode) */}
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  Gift Card Form (Optional)
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {['Physical Card', 'Ecode'].map((form) => (
-                    <button
-                      key={form}
-                      type="button"
-                      onClick={() => setCardForm(form)}
-                      className={`p-3 rounded-lg border transition text-center ${
-                        cardForm === form
-                          ? 'border-orange bg-orange/10 text-orange'
-                          : 'border-border bg-black/20 text-text-muted hover:border-orange/50'
-                      }`}
-                    >
-                      <p className="font-semibold text-sm">{form}</p>
-                      <p className="text-xs opacity-70">{form === 'Physical Card' ? 'Card with image' : 'Code only'}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
+                  {/* MoneyPak Special Field */}
+                  {isMoneyPak && (
+                    <div>
+                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                        Code
+                      </label>
+                      <input
+                        type="text"
+                        value={moneypakCode}
+                        onChange={(e) => setMoneypakCode(e.target.value)}
+                        className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                        placeholder="Single barcode card has lower rate"
+                      />
+                    </div>
+                  )}
 
-              {/* Amount */}
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  Total Gift Card Amount ($)
-                </label>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                  placeholder="Enter amount (e.g., 100)"
-                  required
-                  min="1"
-                  step="any"
-                />
-                {estimatedPayout && (
-                  <div className="mt-2 bg-green-400/5 border border-green-400/20 rounded-lg p-3">
-                    <p className="text-sm text-text-muted">
-                      <i className="fa-regular fa-circle-check text-green-400 mr-1"></i>
-                      You'll receive: <span className="text-green-400 font-bold text-lg">₦{estimatedPayout.toLocaleString()}</span>
-                    </p>
-                    <p className="text-xs text-text-muted">
-                      Rate: ₦{selectedCard.rate}/$ · {Math.round((selectedCard.rate / ngnRate) * 100)}% of market rate
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Card Code */}
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  Card Code / Number
-                </label>
-                <input
-                  type="text"
-                  value={cardCode}
-                  onChange={(e) => setCardCode(e.target.value)}
-                  className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                  placeholder="Enter the gift card code or number"
-                  required
-                />
-                <p className="text-xs text-text-muted mt-1">
-                  <i className="fa-regular fa-circle-info mr-1"></i>
-                  This is the code on the back of the card or in the email.
-                </p>
-              </div>
-
-              {/* PIN */}
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  PIN (if required)
-                </label>
-                <input
-                  type="text"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  className="w-full bg-black/40 border border-border rounded-lg px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
-                  placeholder="Enter PIN (if your card has one)"
-                />
-              </div>
-
-              {/* File Upload */}
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  Upload Gift Card Image(s)
-                </label>
-                <div
-                  className={`relative border-2 border-dashed rounded-lg p-8 text-center transition ${
-                    dragActive ? 'border-orange bg-orange/5' : 'border-border bg-black/20'
-                  }`}
-                  onDragEnter={handleDrag}
-                  onDragOver={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDrop={handleDrop}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
-                  <div className="space-y-3">
-                    <i className="fa-solid fa-cloud-upload-alt text-4xl text-text-muted"></i>
-                    <p className="text-text-secondary font-medium">
-                      Upload file or drag and drop
-                    </p>
-                    <p className="text-text-muted text-sm">
-                      You can upload multiple files. (PNG, JPG, JPEG)
-                    </p>
-                  </div>
-                </div>
-
-                {files.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {files.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between bg-black/20 rounded-lg px-4 py-2 border border-border">
-                        <div className="flex items-center gap-3">
-                          <i className="fa-solid fa-file-image text-lg text-orange"></i>
-                          <span className="text-sm truncate max-w-[200px]">{file.name}</span>
-                          <span className="text-xs text-text-muted">{(file.size / 1024).toFixed(0)} KB</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeFile(index)}
-                          className="text-red-400 hover:text-red-300 transition"
-                        >
-                          <i className="fa-solid fa-xmark"></i>
-                        </button>
+                  {/* Rate & Payout Display */}
+                  {selectedSubcategory && rate > 0 && (
+                    <div className="bg-black/20 rounded-xl p-4 border border-border space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-text-muted">Rate</span>
+                        <span className="font-bold text-green-400">₦{rate}/$</span>
                       </div>
-                    ))}
+                      {usdAmount > 0 && (
+                        <>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-text-muted">Amount</span>
+                            <span>${usdAmount.toFixed(2)}</span>
+                          </div>
+                          {(isGo2bank || isGreenDot) && (
+                            <div className="flex justify-between text-sm text-red-400">
+                              <span>Fee (${feeUsd} USD)</span>
+                              <span>-${feeUsd.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-lg font-bold border-t border-border pt-2">
+                            <span className="text-text-muted">You Receive</span>
+                            <span className="text-green-400">₦{finalPayout.toLocaleString()}</span>
+                          </div>
+                          {giftPoints > 0 && (
+                            <div className="flex justify-between text-sm text-orange">
+                              <span>🎁 Gift Points</span>
+                              <span>+{giftPoints} points</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* File Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Upload Card Images
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Front */}
+                      <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-orange/30 transition bg-black/20">
+                        <input
+                          ref={frontInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFrontUpload}
+                          className="hidden"
+                        />
+                        {frontFile ? (
+                          <div className="space-y-2">
+                            <i className="fa-regular fa-file-image text-2xl text-green-400"></i>
+                            <p className="text-sm text-text-primary">{frontFile.name}</p>
+                            <button
+                              type="button"
+                              onClick={() => removeFile('front')}
+                              className="text-red-400 text-xs hover:underline"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div onClick={() => frontInputRef.current.click()} className="cursor-pointer">
+                            <i className="fa-solid fa-cloud-upload-alt text-2xl text-text-muted"></i>
+                            <p className="text-sm text-text-secondary mt-1">Upload Front</p>
+                            <p className="text-xs text-text-muted">Click to select</p>
+                          </div>
+                        )}
+                      </div>
+                      {/* Back */}
+                      <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-orange/30 transition bg-black/20">
+                        <input
+                          ref={backInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleBackUpload}
+                          className="hidden"
+                        />
+                        {backFile ? (
+                          <div className="space-y-2">
+                            <i className="fa-regular fa-file-image text-2xl text-green-400"></i>
+                            <p className="text-sm text-text-primary">{backFile.name}</p>
+                            <button
+                              type="button"
+                              onClick={() => removeFile('back')}
+                              className="text-red-400 text-xs hover:underline"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div onClick={() => backInputRef.current.click()} className="cursor-pointer">
+                            <i className="fa-solid fa-cloud-upload-alt text-2xl text-text-muted"></i>
+                            <p className="text-sm text-text-secondary mt-1">Upload Back</p>
+                            <p className="text-xs text-text-muted">Click to select</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-text-muted mt-2">Both front and back images are required.</p>
                   </div>
-                )}
-              </div>
 
-              {error && (
-                <div className="bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-red-400 text-sm">
-                  <i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}
-                </div>
+                  {/* Comment */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Comment (Optional)
+                    </label>
+                    <textarea
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      rows="2"
+                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none resize-none"
+                      placeholder="Enter any additional information..."
+                    />
+                  </div>
+
+                  {/* Error / Success */}
+                  {error && (
+                    <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm">
+                      <i className="fa-solid fa-triangle-exclamation mr-2"></i>{error}
+                    </div>
+                  )}
+                  {success && (
+                    <div className="bg-green-400/10 border border-green-400/20 rounded-xl p-3 text-green-400 text-sm">
+                      <i className="fa-regular fa-circle-check mr-2"></i>{success}
+                    </div>
+                  )}
+
+                  {/* Submit */}
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
+                  >
+                    {submitting ? (
+                      <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</>
+                    ) : (
+                      <><i className="fa-solid fa-paper-plane"></i> Proceed</>
+                    )}
+                  </button>
+
+                  <p className="text-center text-xs text-text-muted">
+                    You must either upload a gift card image or add the code in comments.
+                  </p>
+                </>
               )}
-              {success && (
-                <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-3 text-green-400 text-sm">
-                  <i className="fa-regular fa-circle-check mr-2"></i>{success}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full bg-orange text-white font-bold py-3 rounded-full hover:bg-orange-600 transition disabled:opacity-50 shadow-orange shadow-lg flex items-center justify-center gap-2"
-              >
-                {submitting ? (
-                  <>
-                    <i className="fa-solid fa-spinner fa-spin"></i> Submitting...
-                  </>
-                ) : (
-                  <>
-                    <i className="fa-solid fa-paper-plane"></i> Submit Order
-                  </>
-                )}
-              </button>
-
-              <p className="text-center text-xs text-text-muted">
-                Your order will be verified within 5-15 minutes.
-                <br />
-                <span className="text-green-400 font-bold">0% fees</span> — What you see is what you get.
-              </p>
             </form>
           </div>
         </div>
