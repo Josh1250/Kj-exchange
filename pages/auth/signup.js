@@ -35,7 +35,6 @@ export default function Signup() {
       return;
     }
 
-    // Redirect URL after confirmation (point to a success page)
     const redirectTo = `${window.location.origin}/auth/verify-email`;
 
     const { data, error } = await supabase.auth.signUp({
@@ -109,6 +108,9 @@ export default function Signup() {
                 </p>
                 <p className="text-text-muted text-xs mt-2">
                   After confirmation, you can <Link href="/auth/login" className="text-orange hover:underline">login here</Link>.
+                </p>
+                <p className="text-text-muted text-xs mt-1">
+                  🎁 You'll receive <strong>1,000 gift points</strong> after verification!
                 </p>
               </div>
             ) : (
@@ -218,30 +220,10 @@ export default function Signup() {
             )}
 
             {!success && (
-              <>
-                <div className="relative my-6">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-border"></div>
-                  </div>
-                  <div className="relative flex justify-center text-xs">
-                    <span className="bg-bg-card/70 px-4 text-text-muted">or continue with</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button className="flex items-center justify-center gap-2 bg-black/40 border border-border rounded-xl py-3 hover:bg-white/5 transition text-text-primary text-sm font-medium">
-                    <i className="fab fa-google text-xl text-[#ea4335]"></i> Google
-                  </button>
-                  <button className="flex items-center justify-center gap-2 bg-black/40 border border-border rounded-xl py-3 hover:bg-white/5 transition text-text-primary text-sm font-medium">
-                    <i className="fab fa-apple text-xl"></i> Apple
-                  </button>
-                </div>
-
-                <p className="text-center text-text-muted text-sm mt-6">
-                  Already have an account?{' '}
-                  <Link href="/auth/login" className="text-orange hover:underline font-medium">Login</Link>
-                </p>
-              </>
+              <p className="text-center text-text-muted text-sm mt-6">
+                Already have an account?{' '}
+                <Link href="/auth/login" className="text-orange hover:underline font-medium">Login</Link>
+              </p>
             )}
           </div>
         </div>
