@@ -11,7 +11,8 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCodeInput, setReferralCodeInput] = useState(''); // Manual input
+  const [referralCodeFromUrl, setReferralCodeFromUrl] = useState('');
   const [referrerName, setReferrerName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,8 +24,9 @@ export default function Signup() {
   useEffect(() => {
     const { ref } = router.query;
     if (ref) {
-      setReferralCode(ref);
-      // Fetch referrer's name (optional)
+      setReferralCodeFromUrl(ref);
+      setReferralCodeInput(ref);
+      // Fetch referrer's name
       supabase
         .from('users')
         .select('full_name')
@@ -73,18 +75,19 @@ export default function Signup() {
       return;
     }
 
+    // Determine which referral code to use (input field or URL)
+    const finalReferralCode = referralCodeInput || referralCodeFromUrl;
+
     // If signup successful, create referral record if referralCode exists
-    if (data.user && referralCode) {
+    if (data.user && finalReferralCode) {
       try {
-        // Find referrer by their referral code
         const { data: referrer, error: refError } = await supabase
           .from('users')
           .select('id')
-          .eq('referral_code', referralCode)
+          .eq('referral_code', finalReferralCode)
           .single();
 
         if (!refError && referrer) {
-          // Insert referral record
           await supabase
             .from('referrals')
             .insert({
@@ -93,10 +96,12 @@ export default function Signup() {
               referred_user_id: data.user.id,
               status: 'pending',
             });
+          console.log('✅ Referral recorded successfully!');
+        } else {
+          console.log('⚠️ Invalid referral code:', finalReferralCode);
         }
       } catch (refErr) {
         console.error('Referral creation failed:', refErr);
-        // Don't block signup flow – referral is non‑critical
       }
     }
 
@@ -105,6 +110,7 @@ export default function Signup() {
     setPassword('');
     setConfirmPassword('');
     setFullName('');
+    setReferralCodeInput('');
     setLoading(false);
   };
 
@@ -146,8 +152,8 @@ export default function Signup() {
               Start trading crypto & gift cards today
             </p>
 
-            {/* Referral Banner */}
-            {referralCode && referrerName && (
+            {/* Referral Banner (when coming from URL) */}
+            {referralCodeFromUrl && referrerName && (
               <div className="mt-4 p-3 bg-orange/10 border border-orange/20 rounded-xl text-center text-sm">
                 <i className="fa-solid fa-gift text-orange mr-1"></i>
                 You were referred by <span className="font-semibold text-orange">{referrerName}</span>! 🎁
@@ -205,6 +211,25 @@ export default function Signup() {
                       required
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">Referral Code (optional)</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
+                      <i className="fa-solid fa-gift"></i>
+                    </span>
+                    <input
+                      type="text"
+                      value={referralCodeInput}
+                      onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                      className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                      placeholder="Enter referral code (if you have one)"
+                    />
+                  </div>
+                  <p className="text-xs text-text-muted mt-1">
+                    Enter a friend's referral code to earn 1,000 gift points each after your first trade.
+                  </p>
                 </div>
 
                 <div>
