@@ -40,7 +40,7 @@ export default function Home() {
   const faq = useInView({ threshold: 0.1 });
   const cta = useInView({ threshold: 0.1 });
 
-  // Your actual supported gift cards & crypto
+  // All supported assets (gift cards + crypto)
   const supportedAssets = [
     // Crypto
     { id: 'btc', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', type: 'crypto' },
@@ -56,6 +56,14 @@ export default function Home() {
     { id: 'xbox', name: 'Xbox', icon: 'fa-brands fa-xbox', color: '#107C10', type: 'gift' },
     { id: 'playstation', name: 'PlayStation', icon: 'fa-solid fa-gamepad', color: '#0070d1', type: 'gift' },
     { id: 'razerGold', name: 'Razer Gold', icon: 'fa-solid fa-dragon', color: '#00ff00', type: 'gift' },
+    { id: 'roblox', name: 'Roblox', icon: 'fa-solid fa-cube', color: '#f5a623', type: 'gift' },
+    { id: 'vanilla', name: 'Vanilla', icon: 'fa-regular fa-credit-card', color: '#8b5cf6', type: 'gift' },
+    { id: 'visa', name: 'Visa Gift', icon: 'fa-brands fa-cc-visa', color: '#1a1f71', type: 'gift' },
+    { id: 'walmart', name: 'Walmart', icon: 'fa-solid fa-store', color: '#0071ce', type: 'gift' },
+    { id: 'target', name: 'Target', icon: 'fa-solid fa-bullseye', color: '#cc0000', type: 'gift' },
+    { id: 'nike', name: 'Nike', icon: 'fa-solid fa-shoe-prints', color: '#111', type: 'gift' },
+    { id: 'bestBuy', name: 'Best Buy', icon: 'fa-solid fa-laptop', color: '#0046be', type: 'gift' },
+    { id: 'gamestop', name: 'GameStop', icon: 'fa-solid fa-gamepad', color: '#e4b100', type: 'gift' },
   ];
 
   return (
@@ -90,7 +98,7 @@ export default function Home() {
             <div className="mt-8 flex flex-wrap gap-4 justify-center animate-fade-up animation-delay-300">
               <Link
                 href="/auth/register"
-                className="group relative bg-orange text-white px-10 py-3.5 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-xl shadow-orange/30 hover:shadow-orange/50 flex items-center gap-2 overflow-hidden"
+                className="group relative bg-orange text-white px-8 py-3.5 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-xl shadow-orange/30 hover:shadow-orange/50 flex items-center gap-2 overflow-hidden"
               >
                 <span className="relative z-10 flex items-center gap-2">
                   <i className="fas fa-rocket"></i> Get Started
@@ -98,8 +106,14 @@ export default function Home() {
                 <span className="absolute inset-0 bg-gradient-to-r from-orange-400 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
               </Link>
               <Link
+                href="/auth/login"
+                className="border border-border text-text-primary px-8 py-3.5 rounded-full font-semibold hover:border-orange hover:text-orange transition-all duration-300 backdrop-blur-sm bg-white/5"
+              >
+                <i className="fa-regular fa-circle-user mr-2"></i>Log In
+              </Link>
+              <Link
                 href="/rates"
-                className="border border-border text-text-primary px-10 py-3.5 rounded-full font-semibold hover:border-orange hover:text-orange transition-all duration-300 backdrop-blur-sm bg-white/5"
+                className="border border-border text-text-primary px-8 py-3.5 rounded-full font-semibold hover:border-orange hover:text-orange transition-all duration-300 backdrop-blur-sm bg-white/5"
               >
                 <i className="fa-solid fa-chart-simple mr-2"></i>View Rates →
               </Link>
@@ -158,14 +172,14 @@ export default function Home() {
               title: 'Pay Bills',
               desc: 'Electricity, TV, Internet & more',
               link: '#',
-              cta: 'Coming Soon →'
+              cta: 'Pay Bills →'
             },
             {
               icon: 'fa-solid fa-mobile-screen',
               title: 'Buy Airtime',
               desc: 'MTN, Glo, Airtel, 9mobile & more',
               link: '#',
-              cta: 'Coming Soon →'
+              cta: 'Buy Airtime →'
             }
           ].map((service, idx) => (
             <div
@@ -186,6 +200,31 @@ export default function Home() {
               </Link>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ====== eSIM COMING SOON (Differentiator) ====== */}
+      <section className="container mx-auto px-4 py-12 border-t border-border">
+        <div className="glass rounded-2xl p-8 md:p-12 border border-border bg-gradient-to-br from-purple-900/20 to-orange-900/10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/10 rounded-full blur-2xl"></div>
+          <div className="absolute bottom-0 left-0 w-40 h-40 bg-orange-500/10 rounded-full blur-2xl"></div>
+          <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+            <div className="flex-1 text-center md:text-left">
+              <span className="inline-block bg-orange/20 text-orange text-xs font-bold px-3 py-1 rounded-full mb-3">🚀 Coming Soon</span>
+              <h2 className="text-2xl md:text-3xl font-bold">Global eSIM — Stay Connected Anywhere</h2>
+              <p className="text-text-muted text-sm mt-2 max-w-lg">
+                Get a digital SIM for 100+ countries. No roaming fees. Instant activation. 
+                <br className="hidden sm:block" />
+                <span className="text-orange font-semibold">Be the first to know when we launch.</span>
+              </p>
+              <button className="mt-4 bg-orange/10 hover:bg-orange/20 text-orange px-6 py-2.5 rounded-full text-sm font-semibold transition border border-orange/20">
+                <i className="fa-regular fa-bell mr-2"></i>Notify Me
+              </button>
+            </div>
+            <div className="flex-shrink-0 text-6xl md:text-7xl">
+              🌐
+            </div>
+          </div>
         </div>
       </section>
 
@@ -271,7 +310,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ====== WHAT WE ACCEPT (Updated with your cards + images) ====== */}
+      {/* ====== WHAT WE ACCEPT ====== */}
       <section
         ref={assets.ref}
         id="assets"
@@ -287,7 +326,6 @@ export default function Home() {
 
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
           {supportedAssets.map((asset, i) => {
-            // Try to load card image for gift cards
             const imagePath = `/images/cards/${asset.id}.png`;
             const isGift = asset.type === 'gift';
             return (
@@ -319,6 +357,11 @@ export default function Home() {
               </div>
             );
           })}
+        </div>
+        <div className="text-center mt-6">
+          <Link href="/dashboard/products" className="text-orange hover:underline text-sm font-semibold">
+            View All Supported Assets →
+          </Link>
         </div>
       </section>
 
