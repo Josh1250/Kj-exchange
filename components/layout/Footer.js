@@ -78,16 +78,16 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10">
           {/* Column 1: Brand */}
           <div className="space-y-4 lg:col-span-1">
+            {/* 👇 UPDATED LOGO SIZE — matches header */}
             <Link href="/" className="block group">
               <Image
                 src="/logo.png"
                 alt="KJ Exchange"
-                width={120}
-                height={120}
-                className="w-32 md:w-40 h-auto transition-transform group-hover:scale-105"
+                width={220}
+                height={220}
+                className="w-44 md:w-56 h-auto transition-transform group-hover:scale-105"
               />
             </Link>
-            {/* 👇 Company Description — tells visitors exactly what we do */}
             <p className="text-text-muted text-sm leading-relaxed max-w-xs">
               Nigeria's trusted platform for selling gift cards, crypto, and paying bills instantly. 
               Get paid in Naira, USD, or Cedis.
@@ -148,7 +148,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Column 3: Services — Bills & Airtime ACTIVE (no "Soon") */}
+          {/* Column 3: Services */}
           <div>
             <h4 className="text-text-secondary font-semibold text-sm uppercase tracking-wider mb-4">Our Services</h4>
             <ul className="space-y-2.5">
