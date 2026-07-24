@@ -75,9 +75,9 @@ export default function Footer() {
       </div>
 
       <div className="container mx-auto px-4 py-12 md:py-16">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10">
           {/* Column 1: Brand */}
-          <div className="space-y-4">
+          <div className="space-y-4 lg:col-span-1">
             <Link href="/" className="block group">
               <Image
                 src="/logo.png"
@@ -136,7 +136,7 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="#contact" className="text-text-muted hover:text-orange transition text-sm flex items-center gap-2 group">
+                <Link href="/contact" className="text-text-muted hover:text-orange transition text-sm flex items-center gap-2 group">
                   <span className="w-1 h-1 bg-orange rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
                   Contact
                 </Link>
@@ -155,7 +155,7 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard/sell-crypto" className="text-text-muted hover:text-orange transition text-sm flex items-center gap-2 group">
+                <Link href="/dashboard/sell" className="text-text-muted hover:text-orange transition text-sm flex items-center gap-2 group">
                   <span className="w-1 h-1 bg-orange rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
                   <i className="fa-brands fa-bitcoin text-orange w-4"></i> Crypto
                 </Link>
@@ -167,6 +167,10 @@ export default function Footer() {
               <li className="text-text-muted text-sm flex items-center gap-2 opacity-60">
                 <span className="w-1 h-1 bg-orange rounded-full opacity-0"></span>
                 <i className="fa-solid fa-mobile-screen w-4"></i> Buy Airtime <span className="text-[10px] text-orange ml-1">Soon</span>
+              </li>
+              <li className="text-text-muted text-sm flex items-center gap-2 opacity-60">
+                <span className="w-1 h-1 bg-orange rounded-full opacity-0"></span>
+                <i className="fa-solid fa-globe w-4"></i> eSIM <span className="text-[10px] text-orange ml-1">Soon</span>
               </li>
             </ul>
           </div>
@@ -195,7 +199,7 @@ export default function Footer() {
                 </span>
                 <span className="text-sm">support@kjexchange.com</span>
               </a>
-              <div className="flex gap-4 pt-2">
+              <div className="flex gap-4 pt-2 flex-wrap">
                 <a
                   href="https://instagram.com/kj_xchange"
                   target="_blank"
@@ -213,13 +217,39 @@ export default function Footer() {
                   <i className="fab fa-tiktok text-lg"></i>
                 </a>
                 <a
-                  href="https://wa.me/2348160678317"
+                  href="https://x.com/kj_xchange"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-10 h-10 rounded-full bg-bg-card border border-border flex items-center justify-center text-text-muted hover:text-orange hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
                 >
-                  <i className="fab fa-whatsapp text-lg"></i>
+                  <i className="fab fa-twitter text-lg"></i>
                 </a>
+                <a
+                  href="https://facebook.com/kj_xchange"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-bg-card border border-border flex items-center justify-center text-text-muted hover:text-orange hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <i className="fab fa-facebook-f text-lg"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 5: Mobile App Coming Soon */}
+          <div>
+            <h4 className="text-text-secondary font-semibold text-sm uppercase tracking-wider mb-4">Mobile App</h4>
+            <div className="bg-black/20 rounded-2xl p-5 border border-border/50 text-center">
+              <div className="text-4xl mb-2">📱</div>
+              <p className="text-text-muted text-sm font-medium">Coming Soon</p>
+              <p className="text-text-muted text-xs mt-1">Trade on the go with our mobile app.</p>
+              <div className="flex flex-col gap-2 mt-3">
+                <span className="border border-border rounded-lg px-3 py-1.5 text-xs text-text-muted flex items-center justify-center gap-2 opacity-60">
+                  <i className="fab fa-apple"></i> iOS (Soon)
+                </span>
+                <span className="border border-border rounded-lg px-3 py-1.5 text-xs text-text-muted flex items-center justify-center gap-2 opacity-60">
+                  <i className="fab fa-google-play"></i> Android (Soon)
+                </span>
               </div>
             </div>
           </div>
@@ -244,7 +274,7 @@ export default function Footer() {
           </div>
           <a
             href="#top"
-            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-orange transition border border-border hover:border-orange rounded-full px-4 py-1.5 hover:-translate-y-1 transition-all duration-300"
+            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-orange transition border border-border hover:border-orange rounded-full px-4 py-1.5 hover:-translate-y-1 hover:shadow-lg hover:shadow-orange/10 transition-all duration-300"
           >
             <i className="fas fa-chevron-up text-[10px]"></i>
             Back to Top
