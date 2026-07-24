@@ -11,7 +11,7 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [referralCodeInput, setReferralCodeInput] = useState(''); // Manual input
+  const [referralCodeInput, setReferralCodeInput] = useState('');
   const [referralCodeFromUrl, setReferralCodeFromUrl] = useState('');
   const [referrerName, setReferrerName] = useState('');
   const [error, setError] = useState('');
@@ -19,6 +19,7 @@ export default function Signup() {
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [appUrl, setAppUrl] = useState('');
 
   // Capture referral code from URL query
   useEffect(() => {
@@ -35,6 +36,10 @@ export default function Signup() {
         .then(({ data }) => {
           if (data) setReferrerName(data.full_name || 'a friend');
         });
+    }
+    // Set app URL on client side
+    if (typeof window !== 'undefined') {
+      setAppUrl(window.location.origin);
     }
   }, [router.query]);
 
@@ -56,7 +61,7 @@ export default function Signup() {
       return;
     }
 
-    const redirectTo = `${window.location.origin}/auth/verify-email`;
+    const redirectTo = `${appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://kj-exchange.vercel.app'}/auth/verify-email`;
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -75,10 +80,7 @@ export default function Signup() {
       return;
     }
 
-    // Determine which referral code to use (input field or URL)
     const finalReferralCode = referralCodeInput || referralCodeFromUrl;
-
-    // If signup successful, create referral record if referralCode exists
     if (data.user && finalReferralCode) {
       try {
         const { data: referrer, error: refError } = await supabase
@@ -96,9 +98,6 @@ export default function Signup() {
               referred_user_id: data.user.id,
               status: 'pending',
             });
-          console.log('✅ Referral recorded successfully!');
-        } else {
-          console.log('⚠️ Invalid referral code:', finalReferralCode);
         }
       } catch (refErr) {
         console.error('Referral creation failed:', refErr);
@@ -152,7 +151,7 @@ export default function Signup() {
               Start trading crypto & gift cards today
             </p>
 
-            {/* Referral Banner (when coming from URL) */}
+            {/* Referral Banner */}
             {referralCodeFromUrl && referrerName && (
               <div className="mt-4 p-3 bg-orange/10 border border-orange/20 rounded-xl text-center text-sm">
                 <i className="fa-solid fa-gift text-orange mr-1"></i>
