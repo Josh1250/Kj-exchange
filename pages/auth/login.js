@@ -11,19 +11,12 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showResend, setShowResend] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [resendSuccess, setResendSuccess] = useState(false);
   const router = useRouter();
-
-  // Check if user just verified their email
-  const { verified } = router.query;
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setShowResend(false);
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -31,48 +24,10 @@ export default function Login() {
     });
 
     if (error) {
-      // Check if the error is due to unverified email
-      if (error.message.includes('Email not confirmed')) {
-        setError('Please verify your email address first. Check your inbox for the confirmation link.');
-        setShowResend(true);
-      } else {
-        setError(error.message);
-      }
+      setError(error.message);
       setLoading(false);
     } else {
-      // Store session tokens in localStorage for admin bypass
-      const { data: { session, user } } = await supabase.auth.getSession();
-      if (session && user) {
-        localStorage.setItem('sb-access-token', session.access_token);
-        localStorage.setItem('sb-refresh-token', session.refresh_token);
-        localStorage.setItem('sb-user-email', user.email);
-      }
       router.push('/dashboard');
-    }
-  };
-
-  const handleResendVerification = async () => {
-    setResending(true);
-    setResendSuccess(false);
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/verify-email`,
-        },
-      });
-      if (error) {
-        setError('Failed to resend verification email. Please try again.');
-      } else {
-        setResendSuccess(true);
-        setShowResend(false);
-        setError('');
-      }
-    } catch (err) {
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setResending(false);
     }
   };
 
@@ -80,10 +35,11 @@ export default function Login() {
     <>
       <Head>
         <title>Login · KJ Exchange</title>
-        <meta name="description" content="Login to KJ Exchange and start trading crypto & gift cards instantly." />
+        <meta name="description" content="Log in to your KJ Exchange account and start trading crypto & gift cards." />
       </Head>
 
       <div className="min-h-screen flex items-center justify-center bg-bg-primary p-4 relative overflow-hidden">
+        {/* Animated background orbs */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"></div>
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/20 rounded-full blur-3xl animate-float-delayed"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl h-64 bg-purple-400/10 rounded-full blur-2xl animate-pulse-slow"></div>
@@ -98,22 +54,22 @@ export default function Login() {
           </Link>
 
           <div className="bg-bg-card/70 backdrop-blur-xl rounded-3xl border border-border/50 p-8 shadow-2xl shadow-purple/5">
-            <div className="flex justify-center mb-8">
-              <Image src="/logo.png" alt="KJ Exchange" width={60} height={60} className="w-16 h-auto" />
+            <div className="flex justify-center mb-6">
+              <Image
+                src="/logo.png"
+                alt="KJ Exchange"
+                width={60}
+                height={60}
+                className="w-16 h-auto"
+              />
             </div>
 
             <h1 className="text-2xl font-bold text-center">Welcome Back</h1>
-            <p className="text-text-muted text-center text-sm mt-1">Login to continue trading</p>
+            <p className="text-text-muted text-center text-sm mt-1">
+              Log in to your KJ Exchange account
+            </p>
 
-            {/* Success message after verification */}
-            {verified && (
-              <div className="mt-4 bg-green-400/10 border border-green-400/20 rounded-xl p-3 text-green-400 text-sm flex items-center gap-2">
-                <i className="fa-regular fa-circle-check"></i>
-                <span>✅ Email verified! You can now log in.</span>
-              </div>
-            )}
-
-            <form onSubmit={handleLogin} className="mt-8 space-y-5">
+            <form onSubmit={handleLogin} className="mt-8 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1.5">Email Address</label>
                 <div className="relative">
@@ -132,10 +88,7 @@ export default function Login() {
               </div>
 
               <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <label className="block text-sm font-medium text-text-secondary">Password</label>
-                  <Link href="/auth/forgot-password" className="text-xs text-orange hover:underline">Forgot Password?</Link>
-                </div>
+                <label className="block text-sm font-medium text-text-secondary mb-1.5">Password</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
                     <i className="fa-solid fa-lock"></i>
@@ -158,31 +111,10 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Error message with Resend button */}
               {error && (
-                <div className={`rounded-xl p-3 text-sm flex flex-col gap-2 ${
-                  showResend ? 'bg-yellow-400/10 border border-yellow-400/20 text-yellow-400' : 'bg-red-400/10 border border-red-400/20 text-red-400'
-                }`}>
-                  <div className="flex items-start gap-2">
-                    <i className={`fa-solid ${showResend ? 'fa-triangle-exclamation' : 'fa-circle-exclamation'} mt-0.5`}></i>
-                    <span>{error}</span>
-                  </div>
-                  {showResend && (
-                    <button
-                      type="button"
-                      onClick={handleResendVerification}
-                      disabled={resending || resendSuccess}
-                      className="mt-1 self-start bg-orange/20 hover:bg-orange/30 text-orange px-4 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50"
-                    >
-                      {resending ? (
-                        <><i className="fa-solid fa-spinner fa-spin mr-1"></i> Sending...</>
-                      ) : resendSuccess ? (
-                        <><i className="fa-regular fa-check-circle mr-1"></i> Sent! Check your email.</>
-                      ) : (
-                        <><i className="fa-regular fa-paper-plane mr-1"></i> Resend Verification Email</>
-                      )}
-                    </button>
-                  )}
+                <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-center gap-2">
+                  <i className="fa-solid fa-circle-exclamation"></i>
+                  <span>{error}</span>
                 </div>
               )}
 
@@ -194,33 +126,20 @@ export default function Login() {
                 {loading ? (
                   <><i className="fa-solid fa-spinner fa-spin"></i> Logging in...</>
                 ) : (
-                  <><i className="fa-solid fa-arrow-right-to-bracket"></i> Login</>
+                  <><i className="fa-solid fa-right-to-bracket"></i> Log In</>
                 )}
               </button>
             </form>
 
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-bg-card/70 px-4 text-text-muted">or continue with</span>
-              </div>
+            <div className="text-center mt-6 space-y-2">
+              <Link href="/auth/reset-password" className="text-sm text-orange hover:underline block">
+                Forgot password?
+              </Link>
+              <p className="text-text-muted text-sm">
+                Don't have an account?{' '}
+                <Link href="/auth/register" className="text-orange hover:underline font-medium">Sign Up</Link>
+              </p>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button className="flex items-center justify-center gap-2 bg-black/40 border border-border rounded-xl py-3 hover:bg-white/5 transition text-text-primary text-sm font-medium">
-                <i className="fab fa-google text-xl text-[#ea4335]"></i> Google
-              </button>
-              <button className="flex items-center justify-center gap-2 bg-black/40 border border-border rounded-xl py-3 hover:bg-white/5 transition text-text-primary text-sm font-medium">
-                <i className="fab fa-apple text-xl"></i> Apple
-              </button>
-            </div>
-
-            <p className="text-center text-text-muted text-sm mt-6">
-              Don't have an account?{' '}
-              <Link href="/auth/signup" className="text-orange hover:underline font-medium">Sign Up</Link>
-            </p>
           </div>
         </div>
       </div>
