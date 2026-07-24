@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Layout from '../components/layout/Layout';
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 
 // Custom hook using native IntersectionObserver
 function useInView(options) {
@@ -12,7 +13,7 @@ function useInView(options) {
       ([entry]) => {
         if (entry.isIntersecting) {
           setInView(true);
-          observer.disconnect(); // Only trigger once
+          observer.disconnect();
         }
       },
       { threshold: options?.threshold || 0.1 }
@@ -31,7 +32,6 @@ function useInView(options) {
 export default function Home() {
   const [openFaq, setOpenFaq] = useState(null);
 
-  // Each section gets its own observer
   const services = useInView({ threshold: 0.1 });
   const how = useInView({ threshold: 0.1 });
   const why = useInView({ threshold: 0.1 });
@@ -39,6 +39,24 @@ export default function Home() {
   const testimonials = useInView({ threshold: 0.1 });
   const faq = useInView({ threshold: 0.1 });
   const cta = useInView({ threshold: 0.1 });
+
+  // Your actual supported gift cards & crypto
+  const supportedAssets = [
+    // Crypto
+    { id: 'btc', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', type: 'crypto' },
+    { id: 'eth', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea', type: 'crypto' },
+    { id: 'usdt', name: 'Tether', icon: 'fa-solid fa-coins', color: '#26a17b', type: 'crypto' },
+    { id: 'sol', name: 'Solana', icon: 'fa-solid fa-bolt', color: '#9945FF', type: 'crypto' },
+    // Gift Cards
+    { id: 'apple', name: 'Apple', icon: 'fa-brands fa-apple', color: '#a2aaad', type: 'gift' },
+    { id: 'amazon', name: 'Amazon', icon: 'fa-brands fa-amazon', color: '#ff9900', type: 'gift' },
+    { id: 'googlePlay', name: 'Google Play', icon: 'fa-brands fa-google-play', color: '#34a853', type: 'gift' },
+    { id: 'steam', name: 'Steam', icon: 'fa-solid fa-gamepad', color: '#1b2838', type: 'gift' },
+    { id: 'sephora', name: 'Sephora', icon: 'fa-solid fa-spa', color: '#e74c3c', type: 'gift' },
+    { id: 'xbox', name: 'Xbox', icon: 'fa-brands fa-xbox', color: '#107C10', type: 'gift' },
+    { id: 'playstation', name: 'PlayStation', icon: 'fa-solid fa-gamepad', color: '#0070d1', type: 'gift' },
+    { id: 'razerGold', name: 'Razer Gold', icon: 'fa-solid fa-dragon', color: '#00ff00', type: 'gift' },
+  ];
 
   return (
     <Layout>
@@ -55,24 +73,23 @@ export default function Home() {
             </span>
 
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight animate-fade-up">
-              Buy &amp; Sell your{' '}
-              <span className="bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
-                Digital Assets
+              Sell Gift Cards &amp; Crypto{' '}
+              <span className="bg-gradient-to-r from-orange-400 to-orange-500 bg-clip-text text-transparent">
+                Instantly
               </span>
               <br />
-              with{' '}
-              <span className="bg-gradient-to-r from-orange-400 to-orange-500 bg-clip-text text-transparent">
-                Confidence
+              <span className="text-2xl sm:text-3xl md:text-4xl text-text-muted">
+                Paid in Naira, USD, or Cedis.
               </span>
             </h1>
 
-            <p className="text-text-muted text-lg md:text-xl mt-6 max-w-2xl mx-auto leading-relaxed animate-fade-up animation-delay-200">
-              Buy, sell, and swap crypto & gift cards with live rates, instant payouts, and zero hidden fees.
+            <p className="text-text-muted text-lg md:text-xl mt-4 max-w-2xl mx-auto leading-relaxed animate-fade-up animation-delay-200">
+              Sell gift cards and crypto at the best rates. Get paid instantly. Zero hidden fees.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-4 justify-center animate-fade-up animation-delay-300">
               <Link
-                href="/auth/signup"
+                href="/auth/register"
                 className="group relative bg-orange text-white px-10 py-3.5 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-xl shadow-orange/30 hover:shadow-orange/50 flex items-center gap-2 overflow-hidden"
               >
                 <span className="relative z-10 flex items-center gap-2">
@@ -117,7 +134,7 @@ export default function Home() {
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Services</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">Everything You Need</h2>
-          <p className="text-text-muted mt-2 max-w-2xl mx-auto">Buy, sell, and manage your assets all in one place</p>
+          <p className="text-text-muted mt-2 max-w-2xl mx-auto">Sell, manage, and get paid — all in one place</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -133,7 +150,7 @@ export default function Home() {
               icon: 'fa-brands fa-bitcoin',
               title: 'Crypto',
               desc: 'BTC, USDT, ETH, SOL & more',
-              link: '/dashboard/sell-crypto',
+              link: '/dashboard/sell',
               cta: 'Sell Crypto →'
             },
             {
@@ -245,7 +262,7 @@ export default function Home() {
             <div className="w-16 h-1 bg-orange mx-auto my-4 rounded-full"></div>
             <p className="text-text-muted text-sm">Join 500+ satisfied customers</p>
             <Link
-              href="/auth/signup"
+              href="/auth/register"
               className="inline-block bg-orange text-white px-8 py-3 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-lg shadow-orange/30 mt-6"
             >
               Get Started Now →
@@ -254,7 +271,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ====== SUPPORTED ASSETS ====== */}
+      {/* ====== WHAT WE ACCEPT (Updated with your cards + images) ====== */}
       <section
         ref={assets.ref}
         id="assets"
@@ -265,34 +282,43 @@ export default function Home() {
         <div className="text-center mb-14">
           <span className="text-orange text-sm font-semibold uppercase tracking-widest">Assets</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-2">What We Accept</h2>
-          <p className="text-text-muted mt-2">Over 50+ gift cards and crypto assets supported</p>
+          <p className="text-text-muted mt-2">Gift cards &amp; crypto — all with competitive rates</p>
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
-          {[
-            { icon: 'fa-brands fa-bitcoin', label: 'Bitcoin', sub: 'BTC', color: '#f7931a' },
-            { icon: 'fa-solid fa-coins', label: 'Tether', sub: 'USDT', color: '#26a17b' },
-            { icon: 'fa-brands fa-ethereum', label: 'Ethereum', sub: 'ETH', color: '#627eea' },
-            { icon: 'fa-solid fa-bolt', label: 'Solana', sub: 'SOL', color: '#9945FF' },
-            { icon: 'fa-brands fa-apple', label: 'Apple', sub: 'Gift Card', color: '#a2aaad' },
-            { icon: 'fa-brands fa-amazon', label: 'Amazon', sub: 'Gift Card', color: '#ff9900' },
-            { icon: 'fa-brands fa-google-play', label: 'Google Play', sub: 'Gift Card', color: '#34a853' },
-            { icon: 'fa-solid fa-gamepad', label: 'Steam', sub: 'Gift Card', color: '#1b2838' },
-            { icon: 'fa-solid fa-spa', label: 'Sephora', sub: 'Gift Card', color: '#e74c3c' },
-            { icon: 'fa-solid fa-film', label: 'Netflix', sub: 'Gift Card', color: '#e50914' },
-            { icon: 'fa-solid fa-dragon', label: 'Razer Gold', sub: 'Gift Card', color: '#00ff00' },
-            { icon: 'fa-solid fa-plus-circle', label: '50+ More', sub: 'Contact us', color: 'text-orange' },
-          ].map((asset, i) => (
-            <div
-              key={i}
-              className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10"
-              style={{ transitionDelay: `${i * 50}ms` }}
-            >
-              <i className={`${asset.icon} text-3xl block mb-1`} style={{ color: asset.color }}></i>
-              <p className="font-semibold text-sm">{asset.label}</p>
-              <p className="text-text-muted text-xs">{asset.sub}</p>
-            </div>
-          ))}
+          {supportedAssets.map((asset, i) => {
+            // Try to load card image for gift cards
+            const imagePath = `/images/cards/${asset.id}.png`;
+            const isGift = asset.type === 'gift';
+            return (
+              <div
+                key={i}
+                className="bg-bg-card/60 backdrop-blur-sm rounded-xl p-4 text-center border border-border hover:border-orange transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange/10"
+                style={{ transitionDelay: `${i * 50}ms` }}
+              >
+                {isGift ? (
+                  <div className="relative w-12 h-12 mx-auto mb-2">
+                    <img
+                      src={imagePath}
+                      alt={asset.name}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        const parent = e.target.parentElement;
+                        if (parent) {
+                          parent.innerHTML = `<i class="${asset.icon}" style="color: ${asset.color}; font-size: 28px;"></i>`;
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <i className={`${asset.icon} text-3xl block mb-1`} style={{ color: asset.color }}></i>
+                )}
+                <p className="font-semibold text-sm">{asset.name}</p>
+                <p className="text-text-muted text-xs">{isGift ? 'Gift Card' : 'Crypto'}</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -427,7 +453,7 @@ export default function Home() {
             <span className="text-green-400 font-bold">Transparent pricing</span> — No hidden charges.
           </p>
           <Link
-            href="/auth/signup"
+            href="/auth/register"
             className="inline-block bg-orange text-white px-10 py-3.5 rounded-full font-bold hover:bg-orange-600 transition-all duration-300 shadow-xl shadow-orange/30 hover:shadow-orange/50 mt-6 btn-pulse"
           >
             Sign Up for Free →
@@ -439,14 +465,13 @@ export default function Home() {
       {/* ====== TAGLINE TICKER ====== */}
       <div className="border-t border-border bg-bg-card/40 backdrop-blur-sm py-3 overflow-hidden">
         <div className="flex animate-marquee whitespace-nowrap gap-12 text-sm font-medium tracking-wide text-text-secondary">
-          <span>✦ Your Ultimate Exchange Hub ✦</span>
-          <span>✦ Your Ultimate Exchange Hub ✦</span>
-          <span>✦ Your Ultimate Exchange Hub ✦</span>
-          <span>✦ Your Ultimate Exchange Hub ✦</span>
+          <span>✦ KJ Exchange — Sell Gift Cards & Crypto Instantly ✦</span>
+          <span>✦ KJ Exchange — Sell Gift Cards & Crypto Instantly ✦</span>
+          <span>✦ KJ Exchange — Sell Gift Cards & Crypto Instantly ✦</span>
+          <span>✦ KJ Exchange — Sell Gift Cards & Crypto Instantly ✦</span>
         </div>
       </div>
 
-      {/* ====== GLOBAL STYLES ====== */}
       <style jsx global>{`
         .light-mode {
           --bg-primary: #FAF8FC;
@@ -523,7 +548,6 @@ export default function Home() {
 
         .animate-fade-up, .animate-fade-down { animation-fill-mode: both; }
 
-        /* These are handled via inline classes for scroll sections */
         .opacity-0 { opacity: 0; }
         .translate-y-10 { transform: translateY(10px); }
         .opacity-100 { opacity: 1; }
