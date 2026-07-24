@@ -16,6 +16,14 @@ export default function Referral() {
   const [pointsEarned, setPointsEarned] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [appUrl, setAppUrl] = useState('');
+
+  useEffect(() => {
+    // Set the app URL only on the client
+    if (typeof window !== 'undefined') {
+      setAppUrl(window.location.origin);
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -26,7 +34,6 @@ export default function Referral() {
 
   const fetchReferralCode = async () => {
     try {
-      // Check if user already has a referral code
       const { data, error } = await supabase
         .from('users')
         .select('referral_code')
@@ -38,12 +45,10 @@ export default function Referral() {
       if (data?.referral_code) {
         setReferralCode(data.referral_code);
       } else {
-        // Generate a clean referral code
         const name = user.email?.split('@')[0] || 'user';
         const random = Math.floor(1000 + Math.random() * 9000);
         const code = `${name.substring(0, 4).toUpperCase()}${random}`;
 
-        // Save to user
         await supabase
           .from('users')
           .update({ referral_code: code })
@@ -58,7 +63,6 @@ export default function Referral() {
 
   const fetchReferralData = async () => {
     try {
-      // Get referrals
       const { data: referrals } = await supabase
         .from('referrals')
         .select('*')
@@ -80,24 +84,23 @@ export default function Referral() {
     }
   };
 
-  const copyToClipboard = () => {
-    const shareText = `🎉 Join KJ Exchange and get started! Use my referral code: ${referralCode} \n\nTrade Smart. Trade Secure. \n\nSign up at: ${window.location.origin}/auth/register?ref=${referralCode}`;
-    navigator.clipboard.writeText(shareText);
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
   };
 
   const shareViaWhatsApp = () => {
-    const message = `🎉 Join KJ Exchange and get started! Use my referral code: ${referralCode} \n\nTrade Smart. Trade Secure. \n\nSign up at: ${window.location.origin}/auth/register?ref=${referralCode}`;
+    const message = `🎉 Join KJ Exchange and get started! Use my referral code: ${referralCode} \n\nTrade Smart. Trade Secure. \n\nSign up at: ${appUrl}/auth/register?ref=${referralCode}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const shareViaTwitter = () => {
-    const message = `🎉 Join KJ Exchange and get started! Use my referral code: ${referralCode} \n\nTrade Smart. Trade Secure. \n\nSign up at: ${window.location.origin}/auth/register?ref=${referralCode}`;
+    const message = `🎉 Join KJ Exchange and get started! Use my referral code: ${referralCode} \n\nTrade Smart. Trade Secure. \n\nSign up at: ${appUrl}/auth/register?ref=${referralCode}`;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-  const referralLink = `${window.location.origin}/auth/register?ref=${referralCode}`;
+  const referralLink = `${appUrl}/auth/register?ref=${referralCode}`;
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   if (!user) {
@@ -152,7 +155,7 @@ export default function Referral() {
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
                 <button
-                  onClick={copyToClipboard}
+                  onClick={() => copyToClipboard(`🎉 Join KJ Exchange and get started! Use my referral code: ${referralCode} \n\nTrade Smart. Trade Secure. \n\nSign up at: ${referralLink}`)}
                   className="flex-1 sm:flex-none glass hover:border-orange transition px-4 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 border border-border"
                 >
                   <i className={`fa-regular ${copied ? 'fa-check text-green-400' : 'fa-copy'}`}></i>
@@ -174,22 +177,22 @@ export default function Referral() {
             </div>
 
             {/* Referral Link */}
-            <div className="mt-4">
-              <p className="text-text-muted text-sm mb-1">Your Referral Link</p>
-              <div className="bg-black/40 border border-border rounded-xl px-4 py-3 flex items-center justify-between">
-                <code className="text-sm text-text-muted truncate flex-1">{referralLink}</code>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(referralLink);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 3000);
-                  }}
-                  className="ml-2 text-orange hover:text-orange-light transition text-sm font-semibold whitespace-nowrap"
-                >
-                  {copied ? '✅ Copied' : 'Copy Link'}
-                </button>
+            {appUrl && (
+              <div className="mt-4">
+                <p className="text-text-muted text-sm mb-1">Your Referral Link</p>
+                <div className="bg-black/40 border border-border rounded-xl px-4 py-3 flex items-center justify-between">
+                  <code className="text-sm text-text-muted truncate flex-1">{referralLink}</code>
+                  <button
+                    onClick={() => {
+                      copyToClipboard(referralLink);
+                    }}
+                    className="ml-2 text-orange hover:text-orange-light transition text-sm font-semibold whitespace-nowrap"
+                  >
+                    {copied ? '✅ Copied' : 'Copy Link'}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Stats */}
