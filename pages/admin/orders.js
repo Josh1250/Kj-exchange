@@ -15,8 +15,9 @@ export default function AdminOrders() {
   const [processing, setProcessing] = useState(null);
   const [typeFilter, setTypeFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState(null); // For detail modal
 
-  // Auth check with localStorage bypass
+  // Auth check
   useEffect(() => {
     const checkAuth = async () => {
       let { data: { session } } = await supabase.auth.getSession();
@@ -98,22 +99,20 @@ export default function AdminOrders() {
     if (processing) return;
     setProcessing(orderId);
     try {
-      // 1. Update order
+      const order = orders.find(o => o.id === orderId);
       const { error: orderError } = await supabase
         .from('orders')
         .update({ status: 'verified' })
         .eq('id', orderId);
       if (orderError) throw new Error(orderError.message);
 
-      // 2. Get asset name and user details
-      const order = orders.find(o => o.id === orderId);
       const { data: userData } = await supabase
         .from('users')
         .select('email, full_name')
         .eq('id', userId)
         .single();
 
-      // 3. Wallet update
+      // Wallet update
       let { data: wallet } = await supabase
         .from('wallets')
         .select('balance')
@@ -126,7 +125,7 @@ export default function AdminOrders() {
         await supabase.from('wallets').insert({ user_id: userId, balance: newBalance });
       }
 
-      // 4. Transaction record
+      // Transaction
       await supabase.from('transactions').insert({
         user_id: userId,
         type: 'trade_credit',
@@ -135,16 +134,14 @@ export default function AdminOrders() {
         metadata: { order_id: orderId },
       });
 
-      // 5. 🆕 Add Gift Points (1 point per ₦60)
+      // Gift Points
       const giftPoints = Math.floor(valueNgn / 60);
       if (giftPoints > 0) {
-        // Check if points already added (avoid duplicates)
         const { data: existingPoints } = await supabase
           .from('gift_point_transactions')
           .select('id')
           .eq('metadata->order_id', orderId)
           .maybeSingle();
-
         if (!existingPoints) {
           await supabase
             .from('gift_point_transactions')
@@ -157,13 +154,13 @@ export default function AdminOrders() {
         }
       }
 
-      // 6. Notification
+      // Notification
       await supabase.from('notifications').insert({
         user_id: userId,
         message: `✅ Your order #${orderId.slice(0,8)} has been verified! ₦${valueNgn.toLocaleString()} credited. 🎁 ${giftPoints} gift points earned.`,
       });
 
-      // 7. Send Email
+      // Email
       if (userData?.email) {
         try {
           await fetch('/api/email/send', {
@@ -236,7 +233,6 @@ export default function AdminOrders() {
   if (loading) return <div>Loading admin panel...</div>;
   if (!isAdmin) return null;
 
-  const filteredOrders = orders;
   const statusColors = {
     pending: 'bg-yellow-400/20 text-yellow-400 border-yellow-400/20',
     verifying: 'bg-blue-400/20 text-blue-400 border-blue-400/20',
@@ -306,52 +302,100 @@ export default function AdminOrders() {
                 <i className="fa-solid fa-spinner fa-spin text-2xl text-orange"></i>
                 <span className="ml-3 text-text-muted">Loading orders...</span>
               </div>
-            ) : filteredOrders.length === 0 ? (
+            ) : orders.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-text-muted">No orders found.</p>
               </div>
             ) : (
-              <div className="divide-y divide-border">
-                {filteredOrders.map((order) => (
-                  <div key={order.id} className="p-4 hover:bg-white/5 transition">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-bold">{order.asset}</p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${statusColors[order.status] || 'bg-gray-400/20 text-gray-400'}`}>
-                            {order.status.toUpperCase()}
-                          </span>
-                          <span className="text-xs text-text-muted">{order.type}</span>
-                        </div>
-                        <p className="text-text-muted text-sm">User: {order.users?.email || order.users?.full_name || 'Unknown'}</p>
-                        <p className="text-text-muted text-sm">Amount: {order.amount}</p>
-                        <p className="text-text-muted text-sm">Value: ₦{order.value_ngn.toLocaleString()}</p>
-                        <p className="text-text-muted text-xs">{new Date(order.created_at).toLocaleString()}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {order.status === 'pending' && (
-                          <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-black/30">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs text-text-muted uppercase">User</th>
+                      <th className="px-4 py-3 text-left text-xs text-text-muted uppercase">Asset</th>
+                      <th className="px-4 py-3 text-left text-xs text-text-muted uppercase">Amount</th>
+                      <th className="px-4 py-3 text-left text-xs text-text-muted uppercase">Value (NGN)</th>
+                      <th className="px-4 py-3 text-left text-xs text-text-muted uppercase">Status</th>
+                      <th className="px-4 py-3 text-left text-xs text-text-muted uppercase">Image</th>
+                      <th className="px-4 py-3 text-left text-xs text-text-muted uppercase">Details</th>
+                      <th className="px-4 py-3 text-left text-xs text-text-muted uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map((order) => {
+                      const details = order.details || {};
+                      const frontImg = details.front_image || details.file_image || null;
+                      const backImg = details.back_image || null;
+
+                      return (
+                        <tr key={order.id} className="border-t border-border hover:bg-white/5 transition">
+                          <td className="px-4 py-3 text-sm">
+                            {order.users?.full_name || order.users?.email || 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm">{order.asset}</td>
+                          <td className="px-4 py-3 text-sm">${order.amount?.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm font-bold text-green-400">₦{order.value_ngn?.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-0.5 rounded-full text-xs border ${statusColors[order.status] || 'bg-gray-400/20 text-gray-400'}`}>
+                              {order.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {frontImg ? (
+                              <img
+                                src={frontImg}
+                                alt="Card front"
+                                className="w-12 h-12 object-cover rounded cursor-pointer"
+                                onClick={() => window.open(frontImg, '_blank')}
+                              />
+                            ) : (
+                              <span className="text-text-muted text-xs">No image</span>
+                            )}
+                            {backImg && (
+                              <img
+                                src={backImg}
+                                alt="Card back"
+                                className="w-12 h-12 object-cover rounded cursor-pointer mt-1"
+                                onClick={() => window.open(backImg, '_blank')}
+                              />
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
                             <button
-                              onClick={() => handleVerify(order.id, order.user_id, order.value_ngn)}
-                              disabled={processing === order.id}
-                              className="bg-green-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-600 transition disabled:opacity-50 flex items-center gap-1"
+                              onClick={() => setSelectedOrder(order)}
+                              className="text-orange hover:underline text-xs font-medium"
                             >
-                              {processing === order.id ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-regular fa-circle-check"></i>} Verify
+                              View
                             </button>
-                            <button
-                              onClick={() => handleReject(order.id, order.user_id)}
-                              disabled={processing === order.id}
-                              className="bg-red-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-red-600 transition disabled:opacity-50 flex items-center gap-1"
-                            >
-                              <i className="fa-regular fa-circle-xmark"></i> Reject
-                            </button>
-                          </>
-                        )}
-                        <span className="text-xs text-text-muted">ID: {order.id.slice(0,8)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                          </td>
+                          <td className="px-4 py-3">
+                            {order.status === 'pending' && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleVerify(order.id, order.user_id, order.value_ngn)}
+                                  disabled={processing === order.id}
+                                  className="bg-green-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-green-600 transition disabled:opacity-50"
+                                >
+                                  {processing === order.id ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Verify'}
+                                </button>
+                                <button
+                                  onClick={() => handleReject(order.id, order.user_id)}
+                                  disabled={processing === order.id}
+                                  className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-red-600 transition disabled:opacity-50"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+                            {order.status !== 'pending' && (
+                              <span className="text-text-muted text-xs">Processed</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -387,6 +431,166 @@ export default function AdminOrders() {
           </div>
         </div>
       </AdminLayout>
+
+      {/* ===== Order Detail Modal ===== */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 border border-border">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Order Details</h2>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="text-text-muted hover:text-text-primary text-xl"
+              >
+                <i className="fa-regular fa-xmark"></i>
+              </button>
+            </div>
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-text-muted text-xs uppercase">User</p>
+                  <p className="font-medium">{selectedOrder.users?.full_name || selectedOrder.users?.email || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs uppercase">Order ID</p>
+                  <p className="font-medium font-mono">{selectedOrder.id}</p>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs uppercase">Asset</p>
+                  <p className="font-medium">{selectedOrder.asset}</p>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs uppercase">Type</p>
+                  <p className="font-medium capitalize">{selectedOrder.type}</p>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs uppercase">Amount</p>
+                  <p className="font-medium">${selectedOrder.amount}</p>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs uppercase">Rate</p>
+                  <p className="font-medium">₦{selectedOrder.rate}/$</p>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs uppercase">Payout (NGN)</p>
+                  <p className="font-medium text-green-400">₦{selectedOrder.value_ngn?.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs uppercase">Status</p>
+                  <span className={`px-2 py-0.5 rounded-full text-xs border ${statusColors[selectedOrder.status] || 'bg-gray-400/20 text-gray-400'}`}>
+                    {selectedOrder.status}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs uppercase">Created</p>
+                  <p className="font-medium">{new Date(selectedOrder.created_at).toLocaleString()}</p>
+                </div>
+                {selectedOrder.completed_at && (
+                  <div>
+                    <p className="text-text-muted text-xs uppercase">Completed</p>
+                    <p className="font-medium">{new Date(selectedOrder.completed_at).toLocaleString()}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Details from metadata */}
+              {selectedOrder.details && (
+                <div className="border-t border-border pt-4 mt-4">
+                  <h3 className="font-semibold mb-2">Card Details</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    {selectedOrder.details.card_type && (
+                      <div>
+                        <p className="text-text-muted text-xs uppercase">Card Type</p>
+                        <p className="font-medium">{selectedOrder.details.card_type}</p>
+                      </div>
+                    )}
+                    {selectedOrder.details.subcategory && (
+                      <div>
+                        <p className="text-text-muted text-xs uppercase">Subcategory</p>
+                        <p className="font-medium">{selectedOrder.details.subcategory}</p>
+                      </div>
+                    )}
+                    {selectedOrder.details.country && (
+                      <div>
+                        <p className="text-text-muted text-xs uppercase">Country</p>
+                        <p className="font-medium">{selectedOrder.details.country}</p>
+                      </div>
+                    )}
+                    {selectedOrder.details.card_code && (
+                      <div>
+                        <p className="text-text-muted text-xs uppercase">Card Code</p>
+                        <p className="font-mono text-sm">{selectedOrder.details.card_code}</p>
+                      </div>
+                    )}
+                    {selectedOrder.details.pin && (
+                      <div>
+                        <p className="text-text-muted text-xs uppercase">PIN</p>
+                        <p className="font-mono text-sm">{selectedOrder.details.pin}</p>
+                      </div>
+                    )}
+                    {selectedOrder.details.comment && (
+                      <div className="col-span-2">
+                        <p className="text-text-muted text-xs uppercase">Comment</p>
+                        <p className="font-medium">{selectedOrder.details.comment}</p>
+                      </div>
+                    )}
+                    {selectedOrder.details.fee_usd > 0 && (
+                      <div>
+                        <p className="text-text-muted text-xs uppercase">Fee (USD)</p>
+                        <p className="font-medium text-red-400">${selectedOrder.details.fee_usd}</p>
+                      </div>
+                    )}
+                    {selectedOrder.details.chime_name && (
+                      <div>
+                        <p className="text-text-muted text-xs uppercase">Chime Name</p>
+                        <p className="font-medium">{selectedOrder.details.chime_name}</p>
+                      </div>
+                    )}
+                    {selectedOrder.details.moneypak_code && (
+                      <div>
+                        <p className="text-text-muted text-xs uppercase">MoneyPak Code</p>
+                        <p className="font-mono text-sm">{selectedOrder.details.moneypak_code}</p>
+                      </div>
+                    )}
+                  </div>
+                  {/* Images */}
+                  {(selectedOrder.details.front_image || selectedOrder.details.back_image || selectedOrder.details.file_image) && (
+                    <div className="mt-4 border-t border-border pt-4">
+                      <h4 className="font-semibold mb-2">Images</h4>
+                      <div className="flex flex-wrap gap-4">
+                        {selectedOrder.details.front_image && (
+                          <div>
+                            <p className="text-text-muted text-xs">Front</p>
+                            <img src={selectedOrder.details.front_image} alt="Front" className="max-w-[200px] max-h-[150px] object-contain rounded border border-border" />
+                          </div>
+                        )}
+                        {selectedOrder.details.back_image && (
+                          <div>
+                            <p className="text-text-muted text-xs">Back</p>
+                            <img src={selectedOrder.details.back_image} alt="Back" className="max-w-[200px] max-h-[150px] object-contain rounded border border-border" />
+                          </div>
+                        )}
+                        {selectedOrder.details.file_image && (
+                          <div>
+                            <p className="text-text-muted text-xs">Upload</p>
+                            <img src={selectedOrder.details.file_image} alt="Card" className="max-w-[200px] max-h-[150px] object-contain rounded border border-border" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setSelectedOrder(null)}
+              className="mt-6 w-full bg-orange text-white font-bold py-2 rounded-xl hover:bg-orange-600 transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
