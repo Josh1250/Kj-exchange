@@ -19,6 +19,7 @@ export default function AdminDashboard() {
     pendingWithdrawals: 0,
     pendingCryptoDeposits: 0,
     pendingKYC: 0,
+    pendingGiftCards: 0, // 🆕 New stat
     recentOrders: [],
   });
   const [fetching, setFetching] = useState(false);
@@ -83,6 +84,13 @@ export default function AdminDashboard() {
       const pendingOrders = orders?.filter(o => o.status === 'pending').length || 0;
       const totalVolume = orders?.reduce((sum, o) => sum + (o.value_ngn || 0), 0) || 0;
 
+      // 🆕 Pending gift card orders
+      const { count: pendingGiftCards } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('type', 'gift_card')
+        .eq('status', 'pending');
+
       // Pending fiat top-ups (transactions type deposit, status pending)
       const { count: pendingTopups } = await supabase
         .from('transactions')
@@ -97,13 +105,13 @@ export default function AdminDashboard() {
         .eq('type', 'withdrawal')
         .eq('status', 'pending');
 
-      // NEW: Pending crypto deposits from crypto_orders
+      // Pending crypto deposits from crypto_orders
       const { count: pendingCryptoDeposits } = await supabase
         .from('crypto_orders')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending_confirmation');
 
-      // NEW: Pending KYC
+      // Pending KYC
       const { count: pendingKYC } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
@@ -125,6 +133,7 @@ export default function AdminDashboard() {
         pendingWithdrawals: pendingWithdrawals || 0,
         pendingCryptoDeposits: pendingCryptoDeposits || 0,
         pendingKYC: pendingKYC || 0,
+        pendingGiftCards: pendingGiftCards || 0,
         recentOrders: recentOrders || [],
       });
     } catch (err) {
@@ -162,7 +171,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* Stats Cards */}
+          {/* Stats Cards - 8 cards (4x2 grid) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-bg-card rounded-xl p-4 border border-border">
               <div className="flex items-center justify-between">
@@ -213,13 +222,21 @@ export default function AdminDashboard() {
               </div>
               <p className="text-2xl font-bold mt-2 text-orange-400">{stats.pendingKYC}</p>
             </div>
+            {/* 🆕 Pending Gift Cards */}
+            <div className="bg-bg-card rounded-xl p-4 border border-border">
+              <div className="flex items-center justify-between">
+                <p className="text-text-muted text-sm">Pending Gift Cards</p>
+                <i className="fa-solid fa-gift text-2xl text-pink-400"></i>
+              </div>
+              <p className="text-2xl font-bold mt-2 text-pink-400">{stats.pendingGiftCards}</p>
+            </div>
           </div>
 
           {/* Charts Section */}
           <AdminCharts />
 
           {/* Quick Action Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Link
               href="/admin/kyc-review"
               className="glass rounded-2xl p-4 border border-border hover:border-orange transition group"
@@ -245,6 +262,20 @@ export default function AdminDashboard() {
                 <div>
                   <p className="font-semibold">Pending Crypto Deposits</p>
                   <p className="text-text-muted text-sm">{stats.pendingCryptoDeposits} pending</p>
+                </div>
+              </div>
+            </Link>
+            <Link
+              href="/admin/orders?filter=pending&type=gift_card"
+              className="glass rounded-2xl p-4 border border-border hover:border-orange transition group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
+                  <i className="fa-solid fa-gift"></i>
+                </div>
+                <div>
+                  <p className="font-semibold">Pending Gift Cards</p>
+                  <p className="text-text-muted text-sm">{stats.pendingGiftCards} pending</p>
                 </div>
               </div>
             </Link>
