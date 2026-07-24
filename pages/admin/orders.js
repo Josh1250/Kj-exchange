@@ -135,13 +135,35 @@ export default function AdminOrders() {
         metadata: { order_id: orderId },
       });
 
-      // 5. Notification
+      // 5. 🆕 Add Gift Points (1 point per ₦60)
+      const giftPoints = Math.floor(valueNgn / 60);
+      if (giftPoints > 0) {
+        // Check if points already added (avoid duplicates)
+        const { data: existingPoints } = await supabase
+          .from('gift_point_transactions')
+          .select('id')
+          .eq('metadata->order_id', orderId)
+          .maybeSingle();
+
+        if (!existingPoints) {
+          await supabase
+            .from('gift_point_transactions')
+            .insert({
+              user_id: userId,
+              amount: giftPoints,
+              type: 'gift_card_sale',
+              metadata: { order_id: orderId },
+            });
+        }
+      }
+
+      // 6. Notification
       await supabase.from('notifications').insert({
         user_id: userId,
-        message: `✅ Your order #${orderId.slice(0,8)} has been verified! ₦${valueNgn.toLocaleString()} credited.`,
+        message: `✅ Your order #${orderId.slice(0,8)} has been verified! ₦${valueNgn.toLocaleString()} credited. 🎁 ${giftPoints} gift points earned.`,
       });
 
-      // 6. Send Email
+      // 7. Send Email
       if (userData?.email) {
         try {
           await fetch('/api/email/send', {
@@ -179,7 +201,7 @@ export default function AdminOrders() {
         .eq('id', userId)
         .single();
 
-      await supabase.from('orders').update({ status: 'failed' }).eq('id', orderId);
+      await supabase.from('orders').update({ status: 'rejected' }).eq('id', orderId);
       await supabase.from('notifications').insert({
         user_id: userId,
         message: `❌ Your order #${orderId.slice(0,8)} has been rejected. Contact support.`,
@@ -221,6 +243,7 @@ export default function AdminOrders() {
     verified: 'bg-green-400/20 text-green-400 border-green-400/20',
     completed: 'bg-green-500/20 text-green-500 border-green-500/20',
     failed: 'bg-red-400/20 text-red-400 border-red-400/20',
+    rejected: 'bg-red-400/20 text-red-400 border-red-400/20',
   };
 
   return (
@@ -250,6 +273,7 @@ export default function AdminOrders() {
               <option value="verified">Verified</option>
               <option value="completed">Completed</option>
               <option value="failed">Failed</option>
+              <option value="rejected">Rejected</option>
             </select>
             <select
               value={typeFilter}
