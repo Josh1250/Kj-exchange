@@ -77,14 +77,14 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-bg-secondary/80 backdrop-blur-lg border-b border-border">
       <div className="container mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
-        {/* Logo */}
+        {/* Logo - NOW BIGGER */}
         <Link href="/" className="shrink-0 group">
           <Image
             src="/logo.png"
             alt="KJ Exchange"
-            width={100}
-            height={100}
-            className="w-20 md:w-24 h-auto transition-transform group-hover:scale-105"
+            width={140}
+            height={140}
+            className="w-32 md:w-40 h-auto transition-transform group-hover:scale-105"
             priority
           />
         </Link>
@@ -105,7 +105,7 @@ export default function Header() {
             </Link>
           ))}
 
-          {/* Services Dropdown (only on public pages) */}
+          {/* Services Dropdown */}
           {!user && !loading && (
             <div className="relative" ref={dropdownRef}>
               <button
@@ -185,12 +185,12 @@ export default function Header() {
             <>
               <Link
                 href="/auth/login"
-                className="text-text-muted hover:text-text-primary transition text-sm font-medium hidden sm:inline whitespace-nowrap"
+                className="px-4 py-2 text-sm font-semibold text-text-primary hover:text-orange transition border border-border hover:border-orange rounded-full hidden sm:inline-block"
               >
-                Login
+                Log In
               </Link>
               <Link
-                href="/auth/signup"
+                href="/auth/register"
                 className="bg-orange text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-orange-600 transition shadow-lg shadow-orange/30 whitespace-nowrap"
               >
                 Sign Up Free
@@ -215,8 +215,8 @@ export default function Header() {
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-bg-secondary border-t border-border py-4 px-2 rounded-b-2xl shadow-2xl">
-          <nav className="flex flex-col gap-1">
+        <div className="md:hidden bg-bg-card/95 backdrop-blur-xl border-t border-border rounded-b-2xl shadow-2xl overflow-hidden transition-all duration-300">
+          <nav className="flex flex-col gap-1 p-4">
             {nav.map((item) => (
               <Link
                 key={item.name}
@@ -252,7 +252,7 @@ export default function Header() {
                 <Link href="/auth/login" className="px-4 py-3 rounded-xl hover:bg-orange/10 hover:text-orange transition text-text-primary" onClick={closeMobileMenu}>
                   Login
                 </Link>
-                <Link href="/auth/signup" className="px-4 py-3 rounded-xl bg-orange text-white font-bold hover:bg-orange-600 transition text-center" onClick={closeMobileMenu}>
+                <Link href="/auth/register" className="px-4 py-3 rounded-xl bg-orange text-white font-bold hover:bg-orange-600 transition text-center" onClick={closeMobileMenu}>
                   Sign Up Free
                 </Link>
               </>
