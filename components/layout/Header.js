@@ -54,7 +54,6 @@ export default function Header() {
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
   const isActive = (path) => router.pathname === path || router.pathname.startsWith(path + '/');
 
-  // Public nav items
   const navItems = [
     { name: 'Home', href: '/' },
     { name: 'About', href: '/about' },
@@ -64,7 +63,6 @@ export default function Header() {
     { name: 'Contact', href: '/contact' },
   ];
 
-  // Dashboard nav items (shown when logged in)
   const dashboardNav = [
     { name: 'Dashboard', href: '/dashboard' },
     { name: 'Products', href: '/dashboard/products' },
@@ -77,14 +75,14 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-bg-secondary/80 backdrop-blur-lg border-b border-border">
       <div className="container mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
-        {/* Logo - NOW BIGGER */}
+        {/* Logo - BIGGER */}
         <Link href="/" className="shrink-0 group">
           <Image
             src="/logo.png"
             alt="KJ Exchange"
-            width={140}
-            height={140}
-            className="w-32 md:w-40 h-auto transition-transform group-hover:scale-105"
+            width={220}
+            height={220}
+            className="w-44 md:w-56 h-auto transition-transform group-hover:scale-105"
             priority
           />
         </Link>
@@ -105,7 +103,6 @@ export default function Header() {
             </Link>
           ))}
 
-          {/* Services Dropdown */}
           {!user && !loading && (
             <div className="relative" ref={dropdownRef}>
               <button
@@ -148,7 +145,6 @@ export default function Header() {
 
         {/* Right Side */}
         <div className="flex items-center gap-3">
-          {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
             className="p-2 rounded-full hover:bg-white/10 transition"
@@ -198,7 +194,6 @@ export default function Header() {
             </>
           )}
 
-          {/* Mobile Hamburger */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="md:hidden p-2 rounded-lg hover:bg-white/10 transition focus:outline-none"
