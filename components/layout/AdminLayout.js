@@ -8,27 +8,27 @@ export default function AdminLayout({ children }) {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [pendingCounts, setPendingCounts] = useState({
+    crypto: 0,
     giftCards: 0,
-    deposits: 0,
     kyc: 0,
   });
 
-  // Optional: Fetch pending counts for badges
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        // Pending gift cards
+        // Pending crypto orders (from orders table)
+        const { count: crypto } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('type', 'crypto')
+          .eq('status', 'pending');
+
+        // Pending gift card orders
         const { count: giftCards } = await supabase
           .from('orders')
           .select('*', { count: 'exact', head: true })
           .eq('type', 'gift_card')
           .eq('status', 'pending');
-
-        // Pending crypto deposits
-        const { count: deposits } = await supabase
-          .from('crypto_orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending_confirmation');
 
         // Pending KYC
         const { count: kyc } = await supabase
@@ -37,8 +37,8 @@ export default function AdminLayout({ children }) {
           .eq('kyc_status', 'Pending');
 
         setPendingCounts({
+          crypto: crypto || 0,
           giftCards: giftCards || 0,
-          deposits: deposits || 0,
           kyc: kyc || 0,
         });
       } catch (err) {
@@ -61,7 +61,6 @@ export default function AdminLayout({ children }) {
     return router.pathname.startsWith(path);
   };
 
-  // Navigation with sections
   const navSections = [
     {
       label: 'Overview',
@@ -79,21 +78,21 @@ export default function AdminLayout({ children }) {
     {
       label: 'Payments & Approvals',
       items: [
-        { 
-          name: 'KYC Review', 
-          href: '/admin/kyc-review', 
+        {
+          name: 'KYC Review',
+          href: '/admin/kyc-review',
           icon: 'fa-solid fa-shield-check',
           badge: pendingCounts.kyc,
         },
-        { 
-          name: 'Pending Deposits', 
-          href: '/admin/pending-deposits', 
+        {
+          name: 'Pending Deposits',
+          href: '/admin/orders?filter=pending&type=crypto',
           icon: 'fa-solid fa-coins',
-          badge: pendingCounts.deposits,
+          badge: pendingCounts.crypto,
         },
-        { 
-          name: 'Pending Gift Cards', 
-          href: '/admin/orders?filter=pending&type=gift_card', 
+        {
+          name: 'Pending Gift Cards',
+          href: '/admin/orders?filter=pending&type=gift_card',
           icon: 'fa-solid fa-gift',
           badge: pendingCounts.giftCards,
         },
@@ -113,7 +112,6 @@ export default function AdminLayout({ children }) {
     <div className="flex h-screen bg-bg-primary overflow-hidden">
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-bg-secondary border-r border-border transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="flex flex-col h-full p-4">
-          {/* Logo */}
           <div className="mb-6">
             <Link href="/admin" className="block">
               <Image src="/logo.png" alt="KJ Exchange" width={120} height={120} className="w-20 h-auto" />
@@ -121,7 +119,6 @@ export default function AdminLayout({ children }) {
             <p className="text-xs text-orange font-semibold mt-1">Admin Panel</p>
           </div>
 
-          {/* Navigation */}
           <nav className="flex-1 overflow-y-auto space-y-4">
             {navSections.map((section) => (
               <div key={section.label}>
@@ -160,7 +157,6 @@ export default function AdminLayout({ children }) {
             ))}
           </nav>
 
-          {/* Footer */}
           <div className="border-t border-border pt-4 space-y-2">
             <Link
               href="/dashboard"
