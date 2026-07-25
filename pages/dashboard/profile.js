@@ -153,7 +153,7 @@ export default function Profile() {
     setSaving(false);
   };
 
-  // ===== KYC Submit via Modal =====
+  // ===== KYC Submit (Fixed: does NOT set kyc_tier) =====
   const handleKycSubmit = async () => {
     if (!kycOption || !kycNumber || kycNumber.length !== 11) {
       setMessage('Please enter a valid 11-digit number.');
@@ -168,7 +168,7 @@ export default function Profile() {
     try {
       const updateData = {
         kyc_status: 'Pending',
-        kyc_tier: 2,
+        // ✅ DO NOT set kyc_tier here — stays at 1 until admin approves
       };
       if (kycOption === 'bvn') updateData.bvn = kycNumber;
       if (kycOption === 'nin') updateData.nin = kycNumber;
@@ -181,7 +181,7 @@ export default function Profile() {
       if (error) throw error;
 
       setKycStatus('Pending');
-      setKycTier(2);
+      // kycTier stays at 1 (do NOT change to 2)
       setMessage('KYC submitted for review!');
       setMessageType('success');
       setShowKycModal(false);
