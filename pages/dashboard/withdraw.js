@@ -9,7 +9,6 @@ import Link from 'next/link';
 export default function Withdraw() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const { currency = 'NGN' } = router.query;
 
   // ===== State =====
   const [balance, setBalance] = useState(0);
@@ -36,22 +35,22 @@ export default function Withdraw() {
     if (user) {
       fetchData();
     }
-  }, [user, loading, router, currency]);
+  }, [user, loading, router]);
 
   // ===== Recalculate fee whenever amount changes =====
   useEffect(() => {
     calculateFees();
-  }, [amount, currency]);
+  }, [amount]);
 
   const fetchData = async () => {
     try {
-      const field = currency === 'USD' ? 'usd_balance' : currency === 'GHS' ? 'ghs_balance' : 'balance';
+      // Only NGN balance (users convert USD → NGN first)
       const { data: wallet } = await supabase
         .from('wallets')
-        .select(field)
+        .select('balance')
         .eq('user_id', user.id)
         .maybeSingle();
-      setBalance(wallet?.[field] || 0);
+      setBalance(wallet?.balance || 0);
 
       const { data: profile } = await supabase
         .from('users')
@@ -83,7 +82,7 @@ export default function Withdraw() {
     }
   };
 
-  // ===== Calculate Fees =====
+  // ===== Calculate Fees (NEW) =====
   const calculateFees = () => {
     const amt = parseFloat(amount) || 0;
     if (amt <= 0) {
@@ -93,24 +92,15 @@ export default function Withdraw() {
       return;
     }
 
-    let calculatedFee = 0;
-    let calculatedVat = 0;
+    // Fee: ₦50 for small, ₦100 for large (≥ ₦50,000)
+    const feeAmount = amt >= 50000 ? 100 : 50;
+    // VAT: 7.5% on withdrawal amount
+    const vatAmount = amt * 0.075;
+    const total = amt + feeAmount + vatAmount;
 
-    // Only apply fees for NGN withdrawals (can extend to other currencies later)
-    if (currency === 'NGN') {
-      const flatFee = 50; // ₦50 flat fee
-      const percentageFee = 0.005; // 0.5%
-      const vatRate = 0.075; // 7.5% VAT on fee
-
-      calculatedFee = flatFee + (amt * percentageFee);
-      calculatedFee = Math.round(calculatedFee * 100) / 100; // Round to 2 decimal places
-      calculatedVat = calculatedFee * vatRate;
-      calculatedVat = Math.round(calculatedVat * 100) / 100;
-    }
-
-    setFee(calculatedFee);
-    setVat(calculatedVat);
-    setTotalDeduction(amt + calculatedFee + calculatedVat);
+    setFee(feeAmount);
+    setVat(vatAmount);
+    setTotalDeduction(total);
   };
 
   // ===== Get Selected Bank =====
@@ -133,7 +123,7 @@ export default function Withdraw() {
     }
 
     if (totalDeduction > balance) {
-      setError(`Insufficient balance. Total deduction: ${currencySymbol}${totalDeduction.toFixed(2)}`);
+      setError(`Insufficient balance. Total deduction: ₦${totalDeduction.toFixed(2)}`);
       setSubmitting(false);
       return;
     }
@@ -145,18 +135,20 @@ export default function Withdraw() {
       return;
     }
 
+    // KYC Check: Withdrawals above ₦50,000 require KYC Level 2
     if (kycLevel < 2 && amt > 50000) {
       setError('KYC Level 2 required for withdrawals above ₦50,000. Complete KYC in your profile.');
       setSubmitting(false);
       return;
     }
 
+    // Auto withdrawal if KYC Level 2, but status stays 'pending'
     const isAuto = kycLevel >= 2;
-    const status = isAuto ? 'processing' : 'pending';
+    const status = 'pending'; // Always pending initially
     const withdrawalType = isAuto ? 'auto' : 'manual';
 
     try {
-      // 1. Create transaction with fee and VAT
+      // 1. Create transaction
       const { data: txData, error: txError } = await supabase
         .from('transactions')
         .insert({
@@ -166,7 +158,7 @@ export default function Withdraw() {
           fee: fee,
           vat: vat,
           status: status,
-          currency: currency,
+          currency: 'NGN',
           metadata: {
             bank_name: selectedBank.bank_name,
             account_number: selectedBank.account_number,
@@ -180,18 +172,17 @@ export default function Withdraw() {
 
       if (txError) throw new Error(txError.message);
 
-      // 2. Deduct total (amount + fee + VAT) from wallet
-      const field = currency === 'USD' ? 'usd_balance' : currency === 'GHS' ? 'ghs_balance' : 'balance';
+      // 2. Deduct total from wallet
       const { data: wallet } = await supabase
         .from('wallets')
-        .select(field)
+        .select('balance')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      const newBalance = (wallet?.[field] || 0) - totalDeduction;
+      const newBalance = (wallet?.balance || 0) - totalDeduction;
       await supabase
         .from('wallets')
-        .update({ [field]: newBalance })
+        .update({ balance: newBalance })
         .eq('user_id', user.id);
 
       // 3. If auto withdrawal – trigger Flutterwave transfer
@@ -201,8 +192,8 @@ export default function Withdraw() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              amount: amt, // Send net amount (fees already deducted from wallet)
-              currency: currency,
+              amount: amt,
+              currency: 'NGN',
               bank_code: selectedBank.bank_code,
               account_number: selectedBank.account_number,
               account_name: selectedBank.account_name,
@@ -213,6 +204,7 @@ export default function Withdraw() {
           const transferData = await transferResponse.json();
 
           if (transferData.status === 'success') {
+            // Update to 'completed' on success
             await supabase
               .from('transactions')
               .update({
@@ -221,13 +213,13 @@ export default function Withdraw() {
               })
               .eq('id', txData.id);
 
-            setSuccess(`✅ Withdrawal of ${currency} ${amt.toLocaleString()} processed instantly! (Fee: ${currencySymbol}${fee.toFixed(2)}, VAT: ${currencySymbol}${vat.toFixed(2)})`);
+            setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} processed instantly! (Fee: ₦${fee.toFixed(2)}, VAT: ₦${vat.toFixed(2)})`);
 
             await supabase
               .from('notifications')
               .insert({
                 user_id: user.id,
-                message: `💸 Instant withdrawal of ${currency} ${amt.toLocaleString()} sent to your bank. Fee: ${currencySymbol}${fee.toFixed(2)}, VAT: ${currencySymbol}${vat.toFixed(2)}`,
+                message: `💸 Instant withdrawal of ₦${amt.toLocaleString()} sent to your bank. Fee: ₦${fee.toFixed(2)}, VAT: ₦${vat.toFixed(2)}`,
               });
           } else {
             setSuccess(`⚠️ Withdrawal recorded but bank transfer failed. Our team will review it.`);
@@ -237,13 +229,14 @@ export default function Withdraw() {
           setSuccess(`⚠️ Withdrawal recorded but bank transfer is pending. Our team will process it shortly.`);
         }
       } else {
-        setSuccess(`✅ Withdrawal of ${currency} ${amt.toLocaleString()} initiated for review. (Fee: ${currencySymbol}${fee.toFixed(2)}, VAT: ${currencySymbol}${vat.toFixed(2)})`);
+        // Manual withdrawal — stays 'pending'
+        setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} initiated for review. (Fee: ₦${fee.toFixed(2)}, VAT: ₦${vat.toFixed(2)})`);
 
         await supabase
           .from('notifications')
           .insert({
             user_id: user.id,
-            message: `💸 Withdrawal of ${currency} ${amt.toLocaleString()} submitted for review. Fee: ${currencySymbol}${fee.toFixed(2)}, VAT: ${currencySymbol}${vat.toFixed(2)}`,
+            message: `💸 Withdrawal of ₦${amt.toLocaleString()} submitted for review. Fee: ₦${fee.toFixed(2)}, VAT: ₦${vat.toFixed(2)}`,
           });
       }
 
@@ -282,7 +275,7 @@ export default function Withdraw() {
   if (loading) return <div>Loading...</div>;
   if (!user) return null;
 
-  const currencySymbol = { NGN: '₦', USD: '$', GHS: '₵' }[currency] || '₦';
+  const currencySymbol = '₦';
 
   return (
     <>
@@ -295,10 +288,10 @@ export default function Withdraw() {
             </Link>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <i className="fa-solid fa-arrow-down text-orange"></i>
-              Withdraw {currency}
+              Withdraw Naira
             </h1>
             <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-orange/10 text-orange border border-orange/20">
-              {currency}
+              NGN
             </span>
           </div>
 
@@ -360,7 +353,7 @@ export default function Withdraw() {
                       <span>{currencySymbol}{fee.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-text-muted">VAT (7.5%)</span>
+                      <span className="text-text-muted">VAT (7.5% on amount)</span>
                       <span>{currencySymbol}{vat.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
@@ -487,31 +480,34 @@ export default function Withdraw() {
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
                         tx.status === 'completed' ? 'bg-green-400/10 text-green-400' :
+                        tx.status === 'pending' ? 'bg-yellow-400/10 text-yellow-400' :
                         tx.status === 'processing' ? 'bg-blue-400/10 text-blue-400' :
-                        'bg-yellow-400/10 text-yellow-400'
+                        'bg-red-400/10 text-red-400'
                       }`}>
                         <i className={`fa-solid ${
                           tx.status === 'completed' ? 'fa-circle-check' :
+                          tx.status === 'pending' ? 'fa-clock' :
                           tx.status === 'processing' ? 'fa-spinner fa-spin' :
-                          'fa-clock'
+                          'fa-circle-xmark'
                         }`}></i>
                       </div>
                       <div>
                         <p className="font-medium text-sm">Withdrawal</p>
                         <p className="text-text-muted text-xs">
                           {new Date(tx.created_at).toLocaleDateString()} • {tx.currency}
-                          {tx.fee > 0 && ` • Fee: ${currencySymbol}${tx.fee.toFixed(2)}`}
+                          {tx.fee > 0 && ` • Fee: ₦${tx.fee.toFixed(2)}`}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-red-400">
-                        -{currencySymbol}{Math.abs(tx.amount).toLocaleString()}
+                        -₦{Math.abs(tx.amount).toLocaleString()}
                       </p>
                       <span className={`text-xs capitalize ${
                         tx.status === 'completed' ? 'text-green-400' :
+                        tx.status === 'pending' ? 'text-yellow-400' :
                         tx.status === 'processing' ? 'text-blue-400' :
-                        'text-yellow-400'
+                        'text-red-400'
                       }`}>
                         {tx.status}
                       </span>
