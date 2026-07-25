@@ -14,10 +14,16 @@ export default function Profile() {
   const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
   const [kycLevel, setKycLevel] = useState(1);
+  const [kycTier, setKycTier] = useState(1);
   const [kycStatus, setKycStatus] = useState('Not Submitted');
   const [bvn, setBvn] = useState('');
   const [nin, setNin] = useState('');
   const [idFile, setIdFile] = useState(null);
+
+  // ===== KYC Modal =====
+  const [showKycModal, setShowKycModal] = useState(false);
+  const [kycOption, setKycOption] = useState(''); // 'bvn' or 'nin'
+  const [kycNumber, setKycNumber] = useState('');
 
   // ===== My Banks =====
   const [banks, setBanks] = useState([]);
@@ -49,7 +55,7 @@ export default function Profile() {
     try {
       const { data } = await supabase
         .from('users')
-        .select('full_name, username, phone, kyc_level, kyc_status, bvn, nin')
+        .select('full_name, username, phone, kyc_level, kyc_tier, kyc_status, bvn, nin')
         .eq('id', user.id)
         .single();
       if (data) {
@@ -57,6 +63,7 @@ export default function Profile() {
         setUsername(data.username || '');
         setPhone(data.phone || '');
         setKycLevel(data.kyc_level || 1);
+        setKycTier(data.kyc_tier || 1);
         setKycStatus(data.kyc_status || 'Not Submitted');
         setBvn(data.bvn || '');
         setNin(data.nin || '');
@@ -146,28 +153,10 @@ export default function Profile() {
     setSaving(false);
   };
 
-  // ===== KYC Submit =====
-  const handleKycSubmit = async (e) => {
-    e.preventDefault();
-
-    // Validate: either BVN or NIN must be provided
-    if (!bvn && !nin) {
-      setMessage('Please enter either BVN or NIN.');
-      setMessageType('error');
-      return;
-    }
-    if (bvn && bvn.length !== 11) {
-      setMessage('BVN must be 11 digits.');
-      setMessageType('error');
-      return;
-    }
-    if (nin && nin.length !== 11) {
-      setMessage('NIN must be 11 digits.');
-      setMessageType('error');
-      return;
-    }
-    if (!idFile) {
-      setMessage('Please upload a valid ID document.');
+  // ===== KYC Submit via Modal =====
+  const handleKycSubmit = async () => {
+    if (!kycOption || !kycNumber || kycNumber.length !== 11) {
+      setMessage('Please enter a valid 11-digit number.');
       setMessageType('error');
       return;
     }
@@ -177,42 +166,35 @@ export default function Profile() {
     setMessageType('');
 
     try {
-      // 1. Upload file to Supabase Storage
-      const fileExt = idFile.name.split('.').pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('kyc-documents')
-        .upload(fileName, idFile);
+      const updateData = {
+        kyc_status: 'Pending',
+        kyc_tier: 2,
+      };
+      if (kycOption === 'bvn') updateData.bvn = kycNumber;
+      if (kycOption === 'nin') updateData.nin = kycNumber;
 
-      if (uploadError) throw uploadError;
-
-      // 2. Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('kyc-documents')
-        .getPublicUrl(fileName);
-
-      // 3. Update user profile with BVN, NIN, and document URL
       const { error } = await supabase
         .from('users')
-        .update({
-          bvn: bvn || null,
-          nin: nin || null,
-          kyc_status: 'Pending',
-          kyc_document_url: publicUrl,
-        })
+        .update(updateData)
         .eq('id', user.id);
 
       if (error) throw error;
 
       setKycStatus('Pending');
-      setMessage('KYC submitted! Our team will review it shortly.');
+      setKycTier(2);
+      setMessage('KYC submitted for review!');
       setMessageType('success');
+      setShowKycModal(false);
+      setKycOption('');
+      setKycNumber('');
+      fetchProfile();
     } catch (err) {
       setMessage('Error submitting KYC. Please try again.');
       setMessageType('error');
       console.error(err);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   // ===== Add Bank =====
@@ -362,7 +344,7 @@ export default function Profile() {
                 </p>
                 <p className="text-xs text-orange flex items-center gap-1">
                   <i className="fa-regular fa-shield-check"></i>
-                  KYC Level: {kycLevel} — {kycStatus}
+                  KYC Tier: {kycTier} — {kycStatus}
                 </p>
               </div>
             </div>
@@ -508,78 +490,169 @@ export default function Profile() {
             )}
           </div>
 
-          {/* ===== KYC Section ===== */}
+          {/* ===== KYC Section (Premium Dtunes Style) ===== */}
           <div className="glass rounded-2xl p-6 border border-border">
             <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
               <i className="fa-solid fa-shield-check text-orange"></i>
               KYC Verification
             </h2>
-            <p className="text-text-muted text-sm mb-4">
-              Level 2 required for withdrawals above ₦50,000 and instant withdrawals.
-            </p>
 
-            <form onSubmit={handleKycSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">BVN (11 digits)</label>
-                <input
-                  type="text"
-                  value={bvn}
-                  onChange={(e) => setBvn(e.target.value)}
-                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
-                  placeholder="Enter your BVN"
-                  maxLength="11"
-                  pattern="[0-9]{11}"
-                />
+            {/* Tier Display */}
+            <div className="flex gap-3 mb-4">
+              {[1, 2, 3].map((tier) => (
+                <div
+                  key={tier}
+                  className={`flex-1 text-center p-3 rounded-xl border ${
+                    kycTier >= tier
+                      ? 'border-green-400 bg-green-400/10 text-green-400'
+                      : 'border-border bg-black/20 text-text-muted'
+                  }`}
+                >
+                  <p className="font-bold text-sm">Tier {tier}</p>
+                  {kycTier >= tier && <i className="fa-regular fa-circle-check text-xs"></i>}
+                </div>
+              ))}
+            </div>
+
+            {/* Tier Benefits */}
+            <div className="bg-black/20 rounded-xl p-4 border border-border mb-4">
+              <h3 className="font-semibold text-sm mb-2">Benefits</h3>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Daily Cash Limit</span>
+                  <span className="font-bold">
+                    {kycTier === 1 && '₦3,000,000'}
+                    {kycTier === 2 && '₦15,000,000'}
+                    {kycTier >= 3 && '₦50,000,000'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Per Transaction</span>
+                  <span className="font-bold">
+                    {kycTier === 1 && '₦500,000'}
+                    {kycTier === 2 && '₦1,000,000'}
+                    {kycTier >= 3 && '₦2,000,000'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Deposit & Sell Crypto</span>
+                  <span className="text-green-400">✅ Unlimited</span>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">NIN (11 digits)</label>
-                <input
-                  type="text"
-                  value={nin}
-                  onChange={(e) => setNin(e.target.value)}
-                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
-                  placeholder="Enter your NIN"
-                  maxLength="11"
-                  pattern="[0-9]{11}"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Upload ID (Passport, Driver's License, or NIN Slip)</label>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => setIdFile(e.target.files[0])}
-                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
-                />
-                <p className="text-xs text-text-muted mt-1">Supported formats: JPG, PNG, PDF (max 5MB)</p>
-              </div>
-              <button
-                type="submit"
-                disabled={saving || kycStatus === 'Pending' || kycStatus === 'Approved'}
-                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
-              >
-                {saving ? (
-                  <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</>
-                ) : (
-                  <><i className="fa-solid fa-upload"></i> Submit KYC</>
-                )}
-              </button>
-              {kycStatus === 'Pending' && (
-                <p className="text-yellow-400 text-sm flex items-center gap-2">
-                  <i className="fa-regular fa-clock"></i> Your KYC is pending review.
-                </p>
+            </div>
+
+            {/* Current Tier Status */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-text-muted">
+                Your current tier is <span className="font-bold text-text-primary">{kycTier}</span>
+              </p>
+              {kycTier >= 2 ? (
+                <span className="text-green-400 text-sm font-semibold">✅ Verified</span>
+              ) : (
+                <button
+                  onClick={() => setShowKycModal(true)}
+                  className="bg-orange text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-orange-600 transition"
+                >
+                  Get started
+                </button>
               )}
-              {kycStatus === 'Approved' && (
-                <p className="text-green-400 text-sm flex items-center gap-2">
-                  <i className="fa-regular fa-circle-check"></i> Your KYC is approved! You can now withdraw larger amounts instantly.
-                </p>
-              )}
-            </form>
+            </div>
+
+            {/* KYC Status Messages */}
+            {kycStatus === 'Pending' && (
+              <p className="text-yellow-400 text-sm flex items-center gap-2 mt-3">
+                <i className="fa-regular fa-clock"></i> Your KYC is pending review.
+              </p>
+            )}
+            {kycStatus === 'Approved' && kycTier >= 2 && (
+              <p className="text-green-400 text-sm flex items-center gap-2 mt-3">
+                <i className="fa-regular fa-circle-check"></i> KYC verified! You can now withdraw larger amounts instantly.
+              </p>
+            )}
           </div>
         </div>
       </DashboardLayout>
 
-      {/* ===== Add Bank Modal ===== */}
+      {/* ===== KYC Modal ===== */}
+      {showKycModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">KYC Verification</h2>
+              <button
+                onClick={() => setShowKycModal(false)}
+                className="text-text-muted hover:text-text-primary transition text-xl"
+              >
+                <i className="fa-regular fa-xmark"></i>
+              </button>
+            </div>
+
+            <p className="text-text-muted text-sm mb-4">
+              Select an option below. Your data is encrypted and managed with strict confidentiality.
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => setKycOption('bvn')}
+                className={`w-full p-4 rounded-xl border text-left transition ${
+                  kycOption === 'bvn'
+                    ? 'border-orange bg-orange/10'
+                    : 'border-border bg-black/20 hover:border-orange/50'
+                }`}
+              >
+                <p className="font-semibold">BVN</p>
+                <p className="text-text-muted text-xs">Bank Verification Number</p>
+              </button>
+              <button
+                onClick={() => setKycOption('nin')}
+                className={`w-full p-4 rounded-xl border text-left transition ${
+                  kycOption === 'nin'
+                    ? 'border-orange bg-orange/10'
+                    : 'border-border bg-black/20 hover:border-orange/50'
+                }`}
+              >
+                <p className="font-semibold">NIN</p>
+                <p className="text-text-muted text-xs">National Identification Number</p>
+              </button>
+            </div>
+
+            {kycOption && (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Enter {kycOption.toUpperCase()}
+                  </label>
+                  <input
+                    type="text"
+                    value={kycNumber}
+                    onChange={(e) => setKycNumber(e.target.value)}
+                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
+                    placeholder={`${kycOption.toUpperCase()} number (11 digits)`}
+                    maxLength="11"
+                    pattern="[0-9]{11}"
+                  />
+                  <p className="text-text-muted text-xs mt-1">
+                    Your {kycOption.toUpperCase()} is safely encrypted and only used to verify your identity.
+                  </p>
+                </div>
+                <button
+                  onClick={handleKycSubmit}
+                  disabled={saving}
+                  className="w-full bg-orange text-white font-bold py-3 rounded-xl hover:bg-orange-600 transition shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
+                >
+                  {saving ? <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</> : 'Proceed'}
+                </button>
+              </div>
+            )}
+
+            <p className="text-text-muted text-xs mt-4 text-center">
+              You consent to identity verification using your {kycOption ? kycOption.toUpperCase() : 'selected option'}, by clicking proceed.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Add Bank Modal (unchanged) ===== */}
       {showAddBankModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
@@ -597,7 +670,6 @@ export default function Profile() {
             </div>
 
             <form onSubmit={handleAddBank} className="space-y-4">
-              {/* Bank Search */}
               <div className="relative">
                 <label className="block text-sm font-medium text-text-secondary mb-1">Select Bank</label>
                 <div className="relative">
@@ -652,7 +724,6 @@ export default function Profile() {
                 )}
               </div>
 
-              {/* Account Number */}
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">Account Number</label>
                 <div className="relative">
@@ -672,17 +743,12 @@ export default function Profile() {
                       disabled={fetchingAccount}
                       className="absolute right-3 top-1/2 -translate-y-1/2 bg-orange/10 hover:bg-orange/20 text-orange px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50"
                     >
-                      {fetchingAccount ? (
-                        <i className="fa-solid fa-spinner fa-spin"></i>
-                      ) : (
-                        'Fetch Name'
-                      )}
+                      {fetchingAccount ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Fetch Name'}
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Account Name */}
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">Account Name</label>
                 <input
@@ -708,11 +774,7 @@ export default function Profile() {
                   disabled={saving}
                   className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
                 >
-                  {saving ? (
-                    <><i className="fa-solid fa-spinner fa-spin"></i> Adding...</>
-                  ) : (
-                    <><i className="fa-solid fa-plus"></i> Add Bank</>
-                  )}
+                  {saving ? <><i className="fa-solid fa-spinner fa-spin"></i> Adding...</> : <><i className="fa-solid fa-plus"></i> Add Bank</>}
                 </button>
                 <button
                   type="button"
