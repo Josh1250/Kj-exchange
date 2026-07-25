@@ -10,13 +10,13 @@ export default function Wallet() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  const [balances, setBalances] = useState({ ngn: 0, usd: 0, ghs: 0, gift_points: 0 });
+  const [balances, setBalances] = useState({ ngn: 0, usd: 0, gift_points: 0 });
   const [transactions, setTransactions] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hideBalance, setHideBalance] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('NGN');
-  const [exchangeRates, setExchangeRates] = useState({ USD: 1500, GHS: 120 });
+  const [exchangeRates, setExchangeRates] = useState({ USD: 1500 });
 
   // Top-Up Modal
   const [showTopUpModal, setShowTopUpModal] = useState(false);
@@ -86,7 +86,7 @@ export default function Wallet() {
     try {
       const { data: wallet } = await supabase
         .from('wallets')
-        .select('balance, usd_balance, ghs_balance, gift_points')
+        .select('balance, usd_balance, gift_points')
         .eq('user_id', user.id)
         .single();
 
@@ -94,7 +94,6 @@ export default function Wallet() {
         setBalances({
           ngn: wallet.balance || 0,
           usd: wallet.usd_balance || 0,
-          ghs: wallet.ghs_balance || 0,
           gift_points: wallet.gift_points || 0,
         });
       }
@@ -124,12 +123,11 @@ export default function Wallet() {
       if (data.rates) {
         setExchangeRates({
           USD: data.rates.USD || 1500,
-          GHS: data.rates.GHS || 120,
         });
       }
     } catch (error) {
       console.error('Error fetching exchange rates:', error);
-      setExchangeRates({ USD: 1500, GHS: 120 });
+      setExchangeRates({ USD: 1500 });
     }
   };
 
@@ -182,18 +180,15 @@ export default function Wallet() {
 
   // ===== Get Converted Balance =====
   const getConvertedBalance = () => {
-    const totalBalance = balances.ngn;
     switch (selectedCurrency) {
-      case 'USD': return totalBalance / exchangeRates.USD;
-      case 'GHS': return totalBalance / exchangeRates.GHS;
-      default: return totalBalance;
+      case 'USD': return balances.usd;
+      default: return balances.ngn;
     }
   };
 
   const getCurrencySymbol = () => {
     switch (selectedCurrency) {
       case 'USD': return '$';
-      case 'GHS': return '₵';
       default: return '₦';
     }
   };
@@ -254,7 +249,7 @@ export default function Wallet() {
                   Available Balance
                 </p>
                 <div className="flex bg-black/30 rounded-full p-1 border border-border/50">
-                  {['NGN', 'USD', 'GHS'].map((currency) => (
+                  {['NGN', 'USD'].map((currency) => (
                     <button
                       key={currency}
                       onClick={() => setSelectedCurrency(currency)}
@@ -285,19 +280,13 @@ export default function Wallet() {
                       <span>≈ ${(balances.ngn / exchangeRates.USD).toFixed(2)}</span>
                     </>
                   )}
-                  {selectedCurrency !== 'GHS' && (
-                    <>
-                      <span>•</span>
-                      <span>≈ ₵{(balances.ngn / exchangeRates.GHS).toFixed(2)}</span>
-                    </>
-                  )}
                 </div>
               )}
 
               {/* Action Buttons */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
                 <Link
-                  href={`/dashboard/withdraw?currency=${selectedCurrency}`}
+                  href="/dashboard/withdraw"
                   className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
                 >
                   <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
@@ -315,7 +304,7 @@ export default function Wallet() {
                   <p className="text-sm font-semibold mt-2">Fund Wallet</p>
                 </button>
                 <Link
-                  href={`/dashboard/convert?currency=${selectedCurrency}`}
+                  href="/dashboard/convert"
                   className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
                 >
                   <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
@@ -336,7 +325,7 @@ export default function Wallet() {
             </div>
           </div>
 
-          {/* Gift Points Banner (fixed to match dashboard) */}
+          {/* Gift Points Banner */}
           <div className="glass rounded-2xl p-4 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg flex-shrink-0">
@@ -370,7 +359,7 @@ export default function Wallet() {
             </Link>
           </div>
 
-          {/* Transaction History (unchanged, but note filters) */}
+          {/* Transaction History */}
           <div className="glass rounded-2xl p-6 border border-border">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
@@ -438,7 +427,7 @@ export default function Wallet() {
         </div>
       </DashboardLayout>
 
-      {/* Top-Up Modal (unchanged) */}
+      {/* Top-Up Modal */}
       {showTopUpModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border">
@@ -489,7 +478,6 @@ export default function Wallet() {
                 >
                   <option value="NGN">Naira (₦)</option>
                   <option value="USD">USD ($)</option>
-                  <option value="GHS">Cedis (₵)</option>
                 </select>
               </div>
               {topUpError && (
