@@ -297,7 +297,7 @@ export default function Wallet() {
               {/* Action Buttons */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
                 <Link
-                  href="/dashboard/withdraw"
+                  href={`/dashboard/withdraw?currency=${selectedCurrency}`}
                   className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
                 >
                   <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
@@ -315,7 +315,7 @@ export default function Wallet() {
                   <p className="text-sm font-semibold mt-2">Fund Wallet</p>
                 </button>
                 <Link
-                  href="/dashboard/convert"
+                  href={`/dashboard/convert?currency=${selectedCurrency}`}
                   className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
                 >
                   <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
@@ -336,7 +336,7 @@ export default function Wallet() {
             </div>
           </div>
 
-          {/* Gift Points Banner */}
+          {/* Gift Points Banner (fixed to match dashboard) */}
           <div className="glass rounded-2xl p-4 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg flex-shrink-0">
@@ -352,13 +352,13 @@ export default function Wallet() {
                 <div className="w-full bg-black/30 rounded-full h-2 mt-1">
                   <div
                     className="bg-gradient-to-r from-orange to-purple-500 h-2 rounded-full transition-all"
-                    style={{ width: `${Math.min((balances.gift_points / 1000) * 100, 100)}%` }}
+                    style={{ width: `${Math.min((balances.gift_points / 10000) * 100, 100)}%` }}
                   ></div>
                 </div>
                 <p className="text-text-muted text-xs mt-0.5">
-                  {balances.gift_points >= 1000
-                    ? '🎉 Reward unlocked!'
-                    : `${1000 - balances.gift_points} points to next reward`}
+                  {balances.gift_points >= 10000
+                    ? '🎉 Ready to redeem!'
+                    : `${10000 - balances.gift_points} points to minimum redemption`}
                 </p>
               </div>
             </div>
@@ -370,7 +370,7 @@ export default function Wallet() {
             </Link>
           </div>
 
-          {/* Transaction History */}
+          {/* Transaction History (unchanged, but note filters) */}
           <div className="glass rounded-2xl p-6 border border-border">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
@@ -438,7 +438,7 @@ export default function Wallet() {
         </div>
       </DashboardLayout>
 
-      {/* ===== Simplified Top-Up Modal ===== */}
+      {/* Top-Up Modal (unchanged) */}
       {showTopUpModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border">
