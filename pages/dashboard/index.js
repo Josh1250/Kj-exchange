@@ -14,14 +14,13 @@ export default function DashboardOverview() {
   const [balance, setBalance] = useState(0);
   const [bonusBalance, setBonusBalance] = useState(0);
   const [usdBalance, setUsdBalance] = useState(0);
-  const [ghsBalance, setGhsBalance] = useState(0);
   const [giftPoints, setGiftPoints] = useState(0);
   const [recentOrders, setRecentOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hideBalance, setHideBalance] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('NGN');
   const [kycLevel, setKycLevel] = useState(1);
-  const [exchangeRates, setExchangeRates] = useState({ USD: 1500, GHS: 120 });
+  const [exchangeRates, setExchangeRates] = useState({ USD: 1500 });
   const [quickStats, setQuickStats] = useState({ orders: 0, pending: 0, earned: 0 });
   const [sparklineData, setSparklineData] = useState([]);
 
@@ -57,18 +56,16 @@ export default function DashboardOverview() {
 
   const fetchExchangeRates = async () => {
     try {
-      // Use Frankfurter (same as wallet)
       const response = await fetch('https://api.frankfurter.app/latest?from=NGN');
       const data = await response.json();
       if (data.rates) {
         setExchangeRates({
           USD: data.rates.USD || 1500,
-          GHS: data.rates.GHS || 120,
         });
       }
     } catch (error) {
       console.error('Error fetching exchange rates:', error);
-      setExchangeRates({ USD: 1500, GHS: 120 });
+      setExchangeRates({ USD: 1500 });
     }
   };
 
@@ -142,7 +139,7 @@ export default function DashboardOverview() {
     try {
       const { data: wallet } = await supabase
         .from('wallets')
-        .select('balance, bonus_balance, usd_balance, ghs_balance, gift_points')
+        .select('balance, bonus_balance, usd_balance, gift_points')
         .eq('user_id', user.id)
         .single();
 
@@ -150,7 +147,6 @@ export default function DashboardOverview() {
         setBalance(wallet.balance || 0);
         setBonusBalance(wallet.bonus_balance || 0);
         setUsdBalance(wallet.usd_balance || 0);
-        setGhsBalance(wallet.ghs_balance || 0);
       }
 
       const { data: txs } = await supabase
@@ -184,11 +180,9 @@ export default function DashboardOverview() {
     }
   };
 
-  // ✅ FIXED: Use actual USD/GHS balances
   const getConvertedBalance = () => {
     switch (selectedCurrency) {
       case 'USD': return usdBalance;
-      case 'GHS': return ghsBalance;
       case 'Gift Points': return giftPoints;
       default: return balance + bonusBalance;
     }
@@ -197,7 +191,6 @@ export default function DashboardOverview() {
   const getCurrencySymbol = () => {
     switch (selectedCurrency) {
       case 'USD': return '$';
-      case 'GHS': return '₵';
       case 'Gift Points': return '🎁';
       default: return '₦';
     }
@@ -224,15 +217,14 @@ export default function DashboardOverview() {
     if (selectedCurrency === 'Gift Points') {
       return [{ label: 'Redeem', icon: 'fa-gift', href: '/dashboard/redeem-points' }];
     }
-    // Fiat currencies: always show Withdraw, Top Up, Convert (if KYC), Deposit Crypto
+    // For USD, show Withdraw (converts to NGN first), Top Up, Convert (if KYC), Deposit Crypto
     const actions = [
-      { label: 'Withdraw', icon: 'fa-arrow-down', href: `/dashboard/withdraw?currency=${selectedCurrency}` },
+      { label: 'Withdraw', icon: 'fa-arrow-down', href: '/dashboard/withdraw' },
       { label: 'Top Up', icon: 'fa-arrow-up', href: '/dashboard/wallet' },
     ];
     if (isKycDone) {
-      actions.push({ label: 'Convert', icon: 'fa-arrow-right-arrow-left', href: `/dashboard/convert?currency=${selectedCurrency}` });
+      actions.push({ label: 'Convert', icon: 'fa-arrow-right-arrow-left', href: '/dashboard/convert' });
     }
-    // Always show Deposit Crypto (even if KYC not done)
     actions.push({ label: 'Deposit', icon: 'fa-arrow-down', href: '/dashboard/deposit' });
     return actions;
   };
@@ -277,7 +269,7 @@ export default function DashboardOverview() {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <p className="text-text-muted text-sm">Available Balance</p>
                 <div className="flex bg-black/30 rounded-full p-1 border border-border/50">
-                  {['NGN', 'USD', 'GHS', 'Gift Points'].map((curr) => (
+                  {['NGN', 'USD', 'Gift Points'].map((curr) => (
                     <button
                       key={curr}
                       onClick={() => setSelectedCurrency(curr)}
@@ -301,11 +293,10 @@ export default function DashboardOverview() {
                 <div className="flex flex-wrap gap-3 mt-1 text-sm text-text-muted">
                   {selectedCurrency !== 'NGN' && <span>≈ ₦{totalBalance.toLocaleString()}</span>}
                   {selectedCurrency !== 'USD' && <><span>•</span><span>≈ ${(totalBalance / exchangeRates.USD).toFixed(2)}</span></>}
-                  {selectedCurrency !== 'GHS' && <><span>•</span><span>≈ ₵{(totalBalance / exchangeRates.GHS).toFixed(2)}</span></>}
                 </div>
               )}
               {!hideBalance && isGiftPoints && (
-                <p className="text-xs text-text-muted mt-1">10 points = ₦1 (or equivalent)</p>
+                <p className="text-xs text-text-muted mt-1">10 points = ₦1</p>
               )}
 
               {!hideBalance && !isGiftPoints && sparklineData.length > 0 && (
@@ -350,7 +341,7 @@ export default function DashboardOverview() {
             </div>
           </div>
 
-          {/* ✅ NEW: Rate Calculator */}
+          {/* Rate Calculator */}
           <div className="glass rounded-2xl p-4 border border-border">
             <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
               <i className="fa-solid fa-calculator text-orange"></i> Quick Rate Check
@@ -358,7 +349,7 @@ export default function DashboardOverview() {
             <RateCalculator compact />
           </div>
 
-          {/* Quick Stats - 4 Boxes */}
+          {/* Quick Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="glass rounded-2xl p-4 text-center border border-border">
               <p className="text-text-muted text-xs uppercase tracking-wider">Total Orders</p>
