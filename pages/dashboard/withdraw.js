@@ -23,7 +23,6 @@ export default function Withdraw() {
 
   // ===== Fee Calculation =====
   const [fee, setFee] = useState(0);
-  const [vat, setVat] = useState(0);
   const [totalDeduction, setTotalDeduction] = useState(0);
 
   // ===== Load Data =====
@@ -44,7 +43,6 @@ export default function Withdraw() {
 
   const fetchData = async () => {
     try {
-      // Only NGN balance (users convert USD → NGN first)
       const { data: wallet } = await supabase
         .from('wallets')
         .select('balance')
@@ -82,24 +80,20 @@ export default function Withdraw() {
     }
   };
 
-  // ===== Calculate Fees (NEW) =====
+  // ===== Calculate Fees (Flat fee, no VAT) =====
   const calculateFees = () => {
     const amt = parseFloat(amount) || 0;
     if (amt <= 0) {
       setFee(0);
-      setVat(0);
       setTotalDeduction(0);
       return;
     }
 
-    // Fee: ₦50 for small, ₦100 for large (≥ ₦50,000)
+    // Flat fee: ₦50 for small, ₦100 for large (≥ ₦50,000)
     const feeAmount = amt >= 50000 ? 100 : 50;
-    // VAT: 7.5% on withdrawal amount
-    const vatAmount = amt * 0.075;
-    const total = amt + feeAmount + vatAmount;
+    const total = amt + feeAmount;
 
     setFee(feeAmount);
-    setVat(vatAmount);
     setTotalDeduction(total);
   };
 
@@ -135,20 +129,18 @@ export default function Withdraw() {
       return;
     }
 
-    // KYC Check: Withdrawals above ₦50,000 require KYC Level 2
     if (kycLevel < 2 && amt > 50000) {
       setError('KYC Level 2 required for withdrawals above ₦50,000. Complete KYC in your profile.');
       setSubmitting(false);
       return;
     }
 
-    // Auto withdrawal if KYC Level 2, but status stays 'pending'
     const isAuto = kycLevel >= 2;
     const status = 'pending'; // Always pending initially
     const withdrawalType = isAuto ? 'auto' : 'manual';
 
     try {
-      // 1. Create transaction
+      // 1. Create transaction (no VAT)
       const { data: txData, error: txError } = await supabase
         .from('transactions')
         .insert({
@@ -156,7 +148,7 @@ export default function Withdraw() {
           type: 'withdrawal',
           amount: -amt,
           fee: fee,
-          vat: vat,
+          vat: 0,
           status: status,
           currency: 'NGN',
           metadata: {
@@ -204,7 +196,6 @@ export default function Withdraw() {
           const transferData = await transferResponse.json();
 
           if (transferData.status === 'success') {
-            // Update to 'completed' on success
             await supabase
               .from('transactions')
               .update({
@@ -213,13 +204,13 @@ export default function Withdraw() {
               })
               .eq('id', txData.id);
 
-            setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} processed instantly! (Fee: ₦${fee.toFixed(2)}, VAT: ₦${vat.toFixed(2)})`);
+            setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} processed instantly! (Fee: ₦${fee.toFixed(2)})`);
 
             await supabase
               .from('notifications')
               .insert({
                 user_id: user.id,
-                message: `💸 Instant withdrawal of ₦${amt.toLocaleString()} sent to your bank. Fee: ₦${fee.toFixed(2)}, VAT: ₦${vat.toFixed(2)}`,
+                message: `💸 Instant withdrawal of ₦${amt.toLocaleString()} sent to your bank. Fee: ₦${fee.toFixed(2)}`,
               });
           } else {
             setSuccess(`⚠️ Withdrawal recorded but bank transfer failed. Our team will review it.`);
@@ -229,14 +220,13 @@ export default function Withdraw() {
           setSuccess(`⚠️ Withdrawal recorded but bank transfer is pending. Our team will process it shortly.`);
         }
       } else {
-        // Manual withdrawal — stays 'pending'
-        setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} initiated for review. (Fee: ₦${fee.toFixed(2)}, VAT: ₦${vat.toFixed(2)})`);
+        setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} initiated for review. (Fee: ₦${fee.toFixed(2)})`);
 
         await supabase
           .from('notifications')
           .insert({
             user_id: user.id,
-            message: `💸 Withdrawal of ₦${amt.toLocaleString()} submitted for review. Fee: ₦${fee.toFixed(2)}, VAT: ₦${vat.toFixed(2)}`,
+            message: `💸 Withdrawal of ₦${amt.toLocaleString()} submitted for review. Fee: ₦${fee.toFixed(2)}`,
           });
       }
 
@@ -340,7 +330,7 @@ export default function Withdraw() {
                 )}
               </div>
 
-              {/* ===== Fee Breakdown ===== */}
+              {/* ===== Fee Breakdown (No VAT) ===== */}
               {fee > 0 && (
                 <div className="bg-black/20 rounded-xl p-4 border border-border">
                   <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
@@ -351,10 +341,6 @@ export default function Withdraw() {
                     <div className="flex justify-between">
                       <span className="text-text-muted">Withdrawal Fee</span>
                       <span>{currencySymbol}{fee.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-text-muted">VAT (7.5% on amount)</span>
-                      <span>{currencySymbol}{vat.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
                       <span>Total Deduction</span>
