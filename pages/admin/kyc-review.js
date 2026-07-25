@@ -54,9 +54,14 @@ export default function KYCReview() {
     setProcessing(true);
 
     try {
+      // ✅ Update both kyc_status and kyc_tier to 2
       const { error } = await supabase
         .from('users')
-        .update({ kyc_status: 'Approved', kyc_level: 2 })
+        .update({
+          kyc_status: 'Approved',
+          kyc_level: 2,
+          kyc_tier: 2, // <-- ADD THIS
+        })
         .eq('id', userId);
 
       if (error) throw error;
@@ -94,7 +99,10 @@ export default function KYCReview() {
     try {
       const { error } = await supabase
         .from('users')
-        .update({ kyc_status: 'Rejected' })
+        .update({
+          kyc_status: 'Rejected',
+          // kyc_tier stays as is (or reset to 1 if you want)
+        })
         .eq('id', userId);
 
       if (error) throw error;
