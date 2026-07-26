@@ -50,7 +50,7 @@ export default function Home() {
   const faqs = [
     {
       q: 'What services does KJ Exchange offer?',
-      a: 'KJ Exchange is an all-in-one digital finance platform where you can sell gift cards, sell crypto, pay bills, buy airtime & data, and access global eSIM services — all in one place.',
+      a: 'KJ Exchange is an all-in-one digital finance platform where you can sell gift cards, sell crypto, pay bills, buy airtime & data, convert and save in USD, and access global eSIM services — all in one place.',
     },
     {
       q: 'How fast do I get paid?',
@@ -76,7 +76,7 @@ export default function Home() {
         <title>KJ Exchange · All-in-One Digital Finance Platform</title>
         <meta
           name="description"
-          content="Sell crypto and gift cards, pay bills, buy airtime & data, and access global eSIM — fast, secure, and convenient."
+          content="Sell crypto and gift cards, pay bills, buy airtime & data, convert and save in USD — fast, secure, and convenient."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
@@ -93,17 +93,11 @@ export default function Home() {
               {/* Left: Phone Mockup */}
               <div className="flex-1 flex justify-center md:justify-start relative">
                 <div className="relative group">
-                  {/* Glow behind the phone */}
                   <div className="absolute inset-0 bg-orange-500/20 rounded-[3rem] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-
-                  {/* Phone Frame */}
                   <div className="relative w-72 md:w-80 lg:w-96 rounded-[3rem] border-2 border-border bg-black/10 p-3 shadow-2xl shadow-orange/5 animate-float-slow">
-                    {/* Notch */}
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-b-xl z-20 flex items-center justify-center">
                       <div className="w-2 h-2 bg-black/20 rounded-full"></div>
                     </div>
-
-                    {/* Screen */}
                     <div className="rounded-[2rem] overflow-hidden border border-border/20">
                       <Image
                         src="/images/dashboard-mockup.png"
@@ -114,8 +108,6 @@ export default function Home() {
                         priority
                       />
                     </div>
-
-                    {/* Live Badge */}
                     <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-xs font-medium border border-green-500/30 shadow-lg">
                       <span className="relative flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -138,7 +130,7 @@ export default function Home() {
                 </h1>
 
                 <p className="text-text-muted text-lg md:text-xl mt-4 max-w-xl leading-relaxed mx-auto md:mx-0">
-                  Sell crypto and gift cards, pay bills, buy airtime & data, and access more digital services — fast, secure, and convenient.
+                  Sell crypto and gift cards, pay bills, buy airtime & data, convert and save in Naira or USD — all in one place. Fast, secure, and convenient.
                 </p>
 
                 <div className="mt-8 flex flex-wrap gap-4 justify-center md:justify-start">
@@ -180,7 +172,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== PRODUCTS SECTION ========== */}
+        {/* ========== PRODUCTS SECTION (7 Cards) ========== */}
         <section
           ref={servicesRef}
           id="services"
@@ -192,82 +184,71 @@ export default function Home() {
             <span className="text-orange text-sm font-semibold uppercase tracking-widest">Services</span>
             <h2 className="text-3xl md:text-4xl font-bold mt-2">Everything You Need</h2>
             <p className="text-text-muted mt-2 max-w-2xl mx-auto">
-              Sell, pay, and manage your digital finances all in one place.
+              Sell, pay, save, and manage your digital finances all in one place.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            {[
-              {
-                icon: 'fa-solid fa-gift',
-                title: 'Gift Cards',
-                desc: 'Apple, Amazon, Google Play, Steam & more',
-                link: '/dashboard/sell-gift-card',
-                cta: 'Sell Gift Cards →',
-              },
-              {
-                icon: 'fa-brands fa-bitcoin',
-                title: 'Crypto',
-                desc: 'BTC, USDT, ETH, SOL & more',
-                link: '/dashboard/sell',
-                cta: 'Sell Crypto →',
-              },
-              {
-                icon: 'fa-credit-card',
-                title: 'Pay Bills',
-                desc: 'Electricity, TV, Internet & more',
-                link: '#',
-                cta: 'Pay Bills →',
-              },
-              {
-                icon: 'fa-solid fa-wifi',
-                title: 'Airtime & Data',
-                desc: 'MTN, Glo, Airtel, 9mobile & more',
-                link: '#',
-                cta: 'Buy Airtime →',
-              },
-              {
-                icon: 'fa-solid fa-calculator',
-                title: 'Rate Calculator',
-                desc: 'Check live rates instantly',
-                link: '/rates',
-                cta: 'Check Rates →',
-              },
-              {
-                icon: 'fa-solid fa-sim-card',
-                title: 'eSIM',
-                desc: 'Global connectivity, coming soon',
-                link: '#',
-                cta: 'Coming Soon',
-                soon: true,
-              },
-            ].map((service, idx) => (
-              <div
-                key={idx}
-                className={`glass rounded-2xl p-6 border border-border hover:border-orange transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-orange/10 ${
-                  service.soon ? 'opacity-70' : ''
-                }`}
-                style={{ transitionDelay: `${idx * 100}ms` }}
-              >
-                <div className="w-12 h-12 rounded-full bg-orange/10 flex items-center justify-center text-orange text-2xl mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <i className={service.icon}></i>
-                </div>
-                <h3 className="font-bold text-lg">{service.title}</h3>
-                <p className="text-text-muted text-sm mt-2 leading-relaxed">{service.desc}</p>
-                {service.soon ? (
-                  <span className="inline-block mt-4 text-xs font-semibold text-orange bg-orange/10 px-3 py-1 rounded-full">
-                    Coming Soon
-                  </span>
-                ) : (
-                  <Link
-                    href={service.link}
-                    className="inline-block text-orange text-sm font-semibold mt-4 hover:underline transition-all duration-300 group-hover:translate-x-1"
-                  >
-                    {service.cta}
-                  </Link>
-                )}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {/* Gift Cards */}
+            <Link href="/dashboard/sell-gift-card" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
+                <i className="fa-solid fa-gift"></i>
               </div>
-            ))}
+              <p className="text-sm font-semibold mt-2">Gift Cards</p>
+            </Link>
+
+            {/* Crypto */}
+            <Link href="/dashboard/sell" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
+                <i className="fa-brands fa-bitcoin"></i>
+              </div>
+              <p className="text-sm font-semibold mt-2">Crypto</p>
+            </Link>
+
+            {/* Pay Bills */}
+            <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
+                <i className="fa-credit-card"></i>
+              </div>
+              <p className="text-sm font-semibold mt-2">Pay Bills</p>
+            </Link>
+
+            {/* Airtime & Data */}
+            <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
+                <i className="fa-solid fa-wifi"></i>
+              </div>
+              <p className="text-sm font-semibold mt-2">Airtime & Data</p>
+            </Link>
+
+            {/* Rate Calculator */}
+            <Link href="/rates" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
+                <i className="fa-solid fa-calculator"></i>
+              </div>
+              <p className="text-sm font-semibold mt-2">Rate Calculator</p>
+            </Link>
+
+            {/* USD Wallet — NEW */}
+            <Link href="/dashboard/convert" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+              <div className="w-10 h-10 mx-auto rounded-full bg-green-400/10 flex items-center justify-center text-green-400 text-xl group-hover:scale-110 transition">
+                <i className="fa-solid fa-dollar-sign"></i>
+              </div>
+              <p className="text-sm font-semibold mt-2">USD Wallet</p>
+              <p className="text-[10px] text-text-muted mt-0.5">Convert & Save</p>
+            </Link>
+
+            {/* eSIM — Coming Soon */}
+            <div className="glass rounded-xl p-4 text-center border border-border opacity-60 relative">
+              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-text-muted text-xl">
+                <i className="fa-solid fa-sim-card"></i>
+              </div>
+              <p className="text-sm font-semibold mt-2">eSIM</p>
+              <span className="text-[10px] text-orange">Soon</span>
+              <div className="absolute top-2 right-2 text-text-muted text-xs">
+                <i className="fa-solid fa-lock"></i>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -288,7 +269,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {[
               { step: '01', title: 'Create Account', desc: 'Sign up for free and verify your identity quickly.' },
-              { step: '02', title: 'Choose Service', desc: 'Select from gift cards, crypto, bills, airtime & data, or eSIM.' },
+              { step: '02', title: 'Choose Service', desc: 'Select from gift cards, crypto, bills, airtime & data, or USD wallet.' },
               { step: '03', title: 'Get Paid Instantly', desc: 'Complete your transaction and receive your funds instantly.' },
             ].map((item, idx) => (
               <div key={idx} className="text-center group" style={{ transitionDelay: `${idx * 150}ms` }}>
@@ -302,7 +283,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== WHY CHOOSE ========== */}
+        {/* ========== WHY CHOOSE US (Updated with USD Savings) ========== */}
         <section
           ref={whyRef}
           id="why"
@@ -322,6 +303,7 @@ export default function Home() {
                   { icon: 'fa-solid fa-shield-halved', title: 'Bank-Grade Security', desc: 'All transactions are encrypted and protected' },
                   { icon: 'fa-solid fa-puzzle-piece', title: 'Easy to Use', desc: 'Simple steps from signup to payout' },
                   { icon: 'fa-solid fa-arrows-rotate', title: 'Flexible Options', desc: 'Sell gift cards, crypto, pay bills & buy airtime' },
+                  { icon: 'fa-solid fa-dollar-sign', title: 'Save in USD', desc: 'Protect your money from Naira devaluation with our USD wallet.' },
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-4 group" style={{ transitionDelay: `${i * 100}ms` }}>
                     <span className="text-2xl text-orange group-hover:scale-110 transition-transform duration-300">
