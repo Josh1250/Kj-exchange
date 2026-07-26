@@ -11,6 +11,9 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameAvailable, setUsernameAvailable] = useState(true);
+  const [checkingUsername, setCheckingUsername] = useState(false);
   const [referralCodeInput, setReferralCodeInput] = useState('');
   const [referralCodeFromUrl, setReferralCodeFromUrl] = useState('');
   const [referrerName, setReferrerName] = useState('');
@@ -19,15 +22,13 @@ export default function Signup() {
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [appUrl, setAppUrl] = useState('');
 
-  // Capture referral code from URL query
+  // Capture referral code from URL
   useEffect(() => {
     const { ref } = router.query;
     if (ref) {
       setReferralCodeFromUrl(ref);
       setReferralCodeInput(ref);
-      // Fetch referrer's name
       supabase
         .from('users')
         .select('full_name')
@@ -37,11 +38,29 @@ export default function Signup() {
           if (data) setReferrerName(data.full_name || 'a friend');
         });
     }
-    // Set app URL on client side
-    if (typeof window !== 'undefined') {
-      setAppUrl(window.location.origin);
-    }
   }, [router.query]);
+
+  // Check username availability
+  const checkUsername = async (value) => {
+    if (!value || value.length < 3) {
+      setUsernameAvailable(false);
+      return;
+    }
+    setCheckingUsername(true);
+    try {
+      const response = await fetch('/api/auth/check-username', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: value }),
+      });
+      const data = await response.json();
+      setUsernameAvailable(data.available);
+    } catch (err) {
+      setUsernameAvailable(false);
+    } finally {
+      setCheckingUsername(false);
+    }
+  };
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -61,7 +80,19 @@ export default function Signup() {
       return;
     }
 
-    const redirectTo = `${appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://kj-exchange.vercel.app'}/auth/verify-email`;
+    if (!username || username.length < 3) {
+      setError('Username must be at least 3 characters');
+      setLoading(false);
+      return;
+    }
+
+    if (!usernameAvailable) {
+      setError('Username is not available');
+      setLoading(false);
+      return;
+    }
+
+    const redirectTo = `${window.location.origin}/auth/verify-email`;
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -69,6 +100,7 @@ export default function Signup() {
       options: {
         data: {
           full_name: fullName,
+          username: username,
         },
         emailRedirectTo: redirectTo,
       },
@@ -80,6 +112,7 @@ export default function Signup() {
       return;
     }
 
+    // Create referral record if referralCode exists
     const finalReferralCode = referralCodeInput || referralCodeFromUrl;
     if (data.user && finalReferralCode) {
       try {
@@ -109,7 +142,7 @@ export default function Signup() {
     setPassword('');
     setConfirmPassword('');
     setFullName('');
-    setReferralCodeInput('');
+    setUsername('');
     setLoading(false);
   };
 
@@ -121,7 +154,6 @@ export default function Signup() {
       </Head>
 
       <div className="min-h-screen flex items-center justify-center bg-bg-primary p-4 relative overflow-hidden">
-        {/* Animated background orbs */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"></div>
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/20 rounded-full blur-3xl animate-float-delayed"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl h-64 bg-purple-400/10 rounded-full blur-2xl animate-pulse-slow"></div>
@@ -140,9 +172,9 @@ export default function Signup() {
               <Image
                 src="/logo.png"
                 alt="KJ Exchange"
-                width={60}
-                height={60}
-                className="w-16 h-auto"
+                width={220}
+                height={220}
+                className="w-44 md:w-56 h-auto"
               />
             </div>
 
@@ -178,6 +210,59 @@ export default function Signup() {
               </div>
             ) : (
               <form onSubmit={handleSignup} className="mt-8 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">Username</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
+                      <i className="fa-regular fa-at"></i>
+                    </span>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => {
+                        const value = e.target.value.toLowerCase().replace(/\s/g, '');
+                        setUsername(value);
+                        if (value.length >= 3) checkUsername(value);
+                      }}
+                      className={`w-full bg-black/40 border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:ring-2 transition ${
+                        username && !usernameAvailable
+                          ? 'border-red-400 focus:border-red-400 focus:ring-red-400/20'
+                          : username && usernameAvailable
+                          ? 'border-green-400 focus:border-green-400 focus:ring-green-400/20'
+                          : 'border-border focus:border-orange focus:ring-orange/20'
+                      }`}
+                      placeholder="Choose a unique username"
+                      required
+                    />
+                    {checkingUsername && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2">
+                        <i className="fa-solid fa-spinner fa-spin text-text-muted"></i>
+                      </span>
+                    )}
+                    {username && !checkingUsername && usernameAvailable && username.length >= 3 && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-green-400">
+                        <i className="fa-regular fa-circle-check"></i>
+                      </span>
+                    )}
+                    {username && !checkingUsername && !usernameAvailable && username.length >= 3 && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-red-400">
+                        <i className="fa-regular fa-circle-xmark"></i>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-muted mt-1">
+                    {username && !usernameAvailable && username.length >= 3 && (
+                      <span className="text-red-400">❌ Username already taken</span>
+                    )}
+                    {username && usernameAvailable && username.length >= 3 && (
+                      <span className="text-green-400">✅ Username available</span>
+                    )}
+                    {(!username || username.length < 3) && (
+                      <span>Must be unique. Only lowercase letters, numbers, and underscores. Min 3 chars.</span>
+                    )}
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1.5">Full Name</label>
                   <div className="relative">
@@ -289,7 +374,7 @@ export default function Signup() {
 
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !usernameAvailable}
                   className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
                 >
                   {loading ? (
