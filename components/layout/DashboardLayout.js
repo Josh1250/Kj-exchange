@@ -27,7 +27,7 @@ export default function DashboardLayout({ children }) {
   const bellRef = useRef(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
 
-  // Fetch unread count AND notifications on mount
+  // Fetch unread count & notifications on mount
   useEffect(() => {
     if (!user) return;
     fetchUnreadCount();
@@ -67,7 +67,7 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  // Real‑time subscription
+  // Real‑time subscription for new notifications
   useEffect(() => {
     if (!user) return;
     const subscription = supabase
@@ -118,12 +118,11 @@ export default function DashboardLayout({ children }) {
 
   const toggleDropdown = () => {
     if (!showDropdown) {
-      // Calculate position of bell
       if (bellRef.current) {
         const rect = bellRef.current.getBoundingClientRect();
         setDropdownPosition({
           top: rect.bottom + 8,
-          right: window.innerWidth - rect.right,
+          right: window.innerWidth - rect.right, // ✅ aligns dropdown to the right edge of the bell
         });
       }
     }
@@ -153,11 +152,19 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
+      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-bg-secondary border-r border-border transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="flex flex-col h-full p-4">
           <div className="mb-6">
             <Link href="/dashboard" className="block">
-              <Image src="/logo.png" alt="KJ Exchange" width={120} height={120} className="w-20 h-auto" />
+              <Image
+                src="/logo.png"
+                alt="KJ Exchange"
+                width={160}
+                height={160}
+                className="w-28 md:w-32 h-auto transition-transform group-hover:scale-105" // ✅ bigger logo
+                priority
+              />
             </Link>
           </div>
           <nav className="flex-1 space-y-1">
@@ -196,15 +203,17 @@ export default function DashboardLayout({ children }) {
       )}
 
       <div className="flex-1 flex flex-col md:ml-64 overflow-y-auto">
+        {/* Header */}
         <header className="bg-bg-secondary/80 backdrop-blur-lg border-b border-border px-6 py-3 flex justify-between items-center sticky top-0 z-10">
           <button className="md:hidden p-2 rounded-lg hover:bg-white/10 transition" onClick={() => setIsSidebarOpen(true)}>
             <i className="fa-solid fa-bars text-xl text-text-primary"></i>
           </button>
           <div className="flex items-center gap-4">
+            {/* Bell Button */}
             <button
               ref={bellRef}
               onClick={toggleDropdown}
-              className="relative p-2 rounded-full hover:bg-white/10 transition"
+              className="relative p-2 rounded-full hover:bg-white/10 transition group"
             >
               <i className={`fa-regular fa-bell text-xl text-text-muted ${unreadCount > 0 ? 'animate-wiggle' : ''}`}></i>
               {unreadCount > 0 && (
@@ -214,6 +223,7 @@ export default function DashboardLayout({ children }) {
               )}
             </button>
 
+            {/* Profile */}
             <Link href="/dashboard/profile" className="flex items-center gap-2 hover:bg-white/10 rounded-full px-3 py-1 transition">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
                 {user?.email?.charAt(0).toUpperCase()}
@@ -222,10 +232,11 @@ export default function DashboardLayout({ children }) {
             </Link>
           </div>
         </header>
+
         <main className="flex-1 p-6">{children}</main>
       </div>
 
-      {/* Notification Dropdown - Using Portal */}
+      {/* Notification Dropdown – Portal with RIGHT alignment */}
       {showDropdown && createPortal(
         <div
           ref={dropdownRef}
