@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
 
-// 🔥 Set your admin email here – change if different
 const ADMIN_EMAIL = 'okolijoshua16@gmail.com';
 
 export default function AdminUsers() {
@@ -20,12 +19,10 @@ export default function AdminUsers() {
   const [processing, setProcessing] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
+  // Auth check
   useEffect(() => {
     const checkAuth = async () => {
-      // 1. Get session
       let { data: { session } } = await supabase.auth.getSession();
-
-      // 2. If no session, try localStorage (as before)
       if (!session) {
         const storedEmail = localStorage.getItem('sb-user-email');
         if (storedEmail === ADMIN_EMAIL) {
@@ -46,21 +43,16 @@ export default function AdminUsers() {
           }
         }
       }
-
       if (!session) {
         router.push('/auth/login');
         return;
       }
-
-      // 3. 🔥 FORCE ADMIN IF EMAIL MATCHES – SKIP ANY DATABASE QUERY
       const userEmail = session.user?.email;
       if (userEmail === ADMIN_EMAIL) {
         console.log('✅ Admin email matched – granting access without DB check.');
         setIsAdmin(true);
         setLoading(false);
         fetchUsers();
-
-        // (Optional) Update DB in background so it works later
         supabase
           .from('users')
           .update({ is_admin: true })
@@ -70,8 +62,6 @@ export default function AdminUsers() {
           });
         return;
       }
-
-      // 4. For other users, do the normal admin check
       let isAdminUser = false;
       try {
         const { data, error } = await supabase
@@ -85,27 +75,16 @@ export default function AdminUsers() {
       } catch (e) {
         console.error('Admin query error:', e);
       }
-
       if (!isAdminUser) {
         router.push('/dashboard');
         return;
       }
-
       setIsAdmin(true);
       setLoading(false);
       fetchUsers();
     };
-
     checkAuth();
   }, [router]);
-
-  // ... the rest of your component (fetchUsers, syncUsers, handlers, etc.) stays exactly as before.
-  // To save space, I'll include it all – but you already have the full code from the last message.
-  // For brevity here, I'll assume you copy the full file from the last message and just replace the checkAuth part.
-  // But since we're providing a complete file, I'll include everything.
-
-  // ----- All your existing functions (fetchUsers, syncUsers, handleApproveKyc, handleBanUser, etc.) -----
-  // They are the same as the previous version – I'll include them for completeness.
 
   const fetchUsers = async () => {
     try {
@@ -128,7 +107,7 @@ export default function AdminUsers() {
           ...user,
           wallet_balance: wallet?.balance || 0,
           usd_balance: wallet?.usd_balance || 0,
-          ghs_balance: wallet?.ghs_balance || 0,
+          // ❌ GHS REMOVED – we no longer support Cedis
           gift_points: wallet?.gift_points || 0,
         };
       });
@@ -178,19 +157,24 @@ export default function AdminUsers() {
     }
   }, [search, users]);
 
+  // ✅ FIX: KYC approval now also sets kyc_tier = 2
   const handleApproveKyc = async (userId) => {
     setProcessing(true);
     try {
       const { error } = await supabase
         .from('users')
-        .update({ kyc_status: 'Approved', kyc_level: 2 })
+        .update({
+          kyc_status: 'Approved',
+          kyc_level: 2,
+          kyc_tier: 2, // ← added
+        })
         .eq('id', userId);
       if (error) throw error;
       await supabase
         .from('notifications')
         .insert({
           user_id: userId,
-          message: '✅ Your KYC has been approved! You can now withdraw up to ₦50,000.',
+          message: '✅ Your KYC has been approved! You can now withdraw up to ₦50,000 instantly.',
         });
       alert('✅ KYC approved.');
       fetchUsers();
@@ -250,23 +234,31 @@ export default function AdminUsers() {
     }
   };
 
+  // ✅ FIX: Delete user and all related records to avoid FK constraint errors
   const handleDeleteUser = async (userId) => {
     if (!confirm('⚠️ This will permanently delete the user and all their data. Are you sure?')) return;
     setProcessing(true);
     try {
-      const res = await fetch(`/api/admin/delete-user?userId=${userId}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(data.message);
-        fetchUsers();
-      } else {
-        alert('Failed: ' + data.error);
-      }
+      // First, delete related records (including gift_point_transactions)
+      await supabase.from('gift_point_transactions').delete().eq('user_id', userId);
+      await supabase.from('orders').delete().eq('user_id', userId);
+      await supabase.from('crypto_orders').delete().eq('user_id', userId);
+      await supabase.from('transactions').delete().eq('user_id', userId);
+      await supabase.from('wallets').delete().eq('user_id', userId);
+      await supabase.from('crypto_balances').delete().eq('user_id', userId);
+      await supabase.from('bank_accounts').delete().eq('user_id', userId);
+      await supabase.from('referrals').delete().or(`referrer_id.eq.${userId},referred_user_id.eq.${userId}`);
+      await supabase.from('notifications').delete().eq('user_id', userId);
+
+      // Then delete the user from public.users
+      const { error } = await supabase.from('users').delete().eq('id', userId);
+      if (error) throw error;
+
+      alert('✅ User deleted successfully.');
+      fetchUsers();
     } catch (err) {
-      alert('Error deleting user.');
-      console.error(err);
+      console.error('Delete user error:', err);
+      alert('❌ Failed to delete user: ' + err.message);
     } finally {
       setProcessing(false);
     }
@@ -285,7 +277,6 @@ export default function AdminUsers() {
   if (loading) return <div>Loading admin panel...</div>;
   if (!isAdmin) return null;
 
-  // ----- The JSX is identical to the previous version – I'll include it here for completeness -----
   return (
     <>
       <Head><title>Admin Users · KJ Exchange</title></Head>
@@ -372,6 +363,12 @@ export default function AdminUsers() {
                           }`}>
                             {u.kyc_status || 'Not Submitted'}
                           </span>
+                          {/* ✅ Show KYC Tier if > 1 */}
+                          {u.kyc_tier >= 2 && (
+                            <span className="ml-1 text-[10px] bg-green-400/10 text-green-400 px-1.5 py-0.5 rounded-full border border-green-400/20">
+                              Tier {u.kyc_tier}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${
@@ -384,7 +381,7 @@ export default function AdminUsers() {
                           <div className="flex gap-1 text-xs">
                             <span className="text-green-400">₦{u.wallet_balance.toLocaleString()}</span>
                             <span className="text-blue-400">${u.usd_balance.toFixed(2)}</span>
-                            <span className="text-yellow-400">₵{u.ghs_balance.toFixed(2)}</span>
+                            {/* ❌ GHS REMOVED */}
                           </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-text-muted text-sm">
@@ -446,7 +443,7 @@ export default function AdminUsers() {
         </div>
       </AdminLayout>
 
-      {/* Modal – same as before */}
+      {/* User Detail Modal */}
       {showModal && selectedUser && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-bg-card rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-border shadow-2xl">
@@ -479,6 +476,10 @@ export default function AdminUsers() {
                     'bg-gray-400/20 text-gray-400 border-gray-400/20'
                   }`}>
                     {selectedUser.kyc_status || 'Not Submitted'}
+                  </span>
+                  {/* ✅ Show KYC Tier in modal */}
+                  <span className="ml-2 text-xs bg-orange/10 text-orange px-2 py-0.5 rounded-full">
+                    Tier {selectedUser.kyc_tier || 1}
                   </span>
                 </div>
                 <div>
@@ -517,15 +518,19 @@ export default function AdminUsers() {
                     <p className="font-medium">{selectedUser.bvn || 'Not Provided'}</p>
                   </div>
                   <div>
-                    <p className="text-text-muted text-xs uppercase tracking-wider">KYC Level</p>
-                    <p className="font-medium">Level {selectedUser.kyc_level || 1}</p>
+                    <p className="text-text-muted text-xs uppercase tracking-wider">NIN</p>
+                    <p className="font-medium">{selectedUser.nin || 'Not Provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-text-muted text-xs uppercase tracking-wider">KYC Tier</p>
+                    <p className="font-medium">Tier {selectedUser.kyc_tier || 1}</p>
                   </div>
                 </div>
               </div>
 
               <div className="border-t border-border pt-4">
                 <h3 className="font-semibold mb-2">Wallet Balances</h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="bg-black/20 rounded-xl p-3 text-center">
                     <p className="text-text-muted text-xs">Naira</p>
                     <p className="text-lg font-bold text-green-400">₦{selectedUser.wallet_balance.toLocaleString()}</p>
@@ -534,10 +539,7 @@ export default function AdminUsers() {
                     <p className="text-text-muted text-xs">USD</p>
                     <p className="text-lg font-bold text-blue-400">${selectedUser.usd_balance.toFixed(2)}</p>
                   </div>
-                  <div className="bg-black/20 rounded-xl p-3 text-center">
-                    <p className="text-text-muted text-xs">GHS</p>
-                    <p className="text-lg font-bold text-yellow-400">₵{selectedUser.ghs_balance.toFixed(2)}</p>
-                  </div>
+                  {/* ❌ GHS REMOVED */}
                 </div>
               </div>
 
