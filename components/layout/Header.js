@@ -11,6 +11,7 @@ export default function Header() {
   const [isDark, setIsDark] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [isProductsOpen, setIsProductsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -51,10 +52,14 @@ export default function Header() {
     router.push('/');
   };
 
-  const closeMobileMenu = () => setIsMobileMenuOpen(false);
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+    setIsProductsOpen(false);
+  };
+
   const isActive = (path) => router.pathname === path || router.pathname.startsWith(path + '/');
 
-  // ✅ Updated nav items (Home, Products dropdown, Rates, FAQ, Contact)
+  // ✅ Desktop nav (Home, Products dropdown, Rates, FAQ, Contact)
   const navItems = [
     { name: 'Home', href: '/' },
     { name: 'Products', href: '#', dropdown: true },
@@ -63,7 +68,6 @@ export default function Header() {
     { name: 'Contact', href: '/contact' },
   ];
 
-  // Products dropdown items
   const productItems = [
     { name: 'Gift Cards', href: '/dashboard/sell-gift-card', icon: 'fa-solid fa-gift' },
     { name: 'Crypto', href: '/dashboard/sell', icon: 'fa-brands fa-bitcoin' },
@@ -82,23 +86,27 @@ export default function Header() {
 
   const nav = !loading && user ? dashboardNav : navItems;
 
+  const toggleProducts = () => {
+    setIsProductsOpen(!isProductsOpen);
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-bg-secondary/80 backdrop-blur-lg border-b border-border">
       <div className="container mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
-        {/* Logo */}
+        {/* Logo — smaller on mobile */}
         <Link href="/" className="shrink-0 group">
           <Image
             src="/logo.png"
             alt="KJ Exchange"
             width={220}
             height={220}
-            className="w-44 md:w-56 h-auto transition-transform group-hover:scale-105"
+            className="w-28 sm:w-36 md:w-44 lg:w-56 h-auto transition-transform group-hover:scale-105"
             priority
           />
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-6">
+        <nav className="hidden md:flex items-center gap-4 lg:gap-6">
           {nav.map((item) => {
             if (item.dropdown) {
               // Products Dropdown
@@ -188,12 +196,7 @@ export default function Header() {
             </>
           ) : (
             <>
-              <Link
-                href="/auth/login"
-                className="px-5 py-2 text-sm font-semibold text-text-primary hover:text-orange transition border border-border hover:border-orange rounded-full"
-              >
-                Log In
-              </Link>
+              {/* ✅ Log In removed from desktop header – only Get Started remains */}
               <Link
                 href="/auth/register"
                 className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-5 py-2 rounded-full text-sm font-bold hover:shadow-lg hover:shadow-orange/30 transition-all duration-300"
@@ -218,7 +221,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu (Accordion for Products) */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-bg-card/95 backdrop-blur-xl border-t border-border rounded-b-2xl shadow-2xl overflow-hidden transition-all duration-300">
           <nav className="flex flex-col gap-1 p-4">
@@ -227,19 +230,33 @@ export default function Header() {
               Home
             </Link>
 
-            {/* Products (with sub-items) */}
-            <div className="px-4 py-2 text-sm font-semibold text-text-muted">Products</div>
-            {productItems.map((product) => (
-              <Link
-                key={product.name}
-                href={product.href}
-                className="px-4 py-2 rounded-xl hover:bg-orange/10 hover:text-orange transition text-text-primary text-sm pl-8"
-                onClick={closeMobileMenu}
+            {/* Products Accordion */}
+            <div>
+              <button
+                onClick={toggleProducts}
+                className="flex items-center justify-between w-full px-4 py-3 rounded-xl hover:bg-orange/10 hover:text-orange transition text-text-primary"
               >
-                <i className={`${product.icon} text-orange w-5 text-center mr-2`}></i>
-                {product.name}
-              </Link>
-            ))}
+                <span className="font-medium">Products</span>
+                <svg className={`w-5 h-5 transition-transform duration-200 ${isProductsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div className={`overflow-hidden transition-all duration-300 ${isProductsOpen ? 'max-h-96' : 'max-h-0'}`}>
+                <div className="flex flex-col gap-1 pl-4 mt-1">
+                  {productItems.map((product) => (
+                    <Link
+                      key={product.name}
+                      href={product.href}
+                      className="px-4 py-2 rounded-xl hover:bg-orange/10 hover:text-orange transition text-text-primary text-sm"
+                      onClick={closeMobileMenu}
+                    >
+                      <i className={`${product.icon} text-orange w-5 text-center mr-2`}></i>
+                      {product.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
 
             <Link href="/rates" className="px-4 py-3 rounded-xl hover:bg-orange/10 hover:text-orange transition text-text-primary" onClick={closeMobileMenu}>
               Rates
@@ -254,6 +271,7 @@ export default function Header() {
             <div className="border-t border-border my-2"></div>
             {!user && !loading ? (
               <>
+                {/* Log In only in mobile menu */}
                 <Link href="/auth/login" className="px-4 py-3 rounded-xl hover:bg-orange/10 hover:text-orange transition text-text-primary" onClick={closeMobileMenu}>
                   Log In
                 </Link>
