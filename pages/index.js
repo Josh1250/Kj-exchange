@@ -76,10 +76,11 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <Layout>
+      {/* ✅ Pass a prop to Layout to hide orbs */}
+      <Layout hideOrbs={true}>
         {/* ========== HERO SECTION ========== */}
-        <section className="relative overflow-hidden pt-8 pb-16 md:pt-16 md:pb-20 bg-bg-primary hero-section">
-          {/* Animated Dot Grid Background (premium fintech feel) */}
+        <section className="relative overflow-hidden pt-8 pb-16 md:pt-16 md:pb-20 bg-bg-primary">
+          {/* Dot Grid Background only */}
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute inset-0 bg-grid-pattern bg-[length:40px_40px] opacity-30"></div>
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-bg-primary/20 to-bg-primary/40"></div>
@@ -325,7 +326,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== HOW IT WORKS (Upgraded) ========== */}
+        {/* ========== HOW IT WORKS ========== */}
         <section
           ref={sections[1].ref}
           id="how"
@@ -426,7 +427,7 @@ export default function Home() {
           ref={sections[3].ref}
           id="testimonials"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            testimonialsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            sections[3].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="text-center mb-14">
@@ -487,7 +488,7 @@ export default function Home() {
           ref={sections[4].ref}
           id="faq"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            faqVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            sections[4].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="text-center mb-14">
@@ -532,7 +533,7 @@ export default function Home() {
           ref={sections[5].ref}
           id="cta"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            ctaVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            sections[5].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="glass rounded-3xl p-12 text-center border border-border max-w-4xl mx-auto shadow-2xl shadow-orange/5">
@@ -552,9 +553,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ====== GLOBAL STYLES (including orb removal) ====== */}
+        {/* ====== GLOBAL STYLES ====== */}
         <style jsx global>{`
-          /* ===== Animations ===== */
           @keyframes float {
             0%,
             100% {
@@ -604,12 +604,6 @@ export default function Home() {
           .bg-grid-pattern {
             background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
             background-size: 40px 40px;
-          }
-
-          /* ===== Hide glowing orbs on homepage only ===== */
-          .hero-section .animate-float,
-          .hero-section .animate-float-delayed {
-            display: none !important;
           }
 
           .opacity-0 {
