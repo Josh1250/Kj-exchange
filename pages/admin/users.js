@@ -107,7 +107,6 @@ export default function AdminUsers() {
           ...user,
           wallet_balance: wallet?.balance || 0,
           usd_balance: wallet?.usd_balance || 0,
-          // ❌ GHS REMOVED – we no longer support Cedis
           gift_points: wallet?.gift_points || 0,
         };
       });
@@ -157,42 +156,72 @@ export default function AdminUsers() {
     }
   }, [search, users]);
 
-  // ✅ FIX: KYC approval now also sets kyc_tier = 2
+  // ✅ Fixed KYC approval: sets kyc_tier to 2 or 3 based on document presence
   const handleApproveKyc = async (userId) => {
+    if (!confirm('Approve this KYC?')) return;
     setProcessing(true);
     try {
+      // Fetch current user tier and document presence
+      const { data: userData } = await supabase
+        .from('users')
+        .select('kyc_tier, kyc_document_url')
+        .eq('id', userId)
+        .single();
+
+      // Determine new tier: if user already had tier 2 and has a document, upgrade to 3
+      let newTier = 2;
+      if (userData?.kyc_tier === 2 && userData?.kyc_document_url) {
+        newTier = 3;
+      }
+
       const { error } = await supabase
         .from('users')
         .update({
           kyc_status: 'Approved',
-          kyc_level: 2,
-          kyc_tier: 2, // ← added
+          kyc_level: newTier,
+          kyc_tier: newTier,
         })
         .eq('id', userId);
+
       if (error) throw error;
+
+      // Gift points for KYC (1500)
+      await supabase
+        .from('gift_point_transactions')
+        .insert({
+          user_id: userId,
+          amount: 1500,
+          type: 'kyc',
+        });
+
       await supabase
         .from('notifications')
         .insert({
           user_id: userId,
-          message: '✅ Your KYC has been approved! You can now withdraw up to ₦50,000 instantly.',
+          message: `✅ Your KYC has been approved! You are now Tier ${newTier} with higher withdrawal limits.`,
         });
-      alert('✅ KYC approved.');
+
+      alert(`✅ KYC approved! User is now Tier ${newTier}.`);
       fetchUsers();
     } catch (err) {
       console.error(err);
-      alert('❌ Failed to approve KYC.');
+      alert('Failed to approve KYC.');
     } finally {
       setProcessing(false);
     }
   };
 
   const handleRejectKyc = async (userId) => {
+    if (!confirm('Reject this KYC?')) return;
     setProcessing(true);
     try {
       const { error } = await supabase
         .from('users')
-        .update({ kyc_status: 'Rejected' })
+        .update({
+          kyc_status: 'Rejected',
+        })
         .eq('id', userId);
+
       if (error) throw error;
       await supabase
         .from('notifications')
@@ -200,6 +229,7 @@ export default function AdminUsers() {
           user_id: userId,
           message: '❌ Your KYC was rejected. Please submit valid documents.',
         });
+
       alert('❌ KYC rejected.');
       fetchUsers();
     } catch (err) {
@@ -234,12 +264,11 @@ export default function AdminUsers() {
     }
   };
 
-  // ✅ FIX: Delete user and all related records to avoid FK constraint errors
   const handleDeleteUser = async (userId) => {
     if (!confirm('⚠️ This will permanently delete the user and all their data. Are you sure?')) return;
     setProcessing(true);
     try {
-      // First, delete related records (including gift_point_transactions)
+      // Delete related records
       await supabase.from('gift_point_transactions').delete().eq('user_id', userId);
       await supabase.from('orders').delete().eq('user_id', userId);
       await supabase.from('crypto_orders').delete().eq('user_id', userId);
@@ -250,7 +279,7 @@ export default function AdminUsers() {
       await supabase.from('referrals').delete().or(`referrer_id.eq.${userId},referred_user_id.eq.${userId}`);
       await supabase.from('notifications').delete().eq('user_id', userId);
 
-      // Then delete the user from public.users
+      // Then delete the user
       const { error } = await supabase.from('users').delete().eq('id', userId);
       if (error) throw error;
 
@@ -363,7 +392,6 @@ export default function AdminUsers() {
                           }`}>
                             {u.kyc_status || 'Not Submitted'}
                           </span>
-                          {/* ✅ Show KYC Tier if > 1 */}
                           {u.kyc_tier >= 2 && (
                             <span className="ml-1 text-[10px] bg-green-400/10 text-green-400 px-1.5 py-0.5 rounded-full border border-green-400/20">
                               Tier {u.kyc_tier}
@@ -381,7 +409,6 @@ export default function AdminUsers() {
                           <div className="flex gap-1 text-xs">
                             <span className="text-green-400">₦{u.wallet_balance.toLocaleString()}</span>
                             <span className="text-blue-400">${u.usd_balance.toFixed(2)}</span>
-                            {/* ❌ GHS REMOVED */}
                           </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-text-muted text-sm">
@@ -477,7 +504,6 @@ export default function AdminUsers() {
                   }`}>
                     {selectedUser.kyc_status || 'Not Submitted'}
                   </span>
-                  {/* ✅ Show KYC Tier in modal */}
                   <span className="ml-2 text-xs bg-orange/10 text-orange px-2 py-0.5 rounded-full">
                     Tier {selectedUser.kyc_tier || 1}
                   </span>
@@ -525,6 +551,19 @@ export default function AdminUsers() {
                     <p className="text-text-muted text-xs uppercase tracking-wider">KYC Tier</p>
                     <p className="font-medium">Tier {selectedUser.kyc_tier || 1}</p>
                   </div>
+                  {selectedUser.kyc_document_url && (
+                    <div>
+                      <p className="text-text-muted text-xs uppercase tracking-wider">Document</p>
+                      <a
+                        href={selectedUser.kyc_document_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-orange hover:underline text-sm"
+                      >
+                        View Document
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -539,7 +578,6 @@ export default function AdminUsers() {
                     <p className="text-text-muted text-xs">USD</p>
                     <p className="text-lg font-bold text-blue-400">${selectedUser.usd_balance.toFixed(2)}</p>
                   </div>
-                  {/* ❌ GHS REMOVED */}
                 </div>
               </div>
 
