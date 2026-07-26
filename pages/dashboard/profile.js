@@ -55,20 +55,26 @@ export default function Profile() {
 
   const fetchProfile = async () => {
     try {
+      // Get username from user metadata or fallback to users table
+      const metaUsername = user?.user_metadata?.username;
+      
       const { data } = await supabase
         .from('users')
-        .select('full_name, username, phone, kyc_level, kyc_tier, kyc_status, bvn, nin, kyc_document_type, kyc_document_url')
+        .select('full_name, phone, kyc_level, kyc_tier, kyc_status, bvn, nin, username')
         .eq('id', user.id)
         .single();
+      
       if (data) {
         setFullName(data.full_name || '');
-        setUsername(data.username || '');
+        setUsername(data.username || metaUsername || '');
         setPhone(data.phone || '');
         setKycLevel(data.kyc_level || 1);
         setKycTier(data.kyc_tier || 1);
         setKycStatus(data.kyc_status || 'Not Submitted');
         setBvn(data.bvn || '');
         setNin(data.nin || '');
+      } else if (metaUsername) {
+        setUsername(metaUsername);
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -104,39 +110,18 @@ export default function Profile() {
     }
   };
 
-  const checkUsername = async (value) => {
-    if (!value) return true;
-    const { data, error } = await supabase
-      .from('users')
-      .select('username')
-      .eq('username', value)
-      .neq('id', user.id)
-      .maybeSingle();
-    return !data;
-  };
-
+  // ===== Save Profile =====
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     setMessage('');
     setMessageType('');
 
-    if (username) {
-      const available = await checkUsername(username);
-      if (!available) {
-        setMessage('Username already taken. Please choose another.');
-        setMessageType('error');
-        setSaving(false);
-        return;
-      }
-    }
-
     try {
       const { error } = await supabase
         .from('users')
         .update({
           full_name: fullName,
-          username: username,
           phone: phone,
         })
         .eq('id', user.id);
@@ -211,7 +196,6 @@ export default function Profile() {
       setMessageType('');
 
       try {
-        // Upload document to Supabase Storage
         const fileExt = documentFile.name.split('.').pop();
         const fileName = `${user.id}-tier3-${Date.now()}.${fileExt}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -223,7 +207,6 @@ export default function Profile() {
           .from('kyc-documents')
           .getPublicUrl(fileName);
 
-        // Update user profile
         const { error } = await supabase
           .from('users')
           .update({
@@ -377,7 +360,9 @@ export default function Profile() {
 
   return (
     <>
-      <Head><title>Profile · KJ Exchange</title></Head>
+      <Head>
+        <title>Profile · KJ Exchange</title>
+      </Head>
       <DashboardLayout>
         <div className="max-w-3xl mx-auto space-y-6">
           <h1 className="text-2xl font-bold flex items-center gap-3">
@@ -416,19 +401,17 @@ export default function Profile() {
                 />
               </div>
 
+              {/* Username — Read-Only */}
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">
                   <i className="fa-regular fa-at text-orange mr-1"></i>
-                  Username
+                  Username (Permanent)
                 </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ''))}
-                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
-                  placeholder="Choose a unique username (e.g., josh123)"
-                />
-                <p className="text-xs text-text-muted mt-1">Must be unique. Only lowercase letters and numbers.</p>
+                <div className="w-full bg-black/20 border border-border rounded-xl px-4 py-3 text-text-muted cursor-not-allowed flex items-center gap-2">
+                  <i className="fa-regular fa-circle-check text-green-400"></i>
+                  {username || 'Not set'}
+                </div>
+                <p className="text-xs text-text-muted mt-1">Username cannot be changed after registration.</p>
               </div>
 
               <div>
@@ -759,7 +742,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* ===== Add Bank Modal (unchanged) ===== */}
+      {/* ===== Add Bank Modal ===== */}
       {showAddBankModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
