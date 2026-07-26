@@ -77,9 +77,8 @@ export default function Home() {
       </Head>
 
       <Layout>
-
         {/* ========== HERO SECTION ========== */}
-        <section className="relative overflow-hidden pt-8 pb-16 md:pt-16 md:pb-20 bg-bg-primary">
+        <section className="relative overflow-hidden pt-8 pb-16 md:pt-16 md:pb-20 bg-bg-primary hero-section">
           {/* Animated Dot Grid Background (premium fintech feel) */}
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute inset-0 bg-grid-pattern bg-[length:40px_40px] opacity-30"></div>
@@ -311,8 +310,6 @@ export default function Home() {
                 <h2 className="text-2xl md:text-3xl font-bold">Convert &amp; Save in USD</h2>
                 <p className="text-text-muted text-sm mt-2 max-w-lg mx-auto md:mx-0">
                   Protect your money from Naira devaluation. Convert Naira to USD instantly and hold your savings in USD at competitive rates.
-                  <br />
-                  <span className="text-green-400 font-semibold">Only KJ Exchange offers this feature.</span>
                 </p>
                 <Link
                   href="/dashboard/convert"
@@ -328,7 +325,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== HOW IT WORKS (Upgraded with progress bar & icons) ========== */}
+        {/* ========== HOW IT WORKS (Upgraded) ========== */}
         <section
           ref={sections[1].ref}
           id="how"
@@ -343,7 +340,7 @@ export default function Home() {
           </div>
 
           <div className="max-w-4xl mx-auto relative">
-            {/* Progress Bar (connecting line) */}
+            {/* Progress Bar */}
             <div className="hidden md:block absolute top-1/2 left-0 right-0 h-0.5 bg-border -translate-y-1/2 z-0">
               <div className="h-full w-2/3 bg-gradient-to-r from-orange to-purple-500 rounded-full"></div>
             </div>
@@ -429,7 +426,7 @@ export default function Home() {
           ref={sections[3].ref}
           id="testimonials"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            sections[3].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            testimonialsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="text-center mb-14">
@@ -490,7 +487,7 @@ export default function Home() {
           ref={sections[4].ref}
           id="faq"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            sections[4].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            faqVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="text-center mb-14">
@@ -535,7 +532,7 @@ export default function Home() {
           ref={sections[5].ref}
           id="cta"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            sections[5].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            ctaVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="glass rounded-3xl p-12 text-center border border-border max-w-4xl mx-auto shadow-2xl shadow-orange/5">
@@ -555,8 +552,9 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ====== GLOBAL STYLES ====== */}
+        {/* ====== GLOBAL STYLES (including orb removal) ====== */}
         <style jsx global>{`
+          /* ===== Animations ===== */
           @keyframes float {
             0%,
             100% {
@@ -606,6 +604,12 @@ export default function Home() {
           .bg-grid-pattern {
             background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
             background-size: 40px 40px;
+          }
+
+          /* ===== Hide glowing orbs on homepage only ===== */
+          .hero-section .animate-float,
+          .hero-section .animate-float-delayed {
+            display: none !important;
           }
 
           .opacity-0 {
