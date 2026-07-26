@@ -42,25 +42,38 @@ export default function KYCReview() {
     setLoading(true);
     const { data } = await supabase
       .from('users')
-      .select('id, full_name, email, phone, bvn, nin, kyc_status, kyc_document_url, created_at')
+      .select('id, full_name, email, phone, bvn, nin, kyc_status, kyc_tier, kyc_document_url, created_at')
       .eq('kyc_status', 'Pending')
       .order('created_at', { ascending: false });
     setUsers(data || []);
     setLoading(false);
   };
 
+  // ✅ Fixed approval logic: sets kyc_tier to 2 or 3 based on document presence
   const approveKYC = async (userId) => {
     if (!confirm('Approve this KYC?')) return;
     setProcessing(true);
 
     try {
-      // ✅ Update both kyc_status and kyc_tier to 2
+      // Fetch current user tier and document presence
+      const { data: userData } = await supabase
+        .from('users')
+        .select('kyc_tier, kyc_document_url')
+        .eq('id', userId)
+        .single();
+
+      // Determine new tier: if user already had tier 2 and has a document, upgrade to 3
+      let newTier = 2;
+      if (userData?.kyc_tier === 2 && userData?.kyc_document_url) {
+        newTier = 3;
+      }
+
       const { error } = await supabase
         .from('users')
         .update({
           kyc_status: 'Approved',
-          kyc_level: 2,
-          kyc_tier: 2, // <-- ADD THIS
+          kyc_level: newTier,
+          kyc_tier: newTier,
         })
         .eq('id', userId);
 
@@ -79,10 +92,10 @@ export default function KYCReview() {
         .from('notifications')
         .insert({
           user_id: userId,
-          message: '✅ Your KYC has been approved! You can now withdraw up to ₦50,000 instantly.',
+          message: `✅ Your KYC has been approved! You are now Tier ${newTier} with higher withdrawal limits.`,
         });
 
-      alert('✅ KYC approved!');
+      alert(`✅ KYC approved! User is now Tier ${newTier}.`);
       fetchPendingKYC();
     } catch (err) {
       alert('Failed to approve KYC.');
