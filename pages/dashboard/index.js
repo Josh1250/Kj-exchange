@@ -179,7 +179,6 @@ export default function DashboardOverview() {
     }
   };
 
-  // ✅ Fixed: use actual USD balance
   const getConvertedBalance = () => {
     switch (selectedCurrency) {
       case 'USD': return usdBalance;
@@ -211,7 +210,6 @@ export default function DashboardOverview() {
     }).join(' ');
   };
 
-  // Actions: Withdraw, Deposit, Top Up, Convert (NGN ↔ USD)
   const actions = [
     { label: 'Withdraw', icon: 'fa-arrow-down', href: '/dashboard/withdraw' },
     { label: 'Deposit', icon: 'fa-arrow-down', href: '/dashboard/deposit' },
@@ -407,7 +405,7 @@ export default function DashboardOverview() {
               </Link>
               <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
-                  <i className="fa-regular fa-file-invoice"></i>
+                  <i className="fa-credit-card"></i> {/* ✅ Updated icon */}
                 </div>
                 <p className="text-sm font-semibold mt-2">Pay Bills</p>
               </Link>
