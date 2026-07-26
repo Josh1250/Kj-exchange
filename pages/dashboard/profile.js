@@ -22,8 +22,10 @@ export default function Profile() {
 
   // ===== KYC Modal =====
   const [showKycModal, setShowKycModal] = useState(false);
-  const [kycOption, setKycOption] = useState(''); // 'bvn' or 'nin'
+  const [kycOption, setKycOption] = useState(''); // 'bvn', 'nin', 'document'
   const [kycNumber, setKycNumber] = useState('');
+  const [documentFile, setDocumentFile] = useState(null);
+  const [documentType, setDocumentType] = useState('');
 
   // ===== My Banks =====
   const [banks, setBanks] = useState([]);
@@ -55,7 +57,7 @@ export default function Profile() {
     try {
       const { data } = await supabase
         .from('users')
-        .select('full_name, username, phone, kyc_level, kyc_tier, kyc_status, bvn, nin')
+        .select('full_name, username, phone, kyc_level, kyc_tier, kyc_status, bvn, nin, kyc_document_type, kyc_document_url')
         .eq('id', user.id)
         .single();
       if (data) {
@@ -102,7 +104,6 @@ export default function Profile() {
     }
   };
 
-  // ===== Username Availability Check =====
   const checkUsername = async (value) => {
     if (!value) return true;
     const { data, error } = await supabase
@@ -114,7 +115,6 @@ export default function Profile() {
     return !data;
   };
 
-  // ===== Save Profile =====
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -153,47 +153,102 @@ export default function Profile() {
     setSaving(false);
   };
 
-  // ===== KYC Submit (Fixed: does NOT set kyc_tier) =====
+  // ===== KYC Submit =====
   const handleKycSubmit = async () => {
-    if (!kycOption || !kycNumber || kycNumber.length !== 11) {
-      setMessage('Please enter a valid 11-digit number.');
-      setMessageType('error');
-      return;
-    }
+    if (kycTier === 1) {
+      // Tier 2: BVN or NIN
+      if (!kycOption || !kycNumber || kycNumber.length !== 11) {
+        setMessage('Please enter a valid 11-digit number.');
+        setMessageType('error');
+        return;
+      }
 
-    setSaving(true);
-    setMessage('');
-    setMessageType('');
+      setSaving(true);
+      setMessage('');
+      setMessageType('');
 
-    try {
-      const updateData = {
-        kyc_status: 'Pending',
-        // ✅ DO NOT set kyc_tier here — stays at 1 until admin approves
-      };
-      if (kycOption === 'bvn') updateData.bvn = kycNumber;
-      if (kycOption === 'nin') updateData.nin = kycNumber;
+      try {
+        const updateData = { kyc_status: 'Pending' };
+        if (kycOption === 'bvn') updateData.bvn = kycNumber;
+        if (kycOption === 'nin') updateData.nin = kycNumber;
 
-      const { error } = await supabase
-        .from('users')
-        .update(updateData)
-        .eq('id', user.id);
+        const { error } = await supabase
+          .from('users')
+          .update(updateData)
+          .eq('id', user.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      setKycStatus('Pending');
-      // kycTier stays at 1 (do NOT change to 2)
-      setMessage('KYC submitted for review!');
-      setMessageType('success');
-      setShowKycModal(false);
-      setKycOption('');
-      setKycNumber('');
-      fetchProfile();
-    } catch (err) {
-      setMessage('Error submitting KYC. Please try again.');
-      setMessageType('error');
-      console.error(err);
-    } finally {
-      setSaving(false);
+        setKycStatus('Pending');
+        setMessage('KYC submitted for review!');
+        setMessageType('success');
+        setShowKycModal(false);
+        setKycOption('');
+        setKycNumber('');
+        fetchProfile();
+      } catch (err) {
+        setMessage('Error submitting KYC. Please try again.');
+        setMessageType('error');
+        console.error(err);
+      } finally {
+        setSaving(false);
+      }
+    } else if (kycTier === 2) {
+      // Tier 3: Valid ID Document
+      if (!documentFile) {
+        setMessage('Please upload a valid ID document.');
+        setMessageType('error');
+        return;
+      }
+      if (!documentType) {
+        setMessage('Please select a document type (e.g., Passport, Driver\'s License, NIN Slip).');
+        setMessageType('error');
+        return;
+      }
+
+      setSaving(true);
+      setMessage('');
+      setMessageType('');
+
+      try {
+        // Upload document to Supabase Storage
+        const fileExt = documentFile.name.split('.').pop();
+        const fileName = `${user.id}-tier3-${Date.now()}.${fileExt}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('kyc-documents')
+          .upload(fileName, documentFile);
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('kyc-documents')
+          .getPublicUrl(fileName);
+
+        // Update user profile
+        const { error } = await supabase
+          .from('users')
+          .update({
+            kyc_status: 'Pending',
+            kyc_document_type: documentType,
+            kyc_document_url: publicUrl,
+          })
+          .eq('id', user.id);
+
+        if (error) throw error;
+
+        setKycStatus('Pending');
+        setMessage('Tier 3 KYC submitted for review!');
+        setMessageType('success');
+        setShowKycModal(false);
+        setDocumentFile(null);
+        setDocumentType('');
+        fetchProfile();
+      } catch (err) {
+        setMessage('Error submitting Tier 3 KYC. Please try again.');
+        setMessageType('error');
+        console.error(err);
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -318,11 +373,11 @@ export default function Profile() {
     return null;
   }
 
+  const canUpgradeToTier3 = kycTier === 2 && kycStatus === 'Approved';
+
   return (
     <>
-      <Head>
-        <title>Profile · KJ Exchange</title>
-      </Head>
+      <Head><title>Profile · KJ Exchange</title></Head>
       <DashboardLayout>
         <div className="max-w-3xl mx-auto space-y-6">
           <h1 className="text-2xl font-bold flex items-center gap-3">
@@ -490,7 +545,7 @@ export default function Profile() {
             )}
           </div>
 
-          {/* ===== KYC Section (Premium Dtunes Style) ===== */}
+          {/* ===== KYC Section ===== */}
           <div className="glass rounded-2xl p-6 border border-border">
             <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
               <i className="fa-solid fa-shield-check text-orange"></i>
@@ -546,8 +601,10 @@ export default function Profile() {
               <p className="text-sm text-text-muted">
                 Your current tier is <span className="font-bold text-text-primary">{kycTier}</span>
               </p>
-              {kycTier >= 2 ? (
+              {kycTier >= 2 && kycStatus === 'Approved' ? (
                 <span className="text-green-400 text-sm font-semibold">✅ Verified</span>
+              ) : kycStatus === 'Pending' ? (
+                <span className="text-yellow-400 text-sm font-semibold">⏳ Pending Review</span>
               ) : (
                 <button
                   onClick={() => setShowKycModal(true)}
@@ -558,6 +615,22 @@ export default function Profile() {
               )}
             </div>
 
+            {/* Upgrade to Tier 3 (if eligible) */}
+            {canUpgradeToTier3 && kycTier === 2 && (
+              <div className="mt-4 p-4 bg-orange/5 border border-orange/20 rounded-xl">
+                <p className="text-sm text-text-muted">You are Tier 2 verified.</p>
+                <button
+                  onClick={() => {
+                    setKycOption('document');
+                    setShowKycModal(true);
+                  }}
+                  className="mt-2 bg-orange text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-orange-600 transition"
+                >
+                  Upgrade to Tier 3
+                </button>
+              </div>
+            )}
+
             {/* KYC Status Messages */}
             {kycStatus === 'Pending' && (
               <p className="text-yellow-400 text-sm flex items-center gap-2 mt-3">
@@ -566,7 +639,7 @@ export default function Profile() {
             )}
             {kycStatus === 'Approved' && kycTier >= 2 && (
               <p className="text-green-400 text-sm flex items-center gap-2 mt-3">
-                <i className="fa-regular fa-circle-check"></i> KYC verified! You can now withdraw larger amounts instantly.
+                <i className="fa-regular fa-circle-check"></i> KYC verified! You are now Tier {kycTier} with higher withdrawal limits.
               </p>
             )}
           </div>
@@ -578,7 +651,9 @@ export default function Profile() {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">KYC Verification</h2>
+              <h2 className="text-xl font-bold">
+                {kycTier === 1 ? 'KYC Verification' : kycTier === 2 ? 'Upgrade to Tier 3' : 'KYC Verification'}
+              </h2>
               <button
                 onClick={() => setShowKycModal(false)}
                 className="text-text-muted hover:text-text-primary transition text-xl"
@@ -588,35 +663,65 @@ export default function Profile() {
             </div>
 
             <p className="text-text-muted text-sm mb-4">
-              Select an option below. Your data is encrypted and managed with strict confidentiality.
+              {kycTier === 1 && 'Select an option below. Your data is encrypted and managed with strict confidentiality.'}
+              {kycTier === 2 && 'Upload a valid ID document (Passport, Driver\'s License, or NIN Slip) to upgrade to Tier 3.'}
             </p>
 
-            <div className="space-y-3">
-              <button
-                onClick={() => setKycOption('bvn')}
-                className={`w-full p-4 rounded-xl border text-left transition ${
-                  kycOption === 'bvn'
-                    ? 'border-orange bg-orange/10'
-                    : 'border-border bg-black/20 hover:border-orange/50'
-                }`}
-              >
-                <p className="font-semibold">BVN</p>
-                <p className="text-text-muted text-xs">Bank Verification Number</p>
-              </button>
-              <button
-                onClick={() => setKycOption('nin')}
-                className={`w-full p-4 rounded-xl border text-left transition ${
-                  kycOption === 'nin'
-                    ? 'border-orange bg-orange/10'
-                    : 'border-border bg-black/20 hover:border-orange/50'
-                }`}
-              >
-                <p className="font-semibold">NIN</p>
-                <p className="text-text-muted text-xs">National Identification Number</p>
-              </button>
-            </div>
+            {kycTier === 1 ? (
+              <div className="space-y-3">
+                <button
+                  onClick={() => setKycOption('bvn')}
+                  className={`w-full p-4 rounded-xl border text-left transition ${
+                    kycOption === 'bvn'
+                      ? 'border-orange bg-orange/10'
+                      : 'border-border bg-black/20 hover:border-orange/50'
+                  }`}
+                >
+                  <p className="font-semibold">BVN</p>
+                  <p className="text-text-muted text-xs">Bank Verification Number</p>
+                </button>
+                <button
+                  onClick={() => setKycOption('nin')}
+                  className={`w-full p-4 rounded-xl border text-left transition ${
+                    kycOption === 'nin'
+                      ? 'border-orange bg-orange/10'
+                      : 'border-border bg-black/20 hover:border-orange/50'
+                  }`}
+                >
+                  <p className="font-semibold">NIN</p>
+                  <p className="text-text-muted text-xs">National Identification Number</p>
+                </button>
+              </div>
+            ) : kycTier === 2 ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">Document Type</label>
+                  <select
+                    value={documentType}
+                    onChange={(e) => setDocumentType(e.target.value)}
+                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                  >
+                    <option value="">Select document type</option>
+                    <option value="Passport">International Passport</option>
+                    <option value="DriversLicense">Driver's License</option>
+                    <option value="NIN">NIN Slip</option>
+                    <option value="VotersCard">Voter's Card</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">Upload ID Document</label>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => setDocumentFile(e.target.files[0])}
+                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
+                  />
+                  <p className="text-text-muted text-xs mt-1">Supported: JPG, PNG, PDF (max 5MB)</p>
+                </div>
+              </div>
+            ) : null}
 
-            {kycOption && (
+            {kycOption && kycTier === 1 && (
               <div className="mt-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">
@@ -626,7 +731,7 @@ export default function Profile() {
                     type="text"
                     value={kycNumber}
                     onChange={(e) => setKycNumber(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
+                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none"
                     placeholder={`${kycOption.toUpperCase()} number (11 digits)`}
                     maxLength="11"
                     pattern="[0-9]{11}"
@@ -635,18 +740,20 @@ export default function Profile() {
                     Your {kycOption.toUpperCase()} is safely encrypted and only used to verify your identity.
                   </p>
                 </div>
-                <button
-                  onClick={handleKycSubmit}
-                  disabled={saving}
-                  className="w-full bg-orange text-white font-bold py-3 rounded-xl hover:bg-orange-600 transition shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
-                >
-                  {saving ? <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</> : 'Proceed'}
-                </button>
               </div>
             )}
 
+            <button
+              onClick={handleKycSubmit}
+              disabled={saving || (kycTier === 1 && !kycOption) || (kycTier === 2 && !documentFile)}
+              className="w-full bg-orange text-white font-bold py-3 rounded-xl hover:bg-orange-600 transition shadow-lg shadow-orange/20 flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
+            >
+              {saving ? <><i className="fa-solid fa-spinner fa-spin"></i> Submitting...</> : 'Proceed'}
+            </button>
+
             <p className="text-text-muted text-xs mt-4 text-center">
-              You consent to identity verification using your {kycOption ? kycOption.toUpperCase() : 'selected option'}, by clicking proceed.
+              {kycTier === 1 && `You consent to identity verification using your ${kycOption ? kycOption.toUpperCase() : 'selected option'}, by clicking proceed.`}
+              {kycTier === 2 && 'By uploading your document, you consent to identity verification.'}
             </p>
           </div>
         </div>
