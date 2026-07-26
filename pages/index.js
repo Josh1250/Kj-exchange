@@ -77,17 +77,14 @@ export default function Home() {
       </Head>
 
       <Layout>
-        {/* ========== HERO SECTION ========== */}
-        <section className="relative overflow-hidden pt-8 pb-16 md:pt-16 md:pb-20 bg-gradient-to-br from-purple-900/10 to-orange-900/5">
-          {/* Animated Dot Grid Background */}
-          <div className="absolute inset-0 pointer-events-none opacity-20">
-            <div className="absolute inset-0 bg-grid-pattern bg-[length:40px_40px]"></div>
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-bg-primary/20 to-transparent"></div>
-          </div>
 
-          {/* Floating Orbs */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"></div>
-          <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/20 rounded-full blur-3xl animate-float-delayed"></div>
+        {/* ========== HERO SECTION ========== */}
+        <section className="relative overflow-hidden pt-8 pb-16 md:pt-16 md:pb-20 bg-bg-primary">
+          {/* Animated Dot Grid Background (premium fintech feel) */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute inset-0 bg-grid-pattern bg-[length:40px_40px] opacity-30"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-bg-primary/20 to-bg-primary/40"></div>
+          </div>
 
           <div className="container mx-auto px-4 relative z-10">
             <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16">
@@ -197,7 +194,7 @@ export default function Home() {
                     <span>Instant Payouts</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <i className="fa-solid fa-shield text-green-400"></i>
+                    <i className="fa-solid fa-shield-alt text-green-400"></i>
                     <span>Secure</span>
                   </span>
                   <span className="flex items-center gap-1.5">
@@ -309,7 +306,7 @@ export default function Home() {
             <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
               <div className="flex-1 text-center md:text-left">
                 <span className="inline-block bg-green-400/20 text-green-400 text-xs font-bold px-3 py-1 rounded-full mb-3 border border-green-400/20">
-                  💵 Your Competitive Edge
+                  💰 Protect Your Savings
                 </span>
                 <h2 className="text-2xl md:text-3xl font-bold">Convert &amp; Save in USD</h2>
                 <p className="text-text-muted text-sm mt-2 max-w-lg mx-auto md:mx-0">
@@ -331,7 +328,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== HOW IT WORKS ========== */}
+        {/* ========== HOW IT WORKS (Upgraded with progress bar & icons) ========== */}
         <section
           ref={sections[1].ref}
           id="how"
@@ -345,20 +342,36 @@ export default function Home() {
             <p className="text-text-muted mt-2 max-w-2xl mx-auto">Get started in minutes with our streamlined process</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {[
-              { step: '01', title: 'Create Account', desc: 'Sign up for free and verify your identity quickly.' },
-              { step: '02', title: 'Choose Service', desc: 'Select from gift cards, crypto, bills, airtime & data, or USD wallet.' },
-              { step: '03', title: 'Get Paid Instantly', desc: 'Complete your transaction and receive your funds instantly.' },
-            ].map((item, idx) => (
-              <div key={idx} className="text-center group" style={{ transitionDelay: `${idx * 150}ms` }}>
-                <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-r from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-xl mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-purple/20">
-                  {item.step}
+          <div className="max-w-4xl mx-auto relative">
+            {/* Progress Bar (connecting line) */}
+            <div className="hidden md:block absolute top-1/2 left-0 right-0 h-0.5 bg-border -translate-y-1/2 z-0">
+              <div className="h-full w-2/3 bg-gradient-to-r from-orange to-purple-500 rounded-full"></div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
+              {[
+                { step: '01', title: 'Create Account', desc: 'Sign up for free and verify your identity quickly.', icon: 'fa-user-plus' },
+                { step: '02', title: 'Choose Service', desc: 'Select from gift cards, crypto, bills, airtime & data, or USD wallet.', icon: 'fa-hand-holding' },
+                { step: '03', title: 'Get Paid Instantly', desc: 'Complete your transaction and receive your funds instantly.', icon: 'fa-bolt' },
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  className="text-center group relative hover:scale-105 transition-transform duration-300"
+                  style={{ transitionDelay: `${idx * 150}ms` }}
+                >
+                  <div className="relative z-10">
+                    <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-r from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-xl mb-4 shadow-lg shadow-purple/20 group-hover:shadow-purple/40 transition-shadow duration-300">
+                      <span>{item.step}</span>
+                    </div>
+                    <div className="w-12 h-12 mx-auto -mt-8 rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition-transform duration-300">
+                      <i className={`fa-solid ${item.icon}`}></i>
+                    </div>
+                    <h3 className="font-bold text-xl mt-2">{item.title}</h3>
+                    <p className="text-text-muted text-sm mt-2 leading-relaxed">{item.desc}</p>
+                  </div>
                 </div>
-                <h3 className="font-bold text-xl">{item.title}</h3>
-                <p className="text-text-muted text-sm mt-2 leading-relaxed">{item.desc}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
 
@@ -379,7 +392,7 @@ export default function Home() {
               <ul className="mt-8 space-y-6">
                 {[
                   { icon: 'fa-solid fa-bolt', title: 'Lightning Fast', desc: 'Get paid in 5-15 minutes after verification' },
-                  { icon: 'fa-solid fa-shield-halved', title: 'Bank-Grade Security', desc: 'All transactions are encrypted and protected' },
+                  { icon: 'fa-solid fa-shield-alt', title: 'Bank-Grade Security', desc: 'All transactions are encrypted and protected' },
                   { icon: 'fa-solid fa-puzzle-piece', title: 'Easy to Use', desc: 'Simple steps from signup to payout' },
                   { icon: 'fa-solid fa-dollar-sign', title: 'Save in USD', desc: 'Protect your money from Naira devaluation with our USD wallet.' },
                 ].map((item, i) => (
@@ -556,9 +569,6 @@ export default function Home() {
           .animate-float {
             animation: float 8s ease-in-out infinite;
           }
-          .animate-float-delayed {
-            animation: float 10s ease-in-out infinite 2s;
-          }
           .animate-float-slow {
             animation: float 6s ease-in-out infinite;
           }
@@ -594,7 +604,7 @@ export default function Home() {
           }
 
           .bg-grid-pattern {
-            background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
             background-size: 40px 40px;
           }
 
