@@ -22,10 +22,27 @@ export default function DashboardOverview() {
   const [exchangeRates, setExchangeRates] = useState({ USD: 1500 });
   const [quickStats, setQuickStats] = useState({ orders: 0, pending: 0, earned: 0 });
   const [sparklineData, setSparklineData] = useState([]);
+  const [username, setUsername] = useState('');
 
-  // Fetch KYC level
+  // Fetch KYC level and username
   useEffect(() => {
     if (user) {
+      // Get username from user metadata or users table
+      const metaUsername = user?.user_metadata?.username;
+      if (metaUsername) {
+        setUsername(metaUsername);
+      } else {
+        // Fallback: fetch from users table
+        supabase
+          .from('users')
+          .select('username')
+          .eq('id', user.id)
+          .single()
+          .then(({ data }) => {
+            if (data?.username) setUsername(data.username);
+          });
+      }
+
       supabase
         .from('users')
         .select('kyc_level')
@@ -224,6 +241,7 @@ export default function DashboardOverview() {
   const isGiftPoints = selectedCurrency === 'Gift Points';
   const displayBalance = getConvertedBalance();
   const symbol = getCurrencySymbol();
+  const displayName = username || user?.email?.split('@')[0] || 'User';
 
   return (
     <>
@@ -236,7 +254,7 @@ export default function DashboardOverview() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold">Dashboard</h1>
-              <p className="text-text-muted">Hello {user?.email?.split('@')[0] || 'User'}, 👋</p>
+              <p className="text-text-muted">Hello {displayName}, 👋</p>
             </div>
             <button
               onClick={() => setHideBalance(!hideBalance)}
@@ -405,7 +423,7 @@ export default function DashboardOverview() {
               </Link>
               <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
-                  <i className="fa-credit-card"></i> {/* ✅ Updated icon */}
+                  <i className="fa-credit-card"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Pay Bills</p>
               </Link>
