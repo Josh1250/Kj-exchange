@@ -25,7 +25,7 @@ export default function DashboardLayout({ children }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
   const bellRef = useRef(null);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 
   // Fetch unread count & notifications on mount
   useEffect(() => {
@@ -67,7 +67,7 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  // Real‑time subscription for new notifications
+  // Real‑time subscription
   useEffect(() => {
     if (!user) return;
     const subscription = supabase
@@ -120,9 +120,18 @@ export default function DashboardLayout({ children }) {
     if (!showDropdown) {
       if (bellRef.current) {
         const rect = bellRef.current.getBoundingClientRect();
+        const dropdownWidth = 320;
+        // Align the dropdown's right edge with the bell's right edge
+        let left = rect.left + rect.width - dropdownWidth;
+        // Prevent going off-screen left
+        if (left < 10) left = 10;
+        // Prevent going off-screen right
+        if (left + dropdownWidth > window.innerWidth - 10) {
+          left = window.innerWidth - dropdownWidth - 10;
+        }
         setDropdownPosition({
           top: rect.bottom + 8,
-          right: window.innerWidth - rect.right, // ✅ aligns dropdown to the right edge of the bell
+          left: left,
         });
       }
     }
@@ -162,7 +171,7 @@ export default function DashboardLayout({ children }) {
                 alt="KJ Exchange"
                 width={160}
                 height={160}
-                className="w-28 md:w-32 h-auto transition-transform group-hover:scale-105" // ✅ bigger logo
+                className="w-28 md:w-32 h-auto transition-transform group-hover:scale-105"
                 priority
               />
             </Link>
@@ -203,13 +212,11 @@ export default function DashboardLayout({ children }) {
       )}
 
       <div className="flex-1 flex flex-col md:ml-64 overflow-y-auto">
-        {/* Header */}
         <header className="bg-bg-secondary/80 backdrop-blur-lg border-b border-border px-6 py-3 flex justify-between items-center sticky top-0 z-10">
           <button className="md:hidden p-2 rounded-lg hover:bg-white/10 transition" onClick={() => setIsSidebarOpen(true)}>
             <i className="fa-solid fa-bars text-xl text-text-primary"></i>
           </button>
           <div className="flex items-center gap-4">
-            {/* Bell Button */}
             <button
               ref={bellRef}
               onClick={toggleDropdown}
@@ -223,7 +230,6 @@ export default function DashboardLayout({ children }) {
               )}
             </button>
 
-            {/* Profile */}
             <Link href="/dashboard/profile" className="flex items-center gap-2 hover:bg-white/10 rounded-full px-3 py-1 transition">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
                 {user?.email?.charAt(0).toUpperCase()}
@@ -232,18 +238,17 @@ export default function DashboardLayout({ children }) {
             </Link>
           </div>
         </header>
-
         <main className="flex-1 p-6">{children}</main>
       </div>
 
-      {/* Notification Dropdown – Portal with RIGHT alignment */}
+      {/* Notification Dropdown – Portal with LEFT positioning */}
       {showDropdown && createPortal(
         <div
           ref={dropdownRef}
           className="fixed border border-border rounded-xl shadow-2xl shadow-black/70 z-[9999] p-2"
           style={{
             top: dropdownPosition.top,
-            right: dropdownPosition.right,
+            left: dropdownPosition.left,
             width: '320px',
             maxHeight: '400px',
             overflowY: 'auto',
