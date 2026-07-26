@@ -5,7 +5,6 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Link from 'next/link';
 import Head from 'next/head';
-import RateCalculator from '../../components/calculator/RateCalculator';
 
 export default function DashboardOverview() {
   const { user, loading } = useAuth();
@@ -180,6 +179,7 @@ export default function DashboardOverview() {
     }
   };
 
+  // ✅ Fixed: use actual USD balance
   const getConvertedBalance = () => {
     switch (selectedCurrency) {
       case 'USD': return usdBalance;
@@ -211,29 +211,18 @@ export default function DashboardOverview() {
     }).join(' ');
   };
 
-  // Determine actions based on selected currency
-  const getActions = () => {
-    const isKycDone = kycLevel >= 2;
-    if (selectedCurrency === 'Gift Points') {
-      return [{ label: 'Redeem', icon: 'fa-gift', href: '/dashboard/redeem-points' }];
-    }
-    // For USD, show Withdraw (converts to NGN first), Top Up, Convert (if KYC), Deposit Crypto
-    const actions = [
-      { label: 'Withdraw', icon: 'fa-arrow-down', href: '/dashboard/withdraw' },
-      { label: 'Top Up', icon: 'fa-arrow-up', href: '/dashboard/wallet' },
-    ];
-    if (isKycDone) {
-      actions.push({ label: 'Convert', icon: 'fa-arrow-right-arrow-left', href: '/dashboard/convert' });
-    }
-    actions.push({ label: 'Deposit', icon: 'fa-arrow-down', href: '/dashboard/deposit' });
-    return actions;
-  };
+  // Actions: Withdraw, Deposit, Top Up, Convert (NGN ↔ USD)
+  const actions = [
+    { label: 'Withdraw', icon: 'fa-arrow-down', href: '/dashboard/withdraw' },
+    { label: 'Deposit', icon: 'fa-arrow-down', href: '/dashboard/deposit' },
+    { label: 'Top Up', icon: 'fa-arrow-up', href: '/dashboard/wallet' },
+    { label: 'Convert', icon: 'fa-arrow-right-arrow-left', href: '/dashboard/convert' },
+  ];
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   if (!user) return null;
 
   const totalBalance = balance + bonusBalance;
-  const actions = getActions();
   const isGiftPoints = selectedCurrency === 'Gift Points';
   const displayBalance = getConvertedBalance();
   const symbol = getCurrencySymbol();
@@ -323,8 +312,8 @@ export default function DashboardOverview() {
                 </p>
               )}
 
-              {/* Action Buttons */}
-              <div className={`grid ${actions.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' : 'grid-cols-2 md:grid-cols-4'} gap-3 mt-6`}>
+              {/* Action Buttons (4) */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
                 {actions.map((action) => (
                   <Link
                     key={action.label}
@@ -341,15 +330,7 @@ export default function DashboardOverview() {
             </div>
           </div>
 
-          {/* Rate Calculator */}
-          <div className="glass rounded-2xl p-4 border border-border">
-            <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
-              <i className="fa-solid fa-calculator text-orange"></i> Quick Rate Check
-            </h3>
-            <RateCalculator compact />
-          </div>
-
-          {/* Quick Stats */}
+          {/* Quick Stats (4 boxes) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="glass rounded-2xl p-4 text-center border border-border">
               <p className="text-text-muted text-xs uppercase tracking-wider">Total Orders</p>
@@ -387,7 +368,7 @@ export default function DashboardOverview() {
                   </p>
                 </div>
                 <div className="w-full bg-black/30 rounded-full h-2 mt-1">
-                  <div 
+                  <div
                     className="bg-gradient-to-r from-orange to-purple-500 h-2 rounded-full transition-all"
                     style={{ width: `${Math.min((giftPoints / 10000) * 100, 100)}%` }}
                   ></div>
@@ -405,13 +386,13 @@ export default function DashboardOverview() {
             </Link>
           </div>
 
-          {/* Products */}
+          {/* Products (6 cards) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-bold">Products</h2>
               <Link href="/dashboard/products" className="text-sm text-orange hover:underline">View All</Link>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <Link href="/dashboard/sell-gift-card" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-solid fa-gift"></i>
@@ -424,21 +405,29 @@ export default function DashboardOverview() {
                 </div>
                 <p className="text-sm font-semibold mt-2">Crypto</p>
               </Link>
+              <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+                <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
+                  <i className="fa-regular fa-file-invoice"></i>
+                </div>
+                <p className="text-sm font-semibold mt-2">Pay Bills</p>
+              </Link>
+              <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+                <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
+                  <i className="fa-solid fa-wifi"></i>
+                </div>
+                <p className="text-sm font-semibold mt-2">Airtime & Data</p>
+              </Link>
+              <Link href="/rates" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+                <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
+                  <i className="fa-solid fa-calculator"></i>
+                </div>
+                <p className="text-sm font-semibold mt-2">Rate Calculator</p>
+              </Link>
               <div className="glass rounded-xl p-4 text-center border border-border opacity-60 relative">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-text-muted text-xl">
                   <i className="fa-solid fa-sim-card"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">eSIM</p>
-                <span className="text-[10px] text-orange">Soon</span>
-                <div className="absolute top-2 right-2 text-text-muted text-xs">
-                  <i className="fa-solid fa-lock"></i>
-                </div>
-              </div>
-              <div className="glass rounded-xl p-4 text-center border border-border opacity-60 relative">
-                <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-text-muted text-xl">
-                  <i className="fa-solid fa-file-invoice"></i>
-                </div>
-                <p className="text-sm font-semibold mt-2">Bills</p>
                 <span className="text-[10px] text-orange">Soon</span>
                 <div className="absolute top-2 right-2 text-text-muted text-xs">
                   <i className="fa-solid fa-lock"></i>
