@@ -8,45 +8,39 @@ export default function Home() {
   const [openFaq, setOpenFaq] = useState(null);
 
   // Intersection Observer for scroll animations
-  const servicesRef = useRef(null);
-  const howRef = useRef(null);
-  const whyRef = useRef(null);
-  const testimonialsRef = useRef(null);
-  const faqRef = useRef(null);
-  const ctaRef = useRef(null);
-
-  const [servicesVisible, setServicesVisible] = useState(false);
-  const [howVisible, setHowVisible] = useState(false);
-  const [whyVisible, setWhyVisible] = useState(false);
-  const [testimonialsVisible, setTestimonialsVisible] = useState(false);
-  const [faqVisible, setFaqVisible] = useState(false);
-  const [ctaVisible, setCtaVisible] = useState(false);
+  const sections = [
+    { ref: useRef(null), state: useState(false), id: 'services' },
+    { ref: useRef(null), state: useState(false), id: 'how' },
+    { ref: useRef(null), state: useState(false), id: 'why' },
+    { ref: useRef(null), state: useState(false), id: 'testimonials' },
+    { ref: useRef(null), state: useState(false), id: 'faq' },
+    { ref: useRef(null), state: useState(false), id: 'cta' },
+  ];
 
   useEffect(() => {
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          const id = entry.target.id;
-          if (id === 'services') setServicesVisible(true);
-          if (id === 'how') setHowVisible(true);
-          if (id === 'why') setWhyVisible(true);
-          if (id === 'testimonials') setTestimonialsVisible(true);
-          if (id === 'faq') setFaqVisible(true);
-          if (id === 'cta') setCtaVisible(true);
-        }
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            sections.forEach(({ ref, state }) => {
+              if (ref.current?.id === id) {
+                state[1](true);
+              }
+            });
+          }
+        });
       },
       { threshold: 0.1 }
     );
 
-    const sections = [servicesRef, howRef, whyRef, testimonialsRef, faqRef, ctaRef];
-    sections.forEach(ref => {
+    sections.forEach(({ ref }) => {
       if (ref.current) observer.observe(ref.current);
     });
 
     return () => observer.disconnect();
   }, []);
 
-  // FAQ data
   const faqs = [
     {
       q: 'What services does KJ Exchange offer?',
@@ -85,15 +79,41 @@ export default function Home() {
       <Layout>
         {/* ========== HERO SECTION ========== */}
         <section className="relative overflow-hidden pt-8 pb-16 md:pt-16 md:pb-20 bg-gradient-to-br from-purple-900/10 to-orange-900/5">
+          {/* Animated Dot Grid Background */}
+          <div className="absolute inset-0 pointer-events-none opacity-20">
+            <div className="absolute inset-0 bg-grid-pattern bg-[length:40px_40px]"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-bg-primary/20 to-transparent"></div>
+          </div>
+
+          {/* Floating Orbs */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"></div>
           <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/20 rounded-full blur-3xl animate-float-delayed"></div>
 
           <div className="container mx-auto px-4 relative z-10">
             <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16">
-              {/* Left: Phone Mockup */}
+              {/* Left: Phone Mockup + Floating Stats Card */}
               <div className="flex-1 flex justify-center md:justify-start relative">
+                {/* Floating Stats Card */}
+                <div className="absolute -top-6 -right-6 z-20 glass rounded-2xl px-4 py-3 border border-border shadow-2xl backdrop-blur-md hidden md:flex items-center gap-4 animate-float-slow">
+                  <div className="text-center">
+                    <p className="text-xs text-text-muted">Processed</p>
+                    <p className="text-lg font-bold text-green-400">₦100M+</p>
+                  </div>
+                  <div className="w-px h-10 bg-border"></div>
+                  <div className="text-center">
+                    <p className="text-xs text-text-muted">Rating</p>
+                    <p className="text-lg font-bold text-yellow-400">⭐ 4.9/5</p>
+                  </div>
+                  <div className="w-px h-10 bg-border"></div>
+                  <div className="text-center">
+                    <p className="text-xs text-text-muted">Payout</p>
+                    <p className="text-lg font-bold text-orange">5-15 min</p>
+                  </div>
+                </div>
+
+                {/* Phone Frame */}
                 <div className="relative group">
-                  <div className="absolute inset-0 bg-orange-500/20 rounded-[3rem] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                  <div className="absolute inset-0 bg-orange-500/20 rounded-[3rem] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 animate-pulse-glow"></div>
                   <div className="relative w-72 md:w-80 lg:w-96 rounded-[3rem] border-2 border-border bg-black/10 p-3 shadow-2xl shadow-orange/5 animate-float-slow">
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-b-xl z-20 flex items-center justify-center">
                       <div className="w-2 h-2 bg-black/20 rounded-full"></div>
@@ -130,10 +150,28 @@ export default function Home() {
                 </h1>
 
                 <p className="text-text-muted text-lg md:text-xl mt-4 max-w-xl leading-relaxed mx-auto md:mx-0">
-                  Sell crypto and gift cards, pay bills, buy airtime & data, convert and save in Naira or USD — all in one place. Fast, secure, and convenient.
+                  Sell crypto and gift cards, pay bills, buy airtime & data,{' '}
+                  <span className="text-orange font-semibold">convert and save in Naira or USD</span> — all in one place. Fast, secure, and convenient.
                 </p>
 
-                <div className="mt-8 flex flex-wrap gap-4 justify-center md:justify-start">
+                {/* Feature Pills */}
+                <div className="mt-4 flex flex-wrap gap-2 justify-center md:justify-start">
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange/10 text-orange border border-orange/20">
+                    Sell Crypto
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-400/10 text-green-400 border border-green-400/20">
+                    Pay Bills
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-400/10 text-blue-400 border border-blue-400/20">
+                    Save in USD
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">
+                    Buy Airtime
+                  </span>
+                </div>
+
+                {/* CTAs */}
+                <div className="mt-6 flex flex-wrap gap-4 justify-center md:justify-start">
                   <Link
                     href="/auth/register"
                     className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-8 py-3.5 rounded-full font-bold hover:shadow-lg hover:shadow-orange/30 transition-all duration-300 flex items-center gap-2 btn-pulse"
@@ -149,7 +187,7 @@ export default function Home() {
                 </div>
 
                 {/* Trust Badges */}
-                <div className="mt-8 flex flex-wrap items-center justify-center md:justify-start gap-6 text-sm text-text-muted">
+                <div className="mt-6 flex flex-wrap items-center justify-center md:justify-start gap-6 text-sm text-text-muted">
                   <span className="flex items-center gap-1.5">
                     <i className="fa-solid fa-star text-yellow-400"></i>
                     <span>500+ Users</span>
@@ -172,12 +210,12 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== PRODUCTS SECTION (7 Cards) ========== */}
+        {/* ========== PRODUCTS SECTION (6 Cards - 3×2) ========== */}
         <section
-          ref={servicesRef}
+          ref={sections[0].ref}
           id="services"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            servicesVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            sections[0].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="text-center mb-14">
@@ -189,64 +227,105 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {/* Gift Cards */}
-            <Link href="/dashboard/sell-gift-card" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
-              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
-                <i className="fa-solid fa-gift"></i>
+            {[
+              {
+                icon: 'fa-solid fa-gift',
+                title: 'Gift Cards',
+                desc: 'Apple, Amazon, Google Play, Steam & more',
+                link: '/dashboard/sell-gift-card',
+                cta: 'Sell Gift Cards →',
+              },
+              {
+                icon: 'fa-brands fa-bitcoin',
+                title: 'Crypto',
+                desc: 'BTC, USDT, ETH, SOL & more',
+                link: '/dashboard/sell',
+                cta: 'Sell Crypto →',
+              },
+              {
+                icon: 'fa-credit-card',
+                title: 'Pay Bills',
+                desc: 'Electricity, TV, Internet & more',
+                link: '#',
+                cta: 'Pay Bills →',
+              },
+              {
+                icon: 'fa-solid fa-wifi',
+                title: 'Airtime & Data',
+                desc: 'MTN, Glo, Airtel, 9mobile & more',
+                link: '#',
+                cta: 'Buy Airtime →',
+              },
+              {
+                icon: 'fa-solid fa-calculator',
+                title: 'Rate Calculator',
+                desc: 'Check live rates instantly',
+                link: '/rates',
+                cta: 'Check Rates →',
+              },
+              {
+                icon: 'fa-solid fa-sim-card',
+                title: 'eSIM',
+                desc: 'Global connectivity, coming soon',
+                link: '#',
+                cta: 'Coming Soon',
+                soon: true,
+              },
+            ].map((service, idx) => (
+              <div
+                key={idx}
+                className={`glass rounded-2xl p-6 border border-border hover:border-orange transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-orange/10 ${
+                  service.soon ? 'opacity-70' : ''
+                }`}
+                style={{ transitionDelay: `${idx * 100}ms` }}
+              >
+                <div className="w-12 h-12 rounded-full bg-orange/10 flex items-center justify-center text-orange text-2xl mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <i className={service.icon}></i>
+                </div>
+                <h3 className="font-bold text-lg">{service.title}</h3>
+                <p className="text-text-muted text-sm mt-2 leading-relaxed">{service.desc}</p>
+                {service.soon ? (
+                  <span className="inline-block mt-4 text-xs font-semibold text-orange bg-orange/10 px-3 py-1 rounded-full">
+                    Coming Soon
+                  </span>
+                ) : (
+                  <Link
+                    href={service.link}
+                    className="inline-block text-orange text-sm font-semibold mt-4 hover:underline transition-all duration-300 group-hover:translate-x-1"
+                  >
+                    {service.cta}
+                  </Link>
+                )}
               </div>
-              <p className="text-sm font-semibold mt-2">Gift Cards</p>
-            </Link>
+            ))}
+          </div>
+        </section>
 
-            {/* Crypto */}
-            <Link href="/dashboard/sell" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
-              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
-                <i className="fa-brands fa-bitcoin"></i>
+        {/* ========== DEDICATED "CONVERT & SAVE IN USD" SECTION ========== */}
+        <section className="container mx-auto px-4 py-16 border-t border-border">
+          <div className="glass rounded-3xl p-8 md:p-12 border border-border bg-gradient-to-br from-green-900/10 to-orange-900/10 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/10 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl"></div>
+            <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+              <div className="flex-1 text-center md:text-left">
+                <span className="inline-block bg-green-400/20 text-green-400 text-xs font-bold px-3 py-1 rounded-full mb-3 border border-green-400/20">
+                  💵 Your Competitive Edge
+                </span>
+                <h2 className="text-2xl md:text-3xl font-bold">Convert &amp; Save in USD</h2>
+                <p className="text-text-muted text-sm mt-2 max-w-lg mx-auto md:mx-0">
+                  Protect your money from Naira devaluation. Convert Naira to USD instantly and hold your savings in USD at competitive rates.
+                  <br />
+                  <span className="text-green-400 font-semibold">Only KJ Exchange offers this feature.</span>
+                </p>
+                <Link
+                  href="/dashboard/convert"
+                  className="mt-4 inline-block bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-2.5 rounded-full font-semibold hover:shadow-lg hover:shadow-green-500/30 transition-all duration-300"
+                >
+                  <i className="fa-solid fa-dollar-sign mr-2"></i> Start Saving in USD
+                </Link>
               </div>
-              <p className="text-sm font-semibold mt-2">Crypto</p>
-            </Link>
-
-            {/* Pay Bills */}
-            <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
-              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
-                <i className="fa-credit-card"></i>
-              </div>
-              <p className="text-sm font-semibold mt-2">Pay Bills</p>
-            </Link>
-
-            {/* Airtime & Data */}
-            <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
-              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
-                <i className="fa-solid fa-wifi"></i>
-              </div>
-              <p className="text-sm font-semibold mt-2">Airtime & Data</p>
-            </Link>
-
-            {/* Rate Calculator */}
-            <Link href="/rates" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
-              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
-                <i className="fa-solid fa-calculator"></i>
-              </div>
-              <p className="text-sm font-semibold mt-2">Rate Calculator</p>
-            </Link>
-
-            {/* USD Wallet — NEW */}
-            <Link href="/dashboard/convert" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
-              <div className="w-10 h-10 mx-auto rounded-full bg-green-400/10 flex items-center justify-center text-green-400 text-xl group-hover:scale-110 transition">
-                <i className="fa-solid fa-dollar-sign"></i>
-              </div>
-              <p className="text-sm font-semibold mt-2">USD Wallet</p>
-              <p className="text-[10px] text-text-muted mt-0.5">Convert & Save</p>
-            </Link>
-
-            {/* eSIM — Coming Soon */}
-            <div className="glass rounded-xl p-4 text-center border border-border opacity-60 relative">
-              <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-text-muted text-xl">
-                <i className="fa-solid fa-sim-card"></i>
-              </div>
-              <p className="text-sm font-semibold mt-2">eSIM</p>
-              <span className="text-[10px] text-orange">Soon</span>
-              <div className="absolute top-2 right-2 text-text-muted text-xs">
-                <i className="fa-solid fa-lock"></i>
+              <div className="flex-shrink-0 text-6xl md:text-7xl">
+                💵
               </div>
             </div>
           </div>
@@ -254,10 +333,10 @@ export default function Home() {
 
         {/* ========== HOW IT WORKS ========== */}
         <section
-          ref={howRef}
+          ref={sections[1].ref}
           id="how"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            howVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            sections[1].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="text-center mb-14">
@@ -283,12 +362,12 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== WHY CHOOSE US (Updated with USD Savings) ========== */}
+        {/* ========== WHY CHOOSE US ========== */}
         <section
-          ref={whyRef}
+          ref={sections[2].ref}
           id="why"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            whyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            sections[2].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="grid md:grid-cols-2 gap-16 items-center">
@@ -302,7 +381,6 @@ export default function Home() {
                   { icon: 'fa-solid fa-bolt', title: 'Lightning Fast', desc: 'Get paid in 5-15 minutes after verification' },
                   { icon: 'fa-solid fa-shield-halved', title: 'Bank-Grade Security', desc: 'All transactions are encrypted and protected' },
                   { icon: 'fa-solid fa-puzzle-piece', title: 'Easy to Use', desc: 'Simple steps from signup to payout' },
-                  { icon: 'fa-solid fa-arrows-rotate', title: 'Flexible Options', desc: 'Sell gift cards, crypto, pay bills & buy airtime' },
                   { icon: 'fa-solid fa-dollar-sign', title: 'Save in USD', desc: 'Protect your money from Naira devaluation with our USD wallet.' },
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-4 group" style={{ transitionDelay: `${i * 100}ms` }}>
@@ -335,10 +413,10 @@ export default function Home() {
 
         {/* ========== TESTIMONIALS ========== */}
         <section
-          ref={testimonialsRef}
+          ref={sections[3].ref}
           id="testimonials"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            testimonialsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            sections[3].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="text-center mb-14">
@@ -396,10 +474,10 @@ export default function Home() {
 
         {/* ========== FAQ ========== */}
         <section
-          ref={faqRef}
+          ref={sections[4].ref}
           id="faq"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            faqVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            sections[4].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="text-center mb-14">
@@ -441,10 +519,10 @@ export default function Home() {
 
         {/* ========== FINAL CTA ========== */}
         <section
-          ref={ctaRef}
+          ref={sections[5].ref}
           id="cta"
           className={`container mx-auto px-4 py-20 border-t border-border transition-all duration-700 ${
-            ctaVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            sections[5].state[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
           <div className="glass rounded-3xl p-12 text-center border border-border max-w-4xl mx-auto shadow-2xl shadow-orange/5">
@@ -485,6 +563,21 @@ export default function Home() {
             animation: float 6s ease-in-out infinite;
           }
 
+          @keyframes pulse-glow {
+            0%,
+            100% {
+              opacity: 0.3;
+              transform: scale(1);
+            }
+            50% {
+              opacity: 0.7;
+              transform: scale(1.05);
+            }
+          }
+          .animate-pulse-glow {
+            animation: pulse-glow 4s ease-in-out infinite;
+          }
+
           @keyframes pulse-cta {
             0% {
               box-shadow: 0 0 0 0 rgba(255, 115, 0, 0.4);
@@ -498,6 +591,11 @@ export default function Home() {
           }
           .btn-pulse {
             animation: pulse-cta 2.4s infinite;
+          }
+
+          .bg-grid-pattern {
+            background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
           }
 
           .opacity-0 {
