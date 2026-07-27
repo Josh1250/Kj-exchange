@@ -10,35 +10,6 @@ export default function Home() {
   const [mouseY, setMouseY] = useState(0);
   const heroRef = useRef(null);
 
-  // Live activity feed (fake transactions)
-  const [liveActivity, setLiveActivity] = useState({
-    name: 'Chidi O.',
-    amount: '250',
-    time: 'just now',
-  });
-
-  // Rotate through dummy transactions every 5 seconds
-  useEffect(() => {
-    const users = [
-      { name: 'Amina K.', amount: '120' },
-      { name: 'Emeka J.', amount: '400' },
-      { name: 'Tunde A.', amount: '75' },
-      { name: 'Zainab B.', amount: '550' },
-      { name: 'Kofi M.', amount: '200' },
-      { name: 'Ngozi E.', amount: '310' },
-    ];
-    const interval = setInterval(() => {
-      const random = users[Math.floor(Math.random() * users.length)];
-      const minutes = Math.floor(Math.random() * 10) + 1;
-      setLiveActivity({
-        name: random.name,
-        amount: random.amount,
-        time: `${minutes} min ago`,
-      });
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   // Intersection Observer for scroll animations
   const sections = [
     { ref: useRef(null), state: useState(false), id: 'services' },
@@ -154,7 +125,7 @@ export default function Home() {
             <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16">
               {/* Left: Phone Mockup + Floating Stats Card */}
               <div className="flex-1 flex justify-center md:justify-start relative">
-                {/* Floating Stats Card (visible on all screen sizes now) */}
+                {/* Floating Stats Card (visible on all screen sizes) */}
                 <div className="absolute -top-6 -right-6 z-20 glass rounded-2xl px-3 py-2 border border-border shadow-2xl backdrop-blur-md flex items-center gap-3 animate-float-slow">
                   <div className="text-center">
                     <p className="text-[10px] text-text-muted">Processed</p>
@@ -247,17 +218,15 @@ export default function Home() {
                   </Link>
                 </div>
 
-                {/* 4. Live Activity Ticker (New) */}
-                <div className="mt-6 flex items-center gap-3 text-xs bg-black/30 px-4 py-2 rounded-full border border-border backdrop-blur-sm max-w-md mx-auto md:mx-0 transition-all hover:border-orange/30">
-                  <span className="relative flex h-2 w-2 flex-shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                  </span>
-                  <span className="text-text-muted">Recent:</span>
-                  <span className="text-white font-medium">{liveActivity.name}</span>
-                  <span className="text-text-muted">sold</span>
-                  <span className="text-orange font-semibold">${liveActivity.amount}</span>
-                  <span className="text-text-muted">• {liveActivity.time}</span>
+                {/* ✅ REPLACED FAKE TICKER WITH STATIC TRUST BADGE */}
+                <div className="mt-6 flex items-center gap-3 text-xs bg-green-500/5 px-4 py-2 rounded-full border border-green-500/20 backdrop-blur-sm max-w-md mx-auto md:mx-0 transition-all hover:border-green-500/40">
+                  <i className="fa-solid fa-bolt text-green-400"></i>
+                  <span className="text-text-muted">Average payout:</span>
+                  <span className="text-white font-bold">6 min</span>
+                  <span className="text-text-muted">•</span>
+                  <span className="text-green-400 font-medium">100% secure</span>
+                  <span className="text-text-muted">•</span>
+                  <span className="text-orange font-semibold">Live rates</span>
                 </div>
 
                 {/* Trust Badges */}
@@ -284,10 +253,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== (All other sections remain exactly as before) ========== */}
-        {/* I'm including them in full for completeness — they are unchanged. */}
-
-        {/* PRODUCTS SECTION */}
+        {/* ========== PRODUCTS SECTION (Unchanged) ========== */}
         <section
           ref={sections[0].ref}
           id="services"
@@ -378,7 +344,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* CONVERT & SAVE SECTION */}
+        {/* ========== CONVERT & SAVE (Unchanged) ========== */}
         <section className="container mx-auto px-4 py-16 border-t border-border">
           <div className="glass rounded-3xl p-8 md:p-12 border border-border bg-gradient-to-br from-green-900/10 to-orange-900/10 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/10 rounded-full blur-3xl"></div>
@@ -406,7 +372,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* HOW IT WORKS */}
+        {/* ========== HOW IT WORKS (Unchanged) ========== */}
         <section
           ref={sections[1].ref}
           id="how"
@@ -452,7 +418,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* WHY CHOOSE US */}
+        {/* ========== WHY CHOOSE US (Unchanged) ========== */}
         <section
           ref={sections[2].ref}
           id="why"
@@ -501,7 +467,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* TESTIMONIALS */}
+        {/* ========== TESTIMONIALS (Unchanged) ========== */}
         <section
           ref={sections[3].ref}
           id="testimonials"
@@ -562,7 +528,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* FAQ */}
+        {/* ========== FAQ (Unchanged) ========== */}
         <section
           ref={sections[4].ref}
           id="faq"
@@ -607,7 +573,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* FINAL CTA */}
+        {/* ========== FINAL CTA (Unchanged) ========== */}
         <section
           ref={sections[5].ref}
           id="cta"
@@ -632,16 +598,11 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ====== GLOBAL STYLES (kept for completeness) ====== */}
+        {/* ====== GLOBAL STYLES ====== */}
         <style jsx global>{`
           @keyframes float {
-            0%,
-            100% {
-              transform: translateY(0) scale(1);
-            }
-            50% {
-              transform: translateY(-16px) scale(1.02);
-            }
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-16px) scale(1.02); }
           }
           .animate-float {
             animation: float 8s ease-in-out infinite;
