@@ -2,7 +2,7 @@ import Header from './Header';
 import Footer from './Footer';
 import { useState, useEffect } from 'react';
 
-export default function Layout({ children }) {
+export default function Layout({ children, hideOrbs = false }) {
   const [prices, setPrices] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
   const [changes, setChanges] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
   const [isLoading, setIsLoading] = useState(true);
@@ -50,9 +50,18 @@ export default function Layout({ children }) {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-bg-primary">
+    <div className="min-h-screen flex flex-col bg-bg-primary relative overflow-hidden">
+      {/* ===== GLOWING ORBS ===== */}
+      {!hideOrbs && (
+        <>
+          <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/20 rounded-full blur-3xl animate-float-delayed pointer-events-none"></div>
+        </>
+      )}
+
       <Header />
-      {/* ====== LIVE PRICE TICKER (Global) ====== */}
+
+      {/* ===== LIVE PRICE TICKER (Global) ===== */}
       <div className="bg-bg-card/40 backdrop-blur-sm border-y border-border py-2 overflow-hidden">
         <div className="flex animate-marquee whitespace-nowrap gap-8 text-sm">
           {isLoading ? (
@@ -72,9 +81,11 @@ export default function Layout({ children }) {
           )}
         </div>
       </div>
+
       <main id="top" className="flex-1">
         {children}
       </main>
+
       <Footer />
     </div>
   );
