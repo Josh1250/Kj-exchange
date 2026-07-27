@@ -1,84 +1,18 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
-  const [prices, setPrices] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
-  const [changes, setChanges] = useState({ BTC: 0, ETH: 0, USDT: 0, SOL: 0 });
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchPrices = async () => {
-      try {
-        setIsLoading(true);
-        const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
-        const fxData = await fxRes.json();
-        const ngn = fxData.rates?.NGN || 1550;
-
-        const cryptoRes = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,tether,ethereum,solana&vs_currencies=usd'
-        );
-        const cryptoData = await cryptoRes.json();
-
-        const btcUsd = cryptoData.bitcoin?.usd || 0;
-        const usdtUsd = cryptoData.tether?.usd || 1;
-        const ethUsd = cryptoData.ethereum?.usd || 0;
-        const solUsd = cryptoData.solana?.usd || 0;
-
-        setPrices({
-          BTC: btcUsd,
-          ETH: ethUsd,
-          USDT: usdtUsd,
-          SOL: solUsd,
-        });
-
-        setChanges({
-          BTC: (Math.random() * 6 - 2).toFixed(2),
-          ETH: (Math.random() * 6 - 2).toFixed(2),
-          USDT: (Math.random() * 0.5 - 0.25).toFixed(2),
-          SOL: (Math.random() * 8 - 3).toFixed(2),
-        });
-      } catch (error) {
-        console.warn('Footer price fetch failed');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchPrices();
-    const interval = setInterval(fetchPrices, 60000);
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <footer className="relative border-t border-border bg-bg-secondary/80 backdrop-blur-sm">
+      {/* Shimmer border */}
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 via-orange-500 to-purple-500 bg-[length:200%_100%] animate-shimmer opacity-60"></div>
 
-      <div className="border-b border-border bg-bg-card/30 backdrop-blur-sm py-2 overflow-hidden">
-        <div className="flex animate-marquee whitespace-nowrap gap-8 text-xs">
-          {isLoading ? (
-            <span className="text-text-muted">Loading prices...</span>
-          ) : (
-            <>
-              {['BTC', 'ETH', 'USDT', 'SOL'].map((asset) => (
-                <span key={asset} className="flex items-center gap-2">
-                  <span className="font-semibold">{asset}</span>
-                  <span className="text-text-primary">${prices[asset].toFixed(asset === 'USDT' ? 4 : 2)}</span>
-                  <span className={parseFloat(changes[asset]) >= 0 ? 'text-green-400' : 'text-red-400'}>
-                    {parseFloat(changes[asset]) >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(changes[asset]))}%
-                  </span>
-                </span>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-
       <div className="container mx-auto px-4 py-12 md:py-16">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Column 1: Brand */}
           <div className="space-y-4 lg:col-span-1">
-            {/* 👇 UPDATED LOGO SIZE — matches header */}
             <Link href="/" className="block group">
               <Image
                 src="/logo.png"
@@ -88,15 +22,15 @@ export default function Footer() {
                 className="w-44 md:w-56 h-auto transition-transform group-hover:scale-105"
               />
             </Link>
+
+            {/* ✅ NEW BRAND COPY — your provided text */}
             <p className="text-text-muted text-sm leading-relaxed max-w-xs">
-              Nigeria's trusted platform for selling gift cards, crypto, and paying bills instantly. 
-              Get paid in Naira, USD, or Cedis.
+              Your trusted digital finance platform for crypto and gift card exchange,
+              Naira-to-dollar savings, secure withdrawals, and seamless everyday payments.
+              Trade smart. Trade secure.
             </p>
-            <p className="text-text-muted text-sm leading-relaxed max-w-xs">
-              <span className="text-orange font-semibold">Secure</span> · 
-              <span className="text-orange font-semibold"> Fast</span> · 
-              <span className="text-orange font-semibold"> 0% Hidden Fees</span>
-            </p>
+
+            {/* Trust badges */}
             <div className="flex flex-wrap gap-2 pt-2">
               <span className="inline-flex items-center gap-1.5 text-xs bg-green-400/10 text-green-400 border border-green-400/20 px-3 py-1 rounded-full">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
@@ -185,7 +119,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Column 4: Connect */}
+          {/* Column 4: Connect With Us (was Column 4, now last since Mobile App removed) */}
           <div>
             <h4 className="text-text-secondary font-semibold text-sm uppercase tracking-wider mb-4">Connect With Us</h4>
             <div className="space-y-3">
@@ -245,24 +179,6 @@ export default function Footer() {
               </div>
             </div>
           </div>
-
-          {/* Column 5: Mobile App Coming Soon */}
-          <div>
-            <h4 className="text-text-secondary font-semibold text-sm uppercase tracking-wider mb-4">Mobile App</h4>
-            <div className="bg-black/20 rounded-2xl p-5 border border-border/50 text-center">
-              <div className="text-4xl mb-2">📱</div>
-              <p className="text-text-muted text-sm font-medium">Coming Soon</p>
-              <p className="text-text-muted text-xs mt-1">Trade on the go with our mobile app.</p>
-              <div className="flex flex-col gap-2 mt-3">
-                <span className="border border-border rounded-lg px-3 py-1.5 text-xs text-text-muted flex items-center justify-center gap-2 opacity-60">
-                  <i className="fab fa-apple"></i> iOS (Soon)
-                </span>
-                <span className="border border-border rounded-lg px-3 py-1.5 text-xs text-text-muted flex items-center justify-center gap-2 opacity-60">
-                  <i className="fab fa-google-play"></i> Android (Soon)
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Bottom bar */}
@@ -293,16 +209,6 @@ export default function Footer() {
       </div>
 
       <style jsx global>{`
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .animate-marquee {
-          display: flex;
-          animation: marquee 30s linear infinite;
-          width: max-content;
-        }
-
         @keyframes shimmer {
           0%, 100% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
