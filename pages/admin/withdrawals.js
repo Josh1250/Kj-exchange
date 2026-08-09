@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Head from 'next/head';
+import Link from 'next/link';
 
 export default function AdminWithdrawals() {
   const router = useRouter();
@@ -99,14 +100,12 @@ export default function AdminWithdrawals() {
     if (processing) return;
     setProcessing(txId);
     try {
-      // Update transaction status to completed
       const { error } = await supabase
         .from('transactions')
         .update({ status: 'completed' })
         .eq('id', txId);
       if (error) throw new Error(error.message);
 
-      // Send notification
       await supabase
         .from('notifications')
         .insert({
@@ -128,15 +127,12 @@ export default function AdminWithdrawals() {
     if (processing) return;
     setProcessing(txId);
     try {
-      // Update transaction status to failed
       const { error } = await supabase
         .from('transactions')
         .update({ status: 'failed' })
         .eq('id', txId);
       if (error) throw new Error(error.message);
 
-      // Refund the wallet? We need to add the amount back.
-      // For simplicity, we'll just notify and not refund automatically (admin can manually handle).
       await supabase
         .from('notifications')
         .insert({
@@ -167,7 +163,7 @@ export default function AdminWithdrawals() {
     <>
       <Head><title>Admin Withdrawals · KJ Exchange</title></Head>
       <AdminLayout>
-        <div className="space-y-6">
+        <div className="max-w-6xl mx-auto px-4 py-4 space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <h1 className="text-2xl font-bold">Manage Withdrawals</h1>
             <button
@@ -227,33 +223,46 @@ export default function AdminWithdrawals() {
                   return (
                     <div key={tx.id} className="p-4 hover:bg-white/5 transition">
                       <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                          <p className="font-bold">{symbol}{tx.amount.toLocaleString()} ({currency})</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold">{symbol}{Math.abs(tx.amount).toLocaleString()} ({currency})</p>
                           <p className="text-text-muted text-sm">User: {tx.users?.email || tx.users?.full_name || 'Unknown'}</p>
                           <p className="text-text-muted text-sm">Bank: {meta.bank_name || meta.bank_code || 'N/A'}</p>
-                          <p className="text-text-muted text-sm">Account: {meta.account_number || 'N/A'}</p>
+                          <p className="text-text-muted text-sm truncate">Account: {meta.account_number || 'N/A'}</p>
                           <p className="text-text-muted text-xs">{new Date(tx.created_at).toLocaleString()}</p>
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${statusColors[tx.status] || 'bg-gray-400/20 text-gray-400'}`}>
                             {tx.status}
                           </span>
                         </div>
-                        {tx.status === 'pending' && (
+                        {tx.status === 'pending' ? (
                           <div className="flex flex-wrap gap-2">
+                            <Link
+                              href={`/admin/withdrawals/${tx.id}`}
+                              className="text-orange text-xs hover:underline flex items-center gap-1"
+                            >
+                              View Detail →
+                            </Link>
                             <button
                               onClick={() => markCompleted(tx.id, tx.user_id)}
                               disabled={processing === tx.id}
-                              className="bg-green-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-600 transition disabled:opacity-50 flex items-center gap-1"
+                              className="bg-green-500 text-white px-3 py-1 rounded-lg text-sm font-semibold hover:bg-green-600 transition disabled:opacity-50 flex items-center gap-1"
                             >
                               {processing === tx.id ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-regular fa-circle-check"></i>} Complete
                             </button>
                             <button
                               onClick={() => markFailed(tx.id, tx.user_id)}
                               disabled={processing === tx.id}
-                              className="bg-red-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-red-600 transition disabled:opacity-50 flex items-center gap-1"
+                              className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm font-semibold hover:bg-red-600 transition disabled:opacity-50 flex items-center gap-1"
                             >
                               <i className="fa-regular fa-circle-xmark"></i> Reject
                             </button>
                           </div>
+                        ) : (
+                          <Link
+                            href={`/admin/withdrawals/${tx.id}`}
+                            className="text-orange text-sm hover:underline flex items-center gap-1"
+                          >
+                            View Details →
+                          </Link>
                         )}
                       </div>
                     </div>
