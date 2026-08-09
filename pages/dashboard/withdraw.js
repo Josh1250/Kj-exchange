@@ -32,7 +32,7 @@ export default function Withdraw() {
   const [showBanks, setShowBanks] = useState(false);
   const [bankSearch, setBankSearch] = useState('');
 
-  // ===== Fee Calculation =====
+  // ===== Fee =====
   const [fee, setFee] = useState(0);
   const [totalDeduction, setTotalDeduction] = useState(0);
 
@@ -48,14 +48,12 @@ export default function Withdraw() {
     }
   }, [user, loading, router]);
 
-  // ===== Recalculate fee whenever amount changes =====
   useEffect(() => {
     calculateFees();
   }, [amount]);
 
   const fetchData = async () => {
     try {
-      // Wallet balance
       const { data: wallet } = await supabase
         .from('wallets')
         .select('balance')
@@ -63,7 +61,6 @@ export default function Withdraw() {
         .maybeSingle();
       setBalance(wallet?.balance || 0);
 
-      // User profile with KYC tier and daily limits
       const { data: profile } = await supabase
         .from('users')
         .select('kyc_tier, daily_withdrawal_limit, daily_withdrawn_today, withdrawal_limit_reset')
@@ -71,10 +68,8 @@ export default function Withdraw() {
         .single();
 
       if (profile) {
-        // Check if daily limit needs reset
         const today = new Date().toISOString().split('T')[0];
         if (profile.withdrawal_limit_reset !== today) {
-          // Reset daily limit
           await supabase
             .from('users')
             .update({
@@ -90,7 +85,6 @@ export default function Withdraw() {
         const tier = profile.kyc_tier || 1;
         setKycTier(tier);
         
-        // Set limits based on tier (Dtunes style)
         const limits = {
           1: { daily: 3000000, perTx: 500000 },
           2: { daily: 15000000, perTx: 1000000 },
@@ -100,7 +94,6 @@ export default function Withdraw() {
         setRemainingLimit((limits[tier]?.daily || 3000000) - (profile.daily_withdrawn_today || 0));
       }
 
-      // Saved banks
       const { data: bankData } = await supabase
         .from('bank_accounts')
         .select('*')
@@ -117,7 +110,6 @@ export default function Withdraw() {
         setBankSearch(defaultBank.bank_name);
       }
 
-      // Withdrawal history
       const { data: history } = await supabase
         .from('transactions')
         .select('*')
@@ -143,7 +135,6 @@ export default function Withdraw() {
     }
   };
 
-  // ===== Calculate Fees =====
   const calculateFees = () => {
     const amt = parseFloat(amount) || 0;
     if (amt <= 0) {
@@ -156,7 +147,6 @@ export default function Withdraw() {
     setTotalDeduction(amt + feeAmount);
   };
 
-  // ===== Get Selected Bank =====
   const getSelectedBank = () => {
     if (selectedBankId) {
       return banks.find(b => b.id === selectedBankId);
@@ -164,7 +154,6 @@ export default function Withdraw() {
     return null;
   };
 
-  // ===== Check Balance and Limits =====
   const checkLimits = (amt) => {
     if (amt > remainingLimit) {
       setError(`Daily withdrawal limit exceeded. You have ₦${remainingLimit.toLocaleString()} remaining today.`);
@@ -179,7 +168,6 @@ export default function Withdraw() {
     return true;
   };
 
-  // ===== Resolve Account Name =====
   const resolveAccount = async () => {
     if (!accountNumber || accountNumber.length < 10) {
       setError('Enter a valid account number');
@@ -212,7 +200,7 @@ export default function Withdraw() {
     }
   };
 
-  // ===== Withdraw =====
+  // ===== NEW: Withdraw — Manual Only =====
   const handleWithdraw = async (e) => {
     e.preventDefault();
     setError('');
@@ -226,7 +214,6 @@ export default function Withdraw() {
       return;
     }
 
-    // Check daily and per-transaction limits
     if (!checkLimits(amt)) {
       setSubmitting(false);
       return;
@@ -250,17 +237,41 @@ export default function Withdraw() {
       return;
     }
 
-    // KYC Check
     if (kycTier < 2 && amt > 50000) {
       setError('KYC Level 2 required for withdrawals above ₦50,000. Complete KYC in your profile.');
       setSubmitting(false);
       return;
     }
 
-    const isAuto = kycTier >= 2;
-
     try {
-      // 1. Create transaction (status: pending)
+      // 1. Deduct wallet immediately
+      const { data: wallet } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const newBalance = (wallet?.balance || 0) - totalDeduction;
+      if (newBalance < 0) {
+        setError('Insufficient balance');
+        setSubmitting(false);
+        return;
+      }
+
+      await supabase
+        .from('wallets')
+        .update({ balance: newBalance })
+        .eq('user_id', user.id);
+
+      // 2. Update daily withdrawal tracking
+      await supabase
+        .from('users')
+        .update({
+          daily_withdrawn_today: dailyWithdrawnToday + amt,
+        })
+        .eq('id', user.id);
+
+      // 3. Create transaction (status: pending)
       const { data: txData, error: txError } = await supabase
         .from('transactions')
         .insert({
@@ -269,7 +280,7 @@ export default function Withdraw() {
           amount: -amt,
           fee: fee,
           vat: 0,
-          status: 'pending',
+          status: 'pending', // ⏳ Admin must approve
           currency: 'NGN',
           metadata: {
             bank_name: bankName,
@@ -278,147 +289,64 @@ export default function Withdraw() {
             bank_code: bankCode,
             narration: narration || null,
           },
-          withdrawal_type: isAuto ? 'auto' : 'manual',
+          withdrawal_type: 'manual',
+          processed_at: null,
         })
         .select()
         .single();
 
       if (txError) throw new Error(txError.message);
 
-      // 2. If auto withdrawal – trigger Flutterwave transfer
-      if (isAuto) {
-        try {
-          const transferResponse = await fetch('/api/flutterwave/transfer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amount: amt,
-              currency: 'NGN',
-              bank_code: bankCode,
-              account_number: accNumber,
-              account_name: accName,
-              reference: `withdraw_${txData.id}`,
-              narration: narration || 'KJ Exchange Withdrawal',
-            }),
-          });
+      // 4. Update local state
+      setBalance(newBalance);
+      setDailyWithdrawnToday(dailyWithdrawnToday + amt);
+      setRemainingLimit(remainingLimit - amt);
 
-          const transferData = await transferResponse.json();
+      // 5. User notification
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: user.id,
+          message: `💸 Withdrawal of ₦${amt.toLocaleString()} submitted for review. You'll be notified when it's processed.`,
+        });
 
-          if (transferData.status === 'success') {
-            // ✅ Transfer successful – NOW deduct wallet
-            const { data: wallet } = await supabase
-              .from('wallets')
-              .select('balance')
-              .eq('user_id', user.id)
-              .maybeSingle();
+      // 6. ✅ Admin notification (you)
+      // You'll need a separate admin notification system — for now, we'll add a comment
+      console.log(`🆕 NEW WITHDRAWAL REQUEST: ₦${amt.toLocaleString()} to ${bankName} - ${accNumber} (${accName})`);
 
-            const newBalance = (wallet?.balance || 0) - totalDeduction;
-            await supabase
-              .from('wallets')
-              .update({ balance: newBalance })
-              .eq('user_id', user.id);
+      setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} submitted for review. You'll receive a notification once processed.`);
 
-            // Update daily withdrawal tracking
-            await supabase
-              .from('users')
-              .update({
-                daily_withdrawn_today: dailyWithdrawnToday + amt,
-              })
-              .eq('id', user.id);
-
-            // Update transaction to completed
-            await supabase
-              .from('transactions')
-              .update({
-                status: 'completed',
-                processed_at: new Date().toISOString(),
-              })
-              .eq('id', txData.id);
-
-            setBalance(newBalance);
-            setDailyWithdrawnToday(dailyWithdrawnToday + amt);
-            setRemainingLimit(remainingLimit - amt);
-
-            setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} processed instantly! (Fee: ₦${fee.toFixed(2)})`);
-
-            await supabase
-              .from('notifications')
-              .insert({
-                user_id: user.id,
-                message: `💸 Instant withdrawal of ₦${amt.toLocaleString()} sent to your bank. Fee: ₦${fee.toFixed(2)}`,
-              });
-
-            // Reset form
-            setAmount('');
-            setNarration('');
-          } else {
-            // ❌ Transfer failed – keep wallet intact, mark transaction as failed
-            await supabase
-              .from('transactions')
-              .update({ status: 'failed' })
-              .eq('id', txData.id);
-
-            setError(`❌ Bank transfer failed: ${transferData.message || 'Unknown error'}. Please try again or contact support.`);
-          }
-        } catch (transferErr) {
-          console.error('Transfer error:', transferErr);
-          await supabase
-            .from('transactions')
-            .update({ status: 'failed' })
-            .eq('id', txData.id);
-          setError('❌ Bank transfer failed. Please try again or contact support.');
-        }
-      } else {
-        // Manual withdrawal – deduct wallet immediately (since it's pending approval)
-        const { data: wallet } = await supabase
-          .from('wallets')
-          .select('balance')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        const newBalance = (wallet?.balance || 0) - totalDeduction;
-        await supabase
-          .from('wallets')
-          .update({ balance: newBalance })
-          .eq('user_id', user.id);
-
-        setBalance(newBalance);
-
-        setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} initiated for review. (Fee: ₦${fee.toFixed(2)})`);
-
-        await supabase
-          .from('notifications')
-          .insert({
-            user_id: user.id,
-            message: `💸 Withdrawal of ₦${amt.toLocaleString()} submitted for review. Fee: ₦${fee.toFixed(2)}`,
-          });
-
-        setAmount('');
-        setNarration('');
-      }
-
+      // Reset form
+      setAmount('');
+      setNarration('');
       fetchData();
 
     } catch (err) {
       console.error('Withdrawal error:', err);
       setError('❌ Failed to process withdrawal: ' + err.message);
+      
+      // Rollback wallet deduction if transaction failed
+      try {
+        const { data: wallet } = await supabase
+          .from('wallets')
+          .select('balance')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        await supabase
+          .from('wallets')
+          .update({ balance: (wallet?.balance || 0) + totalDeduction })
+          .eq('user_id', user.id);
+      } catch (rollbackErr) {
+        console.error('Rollback failed:', rollbackErr);
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ===== Processing Time =====
   const getProcessingTime = () => {
-    if (kycTier >= 2) {
-      return {
-        label: '⚡ Instant Processing',
-        color: 'text-green-400',
-        bg: 'bg-green-400/10',
-        icon: 'fa-bolt',
-      };
-    }
     return {
-      label: '⏳ 24-Hour Processing',
+      label: '⏳ Admin Review Required',
       color: 'text-yellow-400',
       bg: 'bg-yellow-400/10',
       icon: 'fa-clock',
@@ -427,7 +355,6 @@ export default function Withdraw() {
 
   const processingInfo = getProcessingTime();
 
-  // KYC tier labels
   const kycTierLabels = {
     1: 'Tier 1',
     2: 'Tier 2',
@@ -444,22 +371,29 @@ export default function Withdraw() {
     <>
       <Head><title>Withdraw · KJ Exchange</title></Head>
       <DashboardLayout>
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="flex items-center gap-2">
-            <Link href="/dashboard/wallet" className="text-text-muted hover:text-text-primary transition group">
-              <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
-            </Link>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <i className="fa-solid fa-arrow-down text-orange"></i>
-              Withdraw Naira
-            </h1>
-            <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-orange/10 text-orange border border-orange/20">
-              NGN
-            </span>
+        <div className="max-w-2xl mx-auto px-4 py-4 pb-24">
+          {/* Back Button */}
+          <Link
+            href="/dashboard/wallet"
+            className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition mb-4 group"
+          >
+            <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
+            <span className="text-sm font-medium">Back to Wallet</span>
+          </Link>
+
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange flex-shrink-0">
+              <i className="fa-solid fa-arrow-down text-lg"></i>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Withdraw Naira</h1>
+              <p className="text-text-muted text-sm">Withdraw funds to your bank account</p>
+            </div>
           </div>
 
-          {/* KYC Tier Info Card */}
-          <div className="glass rounded-2xl p-4 border border-border">
+          {/* KYC Tier Info */}
+          <div className="glass rounded-2xl p-4 border border-border mb-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className={`text-sm font-semibold px-2 py-0.5 rounded-full ${
@@ -476,7 +410,7 @@ export default function Withdraw() {
             <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
               <div>
                 <p className="text-text-muted text-xs">Daily Limit</p>
-                <p className="font-bold text-text-primary">{currencySymbol}{dailyLimit.toLocaleString()}</p>
+                <p className="font-bold">{currencySymbol}{dailyLimit.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-text-muted text-xs">Remaining Today</p>
@@ -486,22 +420,20 @@ export default function Withdraw() {
               </div>
               <div>
                 <p className="text-text-muted text-xs">Per Transaction</p>
-                <p className="font-bold text-text-primary">
+                <p className="font-bold">
                   {currencySymbol}{kycTier === 1 ? '500,000' : kycTier === 2 ? '1,000,000' : '2,000,000'}
                 </p>
               </div>
               <div>
                 <p className="text-text-muted text-xs">Processing</p>
-                <p className={`font-bold ${kycTier >= 2 ? 'text-green-400' : 'text-yellow-400'}`}>
-                  {kycTier >= 2 ? '⚡ Instant' : '⏳ 24 Hours'}
-                </p>
+                <p className="font-bold text-yellow-400">⏳ Admin Review</p>
               </div>
             </div>
           </div>
 
-          <div className="glass rounded-2xl p-6 md:p-8 border border-border">
+          <div className="glass rounded-2xl p-5 md:p-6 border border-border">
             {/* Balance */}
-            <div className="flex justify-between items-center mb-6 p-4 bg-black/20 rounded-xl border border-border/50">
+            <div className="flex justify-between items-center mb-5 p-4 bg-black/20 rounded-xl border border-border/50">
               <p className="text-text-muted text-sm flex items-center gap-2">
                 <i className="fa-regular fa-wallet text-orange"></i>
                 Available Balance
@@ -509,14 +441,13 @@ export default function Withdraw() {
               <p className="text-2xl font-bold">{currencySymbol}{balance.toLocaleString()}</p>
             </div>
 
-            <div className={`${processingInfo.bg} rounded-xl p-3 mb-6 flex items-center gap-2 text-sm`}>
+            {/* Processing Info */}
+            <div className={`${processingInfo.bg} rounded-xl p-3 mb-5 flex items-center gap-2 text-sm`}>
               <i className={`fa-solid ${processingInfo.icon} ${processingInfo.color}`}></i>
               <span className={processingInfo.color}>{processingInfo.label}</span>
-              {kycTier < 2 && (
-                <span className="text-text-muted text-xs ml-auto">
-                  (Upgrade to KYC Level 2 for instant)
-                </span>
-              )}
+              <span className="text-text-muted text-xs ml-auto">
+                You'll be notified when completed
+              </span>
             </div>
 
             <form onSubmit={handleWithdraw} className="space-y-5">
@@ -531,7 +462,7 @@ export default function Withdraw() {
                     type="number"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl pl-10 pr-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-lg"
+                    className="w-full bg-black/30 border border-border rounded-xl pl-10 pr-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-lg placeholder:text-text-muted/50"
                     placeholder="0.00"
                     required
                     min="1"
@@ -552,14 +483,13 @@ export default function Withdraw() {
                 </div>
               )}
 
-              {/* Bank Selection - Dtunes Style */}
+              {/* Bank Selection */}
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1.5">
                   <i className="fa-solid fa-building-columns text-orange mr-1"></i>
                   Select Bank
                 </label>
 
-                {/* Saved Banks */}
                 {banks.length > 0 && (
                   <div className="mb-3 space-y-2">
                     {banks.map((bank) => (
@@ -593,7 +523,6 @@ export default function Withdraw() {
                   </div>
                 )}
 
-                {/* Add New Bank - Searchable Dropdown */}
                 <div className={`${banks.length > 0 ? 'border-t border-border pt-3 mt-3' : ''}`}>
                   <p className="text-text-muted text-xs mb-2">
                     {banks.length > 0 ? 'Or add a new bank' : 'Add your bank details'}
@@ -608,11 +537,11 @@ export default function Withdraw() {
                         setSelectedBankId('');
                       }}
                       onFocus={() => setShowBanks(true)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
+                      className="w-full bg-black/30 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 placeholder:text-text-muted/50"
                       placeholder="Search for your bank..."
                     />
                     {showBanks && banksList.length > 0 && (
-                      <div className="absolute z-20 w-full mt-1 bg-bg-card border border-border rounded-xl shadow-2xl max-h-48 overflow-y-auto">
+                      <div className="absolute z-20 w-full mt-1 glass rounded-xl border border-border shadow-2xl max-h-48 overflow-y-auto">
                         {banksList
                           .filter(b => b.name.toLowerCase().includes(bankSearch.toLowerCase()))
                           .map((bank) => (
@@ -652,7 +581,7 @@ export default function Withdraw() {
                         resolveAccount();
                       }
                     }}
-                    className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
+                    className="w-full bg-black/30 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 placeholder:text-text-muted/50"
                     placeholder="Enter account number"
                     required
                     maxLength="10"
@@ -670,7 +599,7 @@ export default function Withdraw() {
                 </div>
               </div>
 
-              {/* Account Name (auto-filled) */}
+              {/* Account Name */}
               {accountName && (
                 <div className="bg-green-400/5 border border-green-400/20 rounded-xl p-3 flex items-center gap-2">
                   <i className="fa-regular fa-circle-check text-green-400"></i>
@@ -678,14 +607,14 @@ export default function Withdraw() {
                 </div>
               )}
 
-              {/* Narration (Dtunes style) */}
+              {/* Narration */}
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1.5">Narration (Optional)</label>
                 <input
                   type="text"
                   value={narration}
                   onChange={(e) => setNarration(e.target.value)}
-                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
+                  className="w-full bg-black/30 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 placeholder:text-text-muted/50"
                   placeholder="Add a note (e.g., Savings withdrawal)"
                   maxLength="50"
                 />
@@ -707,7 +636,7 @@ export default function Withdraw() {
               <button
                 type="submit"
                 disabled={submitting || !isAccountSelected || totalDeduction === 0 || amount <= 0}
-                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2 touch-manipulation"
               >
                 {submitting ? (
                   <><i className="fa-solid fa-spinner fa-spin"></i> Processing...</>
@@ -725,8 +654,8 @@ export default function Withdraw() {
 
           {/* Saved Beneficiaries */}
           {banks.length > 0 && (
-            <div className="glass rounded-2xl p-4 border border-border">
-              <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <div className="glass rounded-2xl p-5 border border-border mt-5">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <i className="fa-regular fa-bookmark text-orange"></i>
                 Saved Beneficiaries
               </h3>
@@ -762,11 +691,10 @@ export default function Withdraw() {
           )}
 
           {/* Withdrawal History */}
-          <div className="glass rounded-2xl p-6 border border-border">
-            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-              <i className="fa-solid fa-clock-rotate-left text-orange"></i>
+          <div className="glass rounded-2xl p-5 border border-border mt-5">
+            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">
               Recent Withdrawals
-            </h2>
+            </h3>
             {withdrawalHistory.length === 0 ? (
               <div className="text-center py-6 text-text-muted">
                 <i className="fa-regular fa-clock text-4xl block mb-3 opacity-40"></i>
