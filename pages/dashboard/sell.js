@@ -17,16 +17,39 @@ const COINS = [
   { id: 'BCH', name: 'Bitcoin Cash', icon: 'fa-brands fa-bitcoin', color: '#8dc351' },
 ];
 
-const SPREADS = {
-  BTC: { low: 0.0286, high: 0.0142, fee: 0.01 },
-  ETH: { low: 0.0287, high: 0.0143, fee: 0.01 },
-  USDT: { low: 0.0106, high: 0.0034, fee: 0 },
-  SOL: { low: 0.0286, high: 0.0142, fee: 0.01 },
-  BNB: { low: 0.0286, high: 0.0142, fee: 0.01 },
-  TRX: { low: 0.0358, high: 0.0142, fee: 0.01 },
-  LTC: { low: 0.0286, high: 0.0142, fee: 0.01 },
-  BCH: { low: 0.1079, high: 0.0143, fee: 0.01 },
+// ===== SPREAD CONFIGURATION (Matches Dtunes) =====
+// Low = amount < $500 | High = amount >= $501
+const SPREAD_CONFIG = {
+  BTC: { low: 0.069, high: 0.056 },
+  ETH: { low: 0.069, high: 0.056 },
+  USDT: { low: 0.052, high: 0.045 },
+  SOL: { low: 0.069, high: 0.056 },
+  BNB: { low: 0.069, high: 0.056 },
+  TRX: { low: 0.076, high: 0.056 },
+  LTC: { low: 0.069, high: 0.056 },
+  BCH: { low: 0.069, high: 0.056 },
 };
+
+// Fee Config (0% fee like Dtunes)
+const FEE_CONFIG = {
+  BTC: 0,
+  ETH: 0,
+  USDT: 0,
+  SOL: 0,
+  BNB: 0,
+  TRX: 0,
+  LTC: 0,
+  BCH: 0,
+};
+
+// Get spread based on coin and amount
+const getSpread = (coinId, amount) => {
+  const config = SPREAD_CONFIG[coinId];
+  if (!config) return 0.06;
+  return amount < 500 ? config.low : config.high;
+};
+
+const getFee = (coinId) => FEE_CONFIG[coinId] || 0;
 
 export default function Sell() {
   const { user, loading } = useAuth();
@@ -45,8 +68,8 @@ export default function Sell() {
 
   const [ngnRate, setNgnRate] = useState(1389);
   const [coinPrices, setCoinPrices] = useState({});
-  const [rates, setRates] = useState({});
   const [isLoadingRates, setIsLoadingRates] = useState(true);
+  const [marketRate, setMarketRate] = useState(1389);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,11 +78,25 @@ export default function Sell() {
       try {
         setIsLoadingRates(true);
 
-        // Fetch NGN rate
-        const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
-        const data = await res.json();
-        const ngn = data.rates?.NGN || 1389;
+        // Fetch NGN rate with fallback
+        let ngn = 1389;
+        try {
+          const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
+          const data = await res.json();
+          if (data.rates?.NGN) ngn = data.rates.NGN;
+        } catch (e) {
+          console.warn('Primary rate API failed, using fallback');
+          // Fallback: try another API
+          try {
+            const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=NGN');
+            const data = await res.json();
+            if (data.rates?.NGN) ngn = data.rates.NGN;
+          } catch (e2) {
+            console.warn('Fallback rate API also failed, using cached rate');
+          }
+        }
         setNgnRate(ngn);
+        setMarketRate(ngn);
 
         // Fetch crypto prices
         const cryptoRes = await fetch(
@@ -67,7 +104,7 @@ export default function Sell() {
         );
         const cryptoData = await cryptoRes.json();
 
-        const prices = {
+        setCoinPrices({
           BTC: cryptoData.bitcoin?.usd || 0,
           ETH: cryptoData.ethereum?.usd || 0,
           USDT: cryptoData.tether?.usd || 1,
@@ -76,23 +113,9 @@ export default function Sell() {
           TRX: cryptoData.tron?.usd || 0,
           LTC: cryptoData.litecoin?.usd || 0,
           BCH: cryptoData['bitcoin-cash']?.usd || 0,
-        };
-        setCoinPrices(prices);
+        });
 
-        // Calculate rates
-        const calculatedRates = {};
-        for (const coin of COINS) {
-          const spread = SPREADS[coin.id];
-          if (spread) {
-            calculatedRates[coin.id] = {
-              low: ngn * (1 - spread.low),
-              high: ngn * (1 - spread.high),
-            };
-          }
-        }
-        setRates(calculatedRates);
-
-        // Fetch user's crypto balance from Supabase
+        // Fetch user's crypto balance
         const { data: walletData, error: walletError } = await supabase
           .from('crypto_balances')
           .select('*')
@@ -100,7 +123,6 @@ export default function Sell() {
           .single();
 
         if (!walletError && walletData) {
-          // Get balance for selected coin (stored in column by coin ID lowercase)
           const balance = walletData[selectedCoin.id?.toLowerCase()] || 0;
           setAvailableBalance(balance);
         } else {
@@ -109,7 +131,6 @@ export default function Sell() {
 
       } catch (error) {
         console.warn('⚠️ Data fetch failed', error);
-        setAvailableBalance(0);
       } finally {
         setIsLoadingRates(false);
       }
@@ -120,24 +141,19 @@ export default function Sell() {
     return () => clearInterval(interval);
   }, [user, selectedCoin]);
 
-  const getRateForCoin = (coinId, amount) => {
-    const rate = rates[coinId];
-    if (!rate) return 0;
-    const parsed = parseFloat(amount) || 0;
-    return parsed <= 500 ? rate.low : rate.high;
-  };
-
+  // Calculate payout with dynamic spread
   const calculatePayout = (coinId, amount) => {
     const parsed = parseFloat(amount) || 0;
-    if (parsed <= 0) return { rate: 0, fee: 0, netUsd: 0, payout: 0 };
+    if (parsed <= 0) return { rate: 0, fee: 0, netUsd: 0, payout: 0, spread: 0 };
 
-    const rate = getRateForCoin(coinId, parsed);
-    const feePercent = SPREADS[coinId]?.fee || 0;
+    const spread = getSpread(coinId, parsed);
+    const rate = marketRate * (1 - spread); // Your rate = market rate × (1 - spread)
+    const feePercent = getFee(coinId);
     const fee = parsed * feePercent;
     const netUsd = parsed - fee;
     const payout = netUsd * rate;
 
-    return { rate, fee, netUsd, payout };
+    return { rate, fee, netUsd, payout, spread };
   };
 
   const setQuickAmount = (pct) => {
@@ -169,7 +185,7 @@ export default function Sell() {
     setError('');
 
     const amount = parseFloat(usdAmount);
-    const { rate, fee, netUsd, payout } = calculatePayout(selectedCoin.id, amount);
+    const { rate, fee, netUsd, payout, spread } = calculatePayout(selectedCoin.id, amount);
 
     try {
       const response = await fetch('/api/crypto/sell', {
@@ -182,6 +198,8 @@ export default function Sell() {
           rate,
           payout,
           network: 'Default',
+          spread,
+          fee,
         }),
       });
 
@@ -216,13 +234,16 @@ export default function Sell() {
   }
 
   const amount = parseFloat(usdAmount) || 0;
-  const { rate, fee, netUsd, payout } = calculatePayout(selectedCoin.id, amount);
+  const { rate, fee, netUsd, payout, spread } = calculatePayout(selectedCoin.id, amount);
   const showRate = amount > 0;
   const priceUsd = coinPrices[selectedCoin.id] || 0;
   const balanceInUsd = availableBalance * priceUsd;
 
-  // Quick amounts
+  // Quick amounts (percentage of balance)
   const quickAmounts = [10, 25, 50, 100];
+
+  // Tier label
+  const tierLabel = amount < 500 ? 'Under $500' : '$500+';
 
   return (
     <>
@@ -351,16 +372,16 @@ export default function Sell() {
             {showRate && (
               <div className="mt-4 bg-black/30 rounded-xl p-4 border border-border/50">
                 <div className="flex justify-between items-center">
-                  <span className="text-text-muted text-sm">Rate</span>
-                  <span className="font-bold text-green-400">
-                    1 USD = ₦{rate.toFixed(2)}
-                  </span>
+                  <span className="text-text-muted text-sm">Market Rate</span>
+                  <span className="font-medium">₦{marketRate.toFixed(2)} / $</span>
                 </div>
                 <div className="flex justify-between items-center mt-1">
-                  <span className="text-text-muted text-sm">Fee</span>
-                  <span className="text-text-muted text-sm">
-                    {SPREADS[selectedCoin.id]?.fee === 0 ? '0%' : '1%'}
-                  </span>
+                  <span className="text-text-muted text-sm">Our Rate ({tierLabel})</span>
+                  <span className="font-bold text-green-400">₦{rate.toFixed(2)} / $</span>
+                </div>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-text-muted text-sm">Spread</span>
+                  <span className="text-text-muted">{(spread * 100).toFixed(1)}%</span>
                 </div>
                 <div className="flex justify-between items-center mt-2 pt-2 border-t border-border/50">
                   <span className="text-text-muted text-sm">You Receive</span>
@@ -424,8 +445,8 @@ export default function Sell() {
               <div className="flex items-start gap-3">
                 <i className="fa-solid fa-percent text-yellow-400 mt-0.5"></i>
                 <div>
-                  <p className="font-semibold">Transaction fee: {SPREADS[selectedCoin.id]?.fee === 0 ? '0%' : '1%'}</p>
-                  <p className="text-text-muted text-xs">Fee is deducted from your sale amount.</p>
+                  <p className="font-semibold">Spread: {(spread * 100).toFixed(1)}%</p>
+                  <p className="text-text-muted text-xs">Our rate is {((1 - spread) * 100).toFixed(0)}% of the market rate.</p>
                 </div>
               </div>
 
