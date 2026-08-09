@@ -5,7 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Link from 'next/link';
 import Head from 'next/head';
-import RateCalculator from '../../components/calculator/RateCalculator'; // ✅ NEW IMPORT
+import RateCalculator from '../../components/calculator/RateCalculator';
 
 export default function DashboardOverview() {
   const { user, loading } = useAuth();
@@ -24,6 +24,9 @@ export default function DashboardOverview() {
   const [quickStats, setQuickStats] = useState({ orders: 0, pending: 0, earned: 0 });
   const [sparklineData, setSparklineData] = useState([]);
   const [username, setUsername] = useState('');
+
+  // ===== STATE FOR SLIDE-IN DRAWER =====
+  const [showRateCalculator, setShowRateCalculator] = useState(false);
 
   // Fetch KYC level and username
   useEffect(() => {
@@ -242,7 +245,6 @@ export default function DashboardOverview() {
   const symbol = getCurrencySymbol();
   const displayName = username || user?.email?.split('@')[0] || 'User';
 
-  // Bottom navigation tabs
   const navTabs = [
     { label: 'Home', icon: 'fa-house', href: '/dashboard' },
     { label: 'Trade', icon: 'fa-arrows-rotate', href: '/dashboard/sell' },
@@ -422,46 +424,58 @@ export default function DashboardOverview() {
             </Link>
           </div>
 
-          {/* ===== RATE CALCULATOR (REPLACES OLD RATE CARD) ===== */}
-          <RateCalculator />
-
-          {/* Products Grid (Rate Calculator card removed, Crypto → Sell Crypto) */}
+          {/* Products Grid */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-bold">Products</h2>
               <Link href="/dashboard/products" className="text-sm text-orange hover:underline">View All</Link>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {/* Gift Cards */}
               <Link href="/dashboard/sell-gift-card" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-solid fa-gift"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Gift Cards</p>
               </Link>
+
+              {/* Sell Crypto */}
               <Link href="/dashboard/sell" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-brands fa-bitcoin"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Sell Crypto</p>
               </Link>
+
+              {/* Pay Bills */}
               <Link href="/dashboard/pay-bills" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-credit-card"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Pay Bills</p>
               </Link>
+
+              {/* Airtime & Data */}
               <Link href="/dashboard/buy-airtime" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-solid fa-wifi"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Airtime & Data</p>
               </Link>
-              <Link href="/rates" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+
+              {/* ===== RATE CALCULATOR CARD (Opens Drawer) ===== */}
+              <button
+                onClick={() => setShowRateCalculator(true)}
+                className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group cursor-pointer"
+              >
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
-                  <i className="fa-solid fa-chart-simple"></i>
+                  <i className="fa-solid fa-calculator"></i>
                 </div>
-                <p className="text-sm font-semibold mt-2">All Rates</p>
-              </Link>
+                <p className="text-sm font-semibold mt-2">Rate Calculator</p>
+                <span className="text-[10px] text-text-muted">Live rates</span>
+              </button>
+
+              {/* eSIM (Soon) */}
               <div className="glass rounded-xl p-4 text-center border border-border opacity-60 relative">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-text-muted text-xl">
                   <i className="fa-solid fa-sim-card"></i>
@@ -544,6 +558,49 @@ export default function DashboardOverview() {
           </div>
         </nav>
       </DashboardLayout>
+
+      {/* ===== SLIDE-IN DRAWER ===== */}
+      <div
+        className={`fixed inset-0 z-50 transition-all duration-300 ease-out ${
+          showRateCalculator ? 'pointer-events-auto' : 'pointer-events-none'
+        }`}
+      >
+        {/* Backdrop */}
+        <div
+          className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${
+            showRateCalculator ? 'opacity-100' : 'opacity-0'
+          }`}
+          onClick={() => setShowRateCalculator(false)}
+        ></div>
+
+        {/* Drawer */}
+        <div
+          className={`absolute right-0 top-0 h-full w-full max-w-2xl bg-bg-primary transition-transform duration-300 ease-out shadow-2xl ${
+            showRateCalculator ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          {/* Close Button */}
+          <button
+            onClick={() => setShowRateCalculator(false)}
+            className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white transition flex items-center justify-center backdrop-blur-sm border border-white/10"
+          >
+            <i className="fa-solid fa-arrow-left text-lg"></i>
+          </button>
+
+          {/* Close Button (Mobile) */}
+          <button
+            onClick={() => setShowRateCalculator(false)}
+            className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white transition flex items-center justify-center backdrop-blur-sm border border-white/10 md:hidden"
+          >
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+
+          {/* Scrollable Content */}
+          <div className="h-full overflow-y-auto p-6 pt-20">
+            <RateCalculator />
+          </div>
+        </div>
+      </div>
     </>
   );
 }
