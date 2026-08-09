@@ -36,7 +36,7 @@ const GIFT_CARD_ASSETS = [
 export default function RateCalculator() {
   const [assetType, setAssetType] = useState('crypto');
   const [selectedAsset, setSelectedAsset] = useState(null);
-  const [amount, setAmount] = useState(100);
+  const [amount, setAmount] = useState(100); // AMOUNT IN USD
   const [result, setResult] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -46,14 +46,12 @@ export default function RateCalculator() {
   const [isLoading, setIsLoading] = useState(true);
 
   // ============================================================
-  // FETCH LIVE RATES (SAME API AS SELL.JS)
+  // FETCH LIVE RATES
   // ============================================================
   useEffect(() => {
     const fetchRates = async () => {
       try {
         setIsLoading(true);
-        
-        // Fetch NGN rate with fallback
         let ngn = 1389;
         try {
           const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
@@ -68,7 +66,6 @@ export default function RateCalculator() {
         }
         setNgnRate(ngn);
 
-        // Fetch crypto prices (Coingecko)
         const cryptoRes = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,tether,ethereum,solana,binancecoin,tron,litecoin,bitcoin-cash&vs_currencies=usd'
         );
@@ -116,7 +113,7 @@ export default function RateCalculator() {
   };
 
   // ============================================================
-  // GET RATE FOR ASSET (USING SPREADS FROM LIB)
+  // GET RATE FOR ASSET
   // ============================================================
   const getAssetRate = (asset) => {
     if (assetType === 'crypto') {
@@ -128,7 +125,7 @@ export default function RateCalculator() {
       // Rate per coin = USD price × NGN rate per USD
       return usdPrice * ratePerUsd;
     } else {
-      // Gift card rate
+      // Gift card rate — rate per $1 in NGN
       return ngnRate * asset.rate;
     }
   };
@@ -156,9 +153,22 @@ export default function RateCalculator() {
     }
 
     const rate = getAssetRate(selectedAsset);
-    const total = amount * rate;
-    setResult(total);
-  }, [selectedAsset, amount, ngnRate, cryptoUsdPrices, assetType, isLoading]);
+    
+    if (assetType === 'crypto') {
+      // For crypto: input is USD, payout = USD amount × rate per USD
+      // But our getAssetRate returns rate per coin (USD price × NGN rate)
+      // So we need rate per USD: ratePerUsd = ngnRate * (1 - spread)
+      const usdPrice = cryptoUsdPrices[selectedAsset.id] || 0;
+      const spread = getSpread(selectedAsset.id, amount);
+      const ratePerUsd = ngnRate * (1 - spread);
+      const total = amount * ratePerUsd;
+      setResult(total);
+    } else {
+      // For gift cards: input is $ amount, rate is per $1
+      const total = amount * rate;
+      setResult(total);
+    }
+  }, [amount, selectedAsset, ngnRate, cryptoUsdPrices, assetType, isLoading]);
 
   // ============================================================
   // SELECT ASSET
@@ -183,6 +193,14 @@ export default function RateCalculator() {
   const getTradeLink = () => {
     if (assetType === 'crypto') return '/dashboard/sell';
     return '/dashboard/sell-gift-card';
+  };
+
+  // Get crypto amount equivalent (for display)
+  const getCryptoAmount = () => {
+    if (!selectedAsset || assetType !== 'crypto') return 0;
+    const usdPrice = cryptoUsdPrices[selectedAsset.id] || 0;
+    if (usdPrice === 0) return 0;
+    return amount / usdPrice;
   };
 
   return (
@@ -344,20 +362,31 @@ export default function RateCalculator() {
         </div>
 
         {/* ============================================
-            AMOUNT INPUT
+            AMOUNT INPUT (IN USD)
         ============================================ */}
         <div className="mb-5">
           <label className="text-xs uppercase tracking-wider text-text-muted font-semibold block mb-1.5">
-            Amount ({selectedAsset ? (assetType === 'crypto' ? selectedAsset.symbol : '$') : 'Units'})
+            Amount (USD)
           </label>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-            className="w-full bg-black/30 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 placeholder:text-text-muted/50 text-lg"
-            min="0"
-            step={assetType === 'crypto' ? 'any' : '1'}
-          />
+          <div className="relative">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+              className="w-full bg-black/30 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 placeholder:text-text-muted/50 text-lg"
+              min="0"
+              step="0.01"
+              placeholder="Enter amount in USD"
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">
+              USD
+            </span>
+          </div>
+          {assetType === 'crypto' && selectedAsset && amount > 0 && (
+            <p className="text-xs text-text-muted mt-1.5">
+              ≈ {getCryptoAmount().toFixed(6)} {selectedAsset.symbol}
+            </p>
+          )}
         </div>
 
         {/* ============================================
