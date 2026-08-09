@@ -27,12 +27,10 @@ export default function DashboardOverview() {
   // Fetch KYC level and username
   useEffect(() => {
     if (user) {
-      // Get username from user metadata or users table
       const metaUsername = user?.user_metadata?.username;
       if (metaUsername) {
         setUsername(metaUsername);
       } else {
-        // Fallback: fetch from users table
         supabase
           .from('users')
           .select('username')
@@ -217,8 +215,8 @@ export default function DashboardOverview() {
     const max = Math.max(...sparklineData.map(d => d.balance));
     const min = Math.min(...sparklineData.map(d => d.balance));
     const range = max - min || 1;
-    const height = 40;
-    const width = 120;
+    const height = 50;
+    const width = 180;
     const step = width / (sparklineData.length - 1);
     return sparklineData.map((d, i) => {
       const x = i * step;
@@ -229,9 +227,9 @@ export default function DashboardOverview() {
 
   const actions = [
     { label: 'Withdraw', icon: 'fa-arrow-down', href: '/dashboard/withdraw' },
-    { label: 'Deposit', icon: 'fa-arrow-down', href: '/dashboard/deposit' },
-    { label: 'Top Up', icon: 'fa-arrow-up', href: '/dashboard/wallet' },
+    { label: 'Deposit', icon: 'fa-arrow-up', href: '/dashboard/deposit' },
     { label: 'Convert', icon: 'fa-arrow-right-arrow-left', href: '/dashboard/convert' },
+    { label: 'Top Up', icon: 'fa-wallet', href: '/dashboard/wallet' },
   ];
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
@@ -243,36 +241,46 @@ export default function DashboardOverview() {
   const symbol = getCurrencySymbol();
   const displayName = username || user?.email?.split('@')[0] || 'User';
 
+  // Bottom navigation tabs
+  const navTabs = [
+    { label: 'Home', icon: 'fa-house', href: '/dashboard' },
+    { label: 'Trade', icon: 'fa-arrows-rotate', href: '/dashboard/sell' },
+    { label: 'Wallet', icon: 'fa-wallet', href: '/dashboard/wallet' },
+    { label: 'Profile', icon: 'fa-user', href: '/dashboard/settings' },
+  ];
+
   return (
     <>
       <Head>
         <title>Dashboard · KJ Exchange</title>
       </Head>
       <DashboardLayout>
-        <div className="space-y-6">
-          {/* Welcome */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-6 pb-24">
+          {/* Welcome & Hide Balance */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold">Dashboard</h1>
-              <p className="text-text-muted">Hello {displayName}, 👋</p>
+              <p className="text-text-muted text-sm">Hello {displayName}, 👋</p>
             </div>
             <button
               onClick={() => setHideBalance(!hideBalance)}
               className="flex items-center gap-2 text-text-muted hover:text-text-primary transition text-sm px-4 py-2 rounded-full border border-border hover:border-orange"
             >
               <i className={`fa-regular ${hideBalance ? 'fa-eye' : 'fa-eye-slash'}`}></i>
-              {hideBalance ? 'Show Balance' : 'Hide Balance'}
+              {hideBalance ? 'Show' : 'Hide'}
             </button>
           </div>
 
           {/* Balance Card */}
-          <div className="bg-gradient-to-br from-purple-900/40 to-orange-900/30 rounded-2xl p-6 border border-border relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl"></div>
-            <div className="absolute bottom-0 left-0 w-40 h-40 bg-orange-500/20 rounded-full blur-3xl"></div>
+          <div className="bg-gradient-to-br from-purple-900/40 via-orange-900/20 to-purple-900/40 rounded-2xl p-6 border border-border relative overflow-hidden">
+            {/* Background blobs */}
+            <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-orange-500/20 rounded-full blur-3xl"></div>
 
             <div className="relative z-10">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <p className="text-text-muted text-sm">Available Balance</p>
+              {/* Currency Toggle */}
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <p className="text-text-muted text-sm font-medium">Available Balance</p>
                 <div className="flex bg-black/30 rounded-full p-1 border border-border/50">
                   {['NGN', 'USD', 'Gift Points'].map((curr) => (
                     <button
@@ -280,20 +288,22 @@ export default function DashboardOverview() {
                       onClick={() => setSelectedCurrency(curr)}
                       className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
                         selectedCurrency === curr
-                          ? 'bg-orange text-white'
+                          ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange/30'
                           : 'text-text-muted hover:text-text-primary'
                       }`}
                     >
-                      {curr === 'Gift Points' ? '🎁 Points' : curr}
+                      {curr === 'Gift Points' ? '🎁' : curr}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <p className="text-4xl font-bold mt-2">
+              {/* Balance Amount */}
+              <p className="text-4xl md:text-5xl font-bold tracking-tight">
                 {hideBalance ? '••••••' : `${symbol}${displayBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               </p>
 
+              {/* Conversion hints */}
               {!hideBalance && !isGiftPoints && (
                 <div className="flex flex-wrap gap-3 mt-1 text-sm text-text-muted">
                   {selectedCurrency !== 'NGN' && <span>≈ ₦{totalBalance.toLocaleString()}</span>}
@@ -304,17 +314,20 @@ export default function DashboardOverview() {
                 <p className="text-xs text-text-muted mt-1">10 points = ₦1</p>
               )}
 
+              {/* Sparkline */}
               {!hideBalance && !isGiftPoints && sparklineData.length > 0 && (
-                <div className="mt-3">
-                  <svg width="120" height="40" className="opacity-80">
+                <div className="mt-4">
+                  <svg width="200" height="50" className="opacity-80 w-full">
                     <polyline
                       points={getSparklinePoints()}
                       fill="none"
                       stroke="#FF7300"
-                      strokeWidth="2"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     />
                     <polyline
-                      points={`${getSparklinePoints()} ${120},${40}`}
+                      points={`${getSparklinePoints()} 200,50`}
                       fill="rgba(255, 115, 0, 0.1)"
                       stroke="none"
                     />
@@ -322,48 +335,61 @@ export default function DashboardOverview() {
                 </div>
               )}
 
+              {/* Bonus balance */}
               {bonusBalance > 0 && !isGiftPoints && (
                 <p className="text-sm text-green-400 mt-1">
                   🎁 Includes ₦{bonusBalance.toLocaleString()} welcome bonus
                 </p>
               )}
 
-              {/* Action Buttons (4) */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+              {/* Quick Action Buttons */}
+              <div className="grid grid-cols-4 gap-3 mt-6">
                 {actions.map((action) => (
                   <Link
                     key={action.label}
                     href={action.href}
-                    className="glass rounded-2xl p-4 text-center hover:border-orange transition border border-border group"
+                    className="glass rounded-2xl p-3 text-center hover:border-orange transition border border-border group"
                   >
                     <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg group-hover:scale-110 transition">
                       <i className={`fa-solid ${action.icon}`}></i>
                     </div>
-                    <p className="text-sm font-semibold mt-2">{action.label}</p>
+                    <p className="text-xs font-semibold mt-1.5">{action.label}</p>
                   </Link>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Quick Stats (4 boxes) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Quick Stats (2×2 grid) */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="glass rounded-2xl p-4 text-center border border-border">
-              <p className="text-text-muted text-xs uppercase tracking-wider">Total Orders</p>
+              <div className="flex items-center justify-center gap-2 text-text-muted text-xs uppercase tracking-wider mb-1">
+                <i className="fa-regular fa-clipboard text-orange"></i>
+                <span>Orders</span>
+              </div>
               <p className="text-2xl font-bold">{quickStats.orders}</p>
             </div>
             <div className="glass rounded-2xl p-4 text-center border border-border">
-              <p className="text-text-muted text-xs uppercase tracking-wider">Pending</p>
+              <div className="flex items-center justify-center gap-2 text-text-muted text-xs uppercase tracking-wider mb-1">
+                <i className="fa-regular fa-clock text-yellow-400"></i>
+                <span>Pending</span>
+              </div>
               <p className="text-2xl font-bold text-yellow-400">{quickStats.pending}</p>
             </div>
             <div className="glass rounded-2xl p-4 text-center border border-border">
-              <p className="text-text-muted text-xs uppercase tracking-wider">Earned</p>
+              <div className="flex items-center justify-center gap-2 text-text-muted text-xs uppercase tracking-wider mb-1">
+                <i className="fa-regular fa-circle-check text-green-400"></i>
+                <span>Earned</span>
+              </div>
               <p className="text-2xl font-bold text-green-400">
                 {hideBalance ? '••••' : `${getCurrencySymbol()}${quickStats.earned.toLocaleString()}`}
               </p>
             </div>
             <div className="glass rounded-2xl p-4 text-center border border-border">
-              <p className="text-text-muted text-xs uppercase tracking-wider">Gift Points</p>
+              <div className="flex items-center justify-center gap-2 text-text-muted text-xs uppercase tracking-wider mb-1">
+                <i className="fa-solid fa-gift text-orange"></i>
+                <span>Points</span>
+              </div>
               <p className="text-2xl font-bold text-orange">
                 {hideBalance ? '••••' : giftPoints.toLocaleString()}
               </p>
@@ -402,7 +428,7 @@ export default function DashboardOverview() {
             </Link>
           </div>
 
-          {/* Products (6 cards) */}
+          {/* Products Grid (2×3) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-bold">Products</h2>
@@ -421,13 +447,13 @@ export default function DashboardOverview() {
                 </div>
                 <p className="text-sm font-semibold mt-2">Crypto</p>
               </Link>
-              <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+              <Link href="/dashboard/pay-bills" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-credit-card"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Pay Bills</p>
               </Link>
-              <Link href="#" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
+              <Link href="/dashboard/buy-airtime" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-solid fa-wifi"></i>
                 </div>
@@ -496,6 +522,30 @@ export default function DashboardOverview() {
             )}
           </div>
         </div>
+
+        {/* ===== BOTTOM NAVIGATION ===== */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border bg-bg-card/90 backdrop-blur-xl">
+          <div className="container mx-auto px-4">
+            <div className="flex justify-around items-center py-2">
+              {navTabs.map((tab) => {
+                const isActive = router.pathname === tab.href;
+                return (
+                  <Link
+                    key={tab.label}
+                    href={tab.href}
+                    className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition ${
+                      isActive ? 'text-orange' : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    <i className={`fa-solid ${tab.icon} text-lg ${isActive ? 'scale-110' : ''}`}></i>
+                    <span className="text-[10px] font-medium">{tab.label}</span>
+                    {isActive && <span className="w-1 h-1 bg-orange rounded-full mt-0.5"></span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </nav>
       </DashboardLayout>
     </>
   );
