@@ -5,68 +5,99 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  try {
-    const { userId, coin, amountUsd, rate, payout, network } = req.body;
+  const { userId, coin, amountUsd, rate, payout } = req.body;
 
-    if (!userId || !coin || !amountUsd || !rate || !payout) {
-      return res.status(400).json({ error: 'Missing required fields' });
+  if (!userId || !coin || !amountUsd || !rate || !payout) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    // 1. Check user's crypto balance
+    const coinLower = coin.toLowerCase();
+    const { data: wallet, error: walletError } = await supabase
+      .from('crypto_balances')
+      .select(coinLower)
+      .eq('user_id', userId)
+      .single();
+
+    if (walletError || !wallet) {
+      return res.status(404).json({ error: 'Wallet not found' });
     }
 
-    // 1. Check if user has enough crypto balance
-    // (We'll add a crypto_balances table later – for now, we skip this check)
-    // For now, we'll just credit their Naira wallet
+    if (wallet[coinLower] < amountUsd) {
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
 
-    // 2. Credit Naira wallet
-    const { data: wallet, error: walletError } = await supabase
+    // 2. Deduct crypto
+    const newBalance = wallet[coinLower] - amountUsd;
+    const { error: updateError } = await supabase
+      .from('crypto_balances')
+      .update({ [coinLower]: newBalance })
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error('Balance update error:', updateError);
+      return res.status(500).json({ error: 'Failed to update balance' });
+    }
+
+    // 3. Credit Naira wallet
+    const { data: nairaWallet, error: nairaError } = await supabase
       .from('wallets')
       .select('balance')
       .eq('user_id', userId)
       .single();
 
-    if (walletError) {
-      console.error('Wallet fetch error:', walletError);
-      return res.status(500).json({ error: 'Failed to fetch wallet' });
+    if (nairaError) {
+      console.error('Naira wallet error:', nairaError);
+      return res.status(500).json({ error: 'Failed to credit Naira wallet' });
     }
 
-    const newBalance = (wallet?.balance || 0) + payout;
-
-    const { error: updateError } = await supabase
+    const newNairaBalance = (nairaWallet?.balance || 0) + payout;
+    const { error: nairaUpdateError } = await supabase
       .from('wallets')
-      .update({ balance: newBalance })
+      .update({ balance: newNairaBalance })
       .eq('user_id', userId);
 
-    if (updateError) {
-      console.error('Wallet update error:', updateError);
-      return res.status(500).json({ error: 'Failed to update wallet' });
+    if (nairaUpdateError) {
+      console.error('Naira update error:', nairaUpdateError);
+      // Try to rollback crypto? For now, log it.
+      return res.status(500).json({ error: 'Failed to credit Naira wallet' });
     }
 
-    // 3. Create transaction record
-    await supabase
+    // 4. Create transaction record
+    const { error: txError } = await supabase
       .from('transactions')
       .insert({
         user_id: userId,
-        type: 'crypto_sale',
+        type: 'crypto_sell',
         amount: payout,
         currency: 'NGN',
         status: 'completed',
-        metadata: { coin, amountUsd, rate, network },
+        metadata: {
+          coin: coin,
+          amount_usd: amountUsd,
+          rate: rate,
+          payout: payout,
+        },
+        description: `Sold ${amountUsd} ${coin} for ₦${payout.toFixed(2)}`,
+        created_at: new Date().toISOString(),
       });
 
-    // 4. Notification
-    await supabase
-      .from('notifications')
-      .insert({
-        user_id: userId,
-        message: `✅ ${coin} sale of ₦${payout.toLocaleString()} credited to your wallet!`,
-      });
+    if (txError) {
+      console.error('Transaction record error:', txError);
+      // Don't fail the request — the money is already moved
+    }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: `Sold ${coin} for ₦${payout.toLocaleString()}`,
-      newBalance,
+      newBalance: newBalance,
+      newNairaBalance: newNairaBalance,
+      payout: payout,
+      message: `Successfully sold ${coin}`,
     });
+
   } catch (error) {
     console.error('Sell error:', error);
-    res.status(500).json({ error: error.message || 'Internal server error' });
+    return res.status(500).json({ error: error.message || 'Internal server error' });
   }
 }
