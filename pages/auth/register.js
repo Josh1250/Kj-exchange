@@ -23,6 +23,17 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // ✅ Redirect if already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.push('/dashboard');
+      }
+    };
+    checkAuth();
+  }, [router]);
+
   // Capture referral code from URL
   useEffect(() => {
     const { ref } = router.query;
@@ -167,14 +178,14 @@ export default function Signup() {
             <span className="text-sm font-medium">Back to Home</span>
           </Link>
 
-          <div className="bg-bg-card/70 backdrop-blur-xl rounded-3xl border border-border/50 p-8 shadow-2xl shadow-purple/5">
+          <div className="glass rounded-3xl p-6 md:p-8 border border-border/50 shadow-2xl shadow-purple/5">
             <div className="flex justify-center mb-6">
               <Image
                 src="/logo.png"
                 alt="KJ Exchange"
-                width={220}
-                height={220}
-                className="w-44 md:w-56 h-auto"
+                width={60}
+                height={60}
+                className="w-14 md:w-16 h-auto"
               />
             </div>
 
@@ -224,7 +235,7 @@ export default function Signup() {
                         setUsername(value);
                         if (value.length >= 3) checkUsername(value);
                       }}
-                      className={`w-full bg-black/40 border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:ring-2 transition ${
+                      className={`w-full bg-black/30 border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:ring-2 transition text-base ${
                         username && !usernameAvailable
                           ? 'border-red-400 focus:border-red-400 focus:ring-red-400/20'
                           : username && usernameAvailable
@@ -273,7 +284,7 @@ export default function Signup() {
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                      className="w-full bg-black/30 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition text-base"
                       placeholder="Enter your full name"
                       required
                     />
@@ -290,7 +301,7 @@ export default function Signup() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                      className="w-full bg-black/30 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition text-base"
                       placeholder="Enter your email"
                       required
                     />
@@ -307,7 +318,7 @@ export default function Signup() {
                       type="text"
                       value={referralCodeInput}
                       onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
-                      className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                      className="w-full bg-black/30 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition text-base"
                       placeholder="Enter referral code (if you have one)"
                     />
                   </div>
@@ -326,7 +337,7 @@ export default function Signup() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                      className="w-full bg-black/30 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition text-base"
                       placeholder="Create a password (min 6 chars)"
                       required
                       minLength="6"
@@ -351,7 +362,7 @@ export default function Signup() {
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                      className="w-full bg-black/30 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition text-base"
                       placeholder="Confirm your password"
                       required
                     />
@@ -375,7 +386,7 @@ export default function Signup() {
                 <button
                   type="submit"
                   disabled={loading || !usernameAvailable}
-                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2 touch-manipulation"
                 >
                   {loading ? (
                     <><i className="fa-solid fa-spinner fa-spin"></i> Creating account...</>
