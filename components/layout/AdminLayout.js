@@ -8,19 +8,20 @@ export default function AdminLayout({ children }) {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [pendingCounts, setPendingCounts] = useState({
-    crypto: 0,
+    withdrawals: 0,
     giftCards: 0,
     kyc: 0,
+    deposits: 0,
   });
 
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        // Pending crypto orders (from orders table)
-        const { count: crypto } = await supabase
-          .from('orders')
+        // Pending withdrawals (from transactions table)
+        const { count: withdrawals } = await supabase
+          .from('transactions')
           .select('*', { count: 'exact', head: true })
-          .eq('type', 'crypto')
+          .eq('type', 'withdrawal')
           .eq('status', 'pending');
 
         // Pending gift card orders
@@ -36,10 +37,18 @@ export default function AdminLayout({ children }) {
           .select('*', { count: 'exact', head: true })
           .eq('kyc_status', 'Pending');
 
+        // Pending deposits (crypto orders)
+        const { count: deposits } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('type', 'crypto')
+          .eq('status', 'pending');
+
         setPendingCounts({
-          crypto: crypto || 0,
+          withdrawals: withdrawals || 0,
           giftCards: giftCards || 0,
           kyc: kyc || 0,
+          deposits: deposits || 0,
         });
       } catch (err) {
         console.error('Error fetching pending counts:', err);
@@ -72,6 +81,7 @@ export default function AdminLayout({ children }) {
       label: 'Orders & Users',
       items: [
         { name: 'Orders', href: '/admin/orders', icon: 'fa-solid fa-list' },
+        { name: 'Gift Cards', href: '/admin/gift-cards', icon: 'fa-solid fa-gift', badge: pendingCounts.giftCards },
         { name: 'Users', href: '/admin/users', icon: 'fa-solid fa-users' },
       ],
     },
@@ -86,18 +96,17 @@ export default function AdminLayout({ children }) {
         },
         {
           name: 'Pending Deposits',
-          href: '/admin/orders?filter=pending&type=crypto',
+          href: '/admin/pending-deposits',
           icon: 'fa-solid fa-coins',
-          badge: pendingCounts.crypto,
+          badge: pendingCounts.deposits,
         },
         {
-          name: 'Pending Gift Cards',
-          href: '/admin/orders?filter=pending&type=gift_card',
-          icon: 'fa-solid fa-gift',
-          badge: pendingCounts.giftCards,
+          name: 'Withdrawals',
+          href: '/admin/withdrawals',
+          icon: 'fa-solid fa-arrow-down',
+          badge: pendingCounts.withdrawals,
         },
         { name: 'Top-Ups', href: '/admin/topups', icon: 'fa-solid fa-arrow-up' },
-        { name: 'Withdrawals', href: '/admin/withdrawals', icon: 'fa-solid fa-arrow-down' },
       ],
     },
     {
@@ -110,6 +119,7 @@ export default function AdminLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
+      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-bg-secondary border-r border-border transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="flex flex-col h-full p-4">
           <div className="mb-6">
@@ -176,10 +186,12 @@ export default function AdminLayout({ children }) {
         </div>
       </aside>
 
+      {/* Mobile overlay */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>
       )}
 
+      {/* Main content */}
       <div className="flex-1 flex flex-col md:ml-64 overflow-y-auto">
         <header className="bg-bg-secondary/80 backdrop-blur-lg border-b border-border px-6 py-4 flex justify-between items-center sticky top-0 z-10">
           <button
