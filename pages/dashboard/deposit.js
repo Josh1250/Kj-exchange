@@ -521,17 +521,31 @@ export default function Deposit() {
                   </button>
                 </div>
 
-                {/* QR Code */}
+                {/* QR Code with Fallback */}
                 {showQR && walletAddress && walletAddress !== 'Address not available' && (
                   <div className="mt-4 bg-black/30 rounded-xl p-4 border border-border text-center">
                     <p className="text-text-muted text-xs uppercase tracking-wider mb-2">Scan QR Code</p>
-                    <div className="inline-block p-3 bg-white rounded-xl shadow-lg">
+                    <div className="inline-block p-3 bg-white rounded-xl shadow-lg" id="qr-container">
                       <img
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(walletAddress)}`}
                         alt="QR Code"
                         width="220"
                         height="220"
                         className="rounded-lg"
+                        onError={(e) => {
+                          // Hide the broken image and show fallback
+                          e.target.style.display = 'none';
+                          const container = document.getElementById('qr-container');
+                          if (container) {
+                            const fallback = document.createElement('div');
+                            fallback.className = 'text-text-muted text-sm p-4';
+                            fallback.innerHTML = `
+                              <i class="fa-solid fa-qrcode text-4xl block mb-2"></i>
+                              <p>QR unavailable — copy address manually</p>
+                            `;
+                            container.appendChild(fallback);
+                          }
+                        }}
                       />
                     </div>
                     <p className="text-text-muted text-xs mt-2">Scan with your wallet app</p>
