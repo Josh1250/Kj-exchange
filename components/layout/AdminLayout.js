@@ -17,27 +17,23 @@ export default function AdminLayout({ children }) {
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        // Pending withdrawals (from transactions table)
         const { count: withdrawals } = await supabase
           .from('transactions')
           .select('*', { count: 'exact', head: true })
           .eq('type', 'withdrawal')
           .eq('status', 'pending');
 
-        // Pending gift card orders
         const { count: giftCards } = await supabase
           .from('orders')
           .select('*', { count: 'exact', head: true })
           .eq('type', 'gift_card')
           .eq('status', 'pending');
 
-        // Pending KYC
         const { count: kyc } = await supabase
           .from('users')
           .select('*', { count: 'exact', head: true })
           .eq('kyc_status', 'Pending');
 
-        // Pending deposits (crypto orders)
         const { count: deposits } = await supabase
           .from('orders')
           .select('*', { count: 'exact', head: true })
@@ -110,6 +106,12 @@ export default function AdminLayout({ children }) {
       ],
     },
     {
+      label: 'Finance',
+      items: [
+        { name: 'Business Wallet', href: '/admin/business-wallet', icon: 'fa-solid fa-wallet' },
+      ],
+    },
+    {
       label: 'Settings',
       items: [
         { name: 'Settings', href: '/admin/settings', icon: 'fa-solid fa-gear' },
@@ -119,7 +121,6 @@ export default function AdminLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
-      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-bg-secondary border-r border-border transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="flex flex-col h-full p-4">
           <div className="mb-6">
@@ -186,12 +187,10 @@ export default function AdminLayout({ children }) {
         </div>
       </aside>
 
-      {/* Mobile overlay */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>
       )}
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col md:ml-64 overflow-y-auto">
         <header className="bg-bg-secondary/80 backdrop-blur-lg border-b border-border px-6 py-4 flex justify-between items-center sticky top-0 z-10">
           <button
