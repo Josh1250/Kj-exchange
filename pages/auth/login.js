@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
@@ -12,6 +12,17 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+
+  // ✅ Redirect if already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.push('/dashboard');
+      }
+    };
+    checkAuth();
+  }, [router]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -53,14 +64,14 @@ export default function Login() {
             <span className="text-sm font-medium">Back to Home</span>
           </Link>
 
-          <div className="bg-bg-card/70 backdrop-blur-xl rounded-3xl border border-border/50 p-8 shadow-2xl shadow-purple/5">
+          <div className="glass rounded-3xl p-6 md:p-8 border border-border/50 shadow-2xl shadow-purple/5">
             <div className="flex justify-center mb-6">
               <Image
                 src="/logo.png"
                 alt="KJ Exchange"
                 width={60}
                 height={60}
-                className="w-16 h-auto"
+                className="w-14 md:w-16 h-auto"
               />
             </div>
 
@@ -80,7 +91,7 @@ export default function Login() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                    className="w-full bg-black/30 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition text-base"
                     placeholder="Enter your email"
                     required
                   />
@@ -97,7 +108,7 @@ export default function Login() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition"
+                    className="w-full bg-black/30 border border-border rounded-xl px-12 py-3.5 text-text-primary placeholder:text-text-muted/60 focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 transition text-base"
                     placeholder="Enter your password"
                     required
                   />
@@ -121,7 +132,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2 touch-manipulation"
               >
                 {loading ? (
                   <><i className="fa-solid fa-spinner fa-spin"></i> Logging in...</>
@@ -132,7 +143,7 @@ export default function Login() {
             </form>
 
             <div className="text-center mt-6 space-y-2">
-              <Link href="/auth/reset-password" className="text-sm text-orange hover:underline block">
+              <Link href="/auth/forgot-password" className="text-sm text-orange hover:underline block">
                 Forgot password?
               </Link>
               <p className="text-text-muted text-sm">
