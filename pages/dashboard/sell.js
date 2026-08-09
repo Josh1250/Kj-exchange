@@ -36,12 +36,12 @@ export default function Sell() {
   const [usdAmount, setUsdAmount] = useState('');
   const [availableBalance, setAvailableBalance] = useState(0);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
   const [showAgreement, setShowAgreement] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastPayout, setLastPayout] = useState(0);
+  const [lastSoldCoin, setLastSoldCoin] = useState('');
 
   const [ngnRate, setNgnRate] = useState(1389);
   const [coinPrices, setCoinPrices] = useState({});
@@ -50,19 +50,24 @@ export default function Sell() {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!user) return;
+
       try {
         setIsLoadingRates(true);
+
+        // Fetch NGN rate
         const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
         const data = await res.json();
         const ngn = data.rates?.NGN || 1389;
         setNgnRate(ngn);
 
+        // Fetch crypto prices
         const cryptoRes = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,binancecoin,tron,litecoin,bitcoin-cash&vs_currencies=usd'
         );
         const cryptoData = await cryptoRes.json();
 
-        setCoinPrices({
+        const prices = {
           BTC: cryptoData.bitcoin?.usd || 0,
           ETH: cryptoData.ethereum?.usd || 0,
           USDT: cryptoData.tether?.usd || 1,
@@ -71,8 +76,10 @@ export default function Sell() {
           TRX: cryptoData.tron?.usd || 0,
           LTC: cryptoData.litecoin?.usd || 0,
           BCH: cryptoData['bitcoin-cash']?.usd || 0,
-        });
+        };
+        setCoinPrices(prices);
 
+        // Calculate rates
         const calculatedRates = {};
         for (const coin of COINS) {
           const spread = SPREADS[coin.id];
@@ -85,9 +92,21 @@ export default function Sell() {
         }
         setRates(calculatedRates);
 
-        // TODO: Fetch real crypto balance from database
-        // For now, set a dummy balance
-        setAvailableBalance(0.5 * (cryptoData.bitcoin?.usd || 0));
+        // Fetch user's crypto balance from Supabase
+        const { data: walletData, error: walletError } = await supabase
+          .from('crypto_balances')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!walletError && walletData) {
+          // Get balance for selected coin (stored in column by coin ID lowercase)
+          const balance = walletData[selectedCoin.id?.toLowerCase()] || 0;
+          setAvailableBalance(balance);
+        } else {
+          setAvailableBalance(0);
+        }
+
       } catch (error) {
         console.warn('⚠️ Data fetch failed', error);
         setAvailableBalance(0);
@@ -96,10 +115,10 @@ export default function Sell() {
       }
     };
 
-    if (user) fetchData();
+    fetchData();
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, selectedCoin]);
 
   const getRateForCoin = (coinId, amount) => {
     const rate = rates[coinId];
@@ -130,7 +149,6 @@ export default function Sell() {
     setUsdAmount(availableBalance.toFixed(2));
   };
 
-  // Open agreement modal
   const handleContinue = () => {
     const amount = parseFloat(usdAmount);
     if (!amount || amount <= 0) {
@@ -138,19 +156,17 @@ export default function Sell() {
       return;
     }
     if (amount > availableBalance) {
-      setError('Amount exceeds your available balance. Please enter a lower amount.');
+      setError(`Insufficient balance. You have ${availableBalance.toFixed(6)} ${selectedCoin.id}`);
       return;
     }
     setError('');
     setShowAgreement(true);
   };
 
-  // Execute sell after agreement
   const handleSell = async () => {
     setShowAgreement(false);
     setSubmitting(true);
     setError('');
-    setSuccess('');
 
     const amount = parseFloat(usdAmount);
     const { rate, fee, netUsd, payout } = calculatePayout(selectedCoin.id, amount);
@@ -176,9 +192,11 @@ export default function Sell() {
       }
 
       setLastPayout(payout);
+      setLastSoldCoin(selectedCoin.id);
       setShowSuccessModal(true);
       setAvailableBalance(availableBalance - amount);
       setUsdAmount('');
+
     } catch (err) {
       setError(err.message || 'Failed to sell. Please try again.');
     } finally {
@@ -191,7 +209,7 @@ export default function Sell() {
     coin.id.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   if (!user) {
     router.push('/auth/login');
     return null;
@@ -200,6 +218,11 @@ export default function Sell() {
   const amount = parseFloat(usdAmount) || 0;
   const { rate, fee, netUsd, payout } = calculatePayout(selectedCoin.id, amount);
   const showRate = amount > 0;
+  const priceUsd = coinPrices[selectedCoin.id] || 0;
+  const balanceInUsd = availableBalance * priceUsd;
+
+  // Quick amounts
+  const quickAmounts = [10, 25, 50, 100];
 
   return (
     <>
@@ -207,8 +230,9 @@ export default function Sell() {
         <title>Sell Crypto · KJ Exchange</title>
       </Head>
       <DashboardLayout>
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-2 mb-6">
+        <div className="max-w-2xl mx-auto px-4 py-4 pb-24">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-6">
             <Link href="/dashboard" className="text-text-muted hover:text-text-primary transition group">
               <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
             </Link>
@@ -218,151 +242,155 @@ export default function Sell() {
             </h1>
           </div>
 
-          <div className="space-y-6">
-            <div className="relative">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 pl-12 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
-                placeholder="Search supported asset"
-              />
-              <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-text-muted"></i>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {filteredCoins.map((coin) => {
-                const isSelected = selectedCoin.id === coin.id;
-                const price = coinPrices[coin.id] || 0;
-
-                return (
-                  <button
-                    key={coin.id}
-                    onClick={() => {
-                      setSelectedCoin(coin);
-                      setUsdAmount('');
-                    }}
-                    className={`p-4 rounded-2xl border transition-all duration-200 text-left ${
-                      isSelected
-                        ? 'border-orange bg-orange/10 shadow-lg shadow-orange/10 scale-[1.02]'
-                        : 'border-border bg-black/20 hover:border-orange/50 hover:bg-black/30'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <i className={`${coin.icon} text-xl`} style={{ color: coin.color }}></i>
-                      <span className="font-bold text-sm">{coin.id}</span>
-                    </div>
-                    <p className="text-text-muted text-xs mt-1">{coin.name}</p>
-                    <p className="text-sm font-semibold mt-1">${price.toFixed(2)}</p>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="glass rounded-2xl p-6 border border-border">
-              <div className="flex items-center gap-3 mb-4">
-                <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
-                <div>
-                  <h2 className="text-xl font-bold">Sell {selectedCoin.name}</h2>
-                  <p className="text-text-muted text-sm">
-                    Available: {availableBalance.toFixed(4)} {selectedCoin.id} (~${availableBalance.toFixed(2)} USD)
-                  </p>
-                </div>
-              </div>
-
-              {showRate && (
-                <div className="bg-black/20 rounded-xl p-4 mb-4 border border-border/50">
-                  <div className="flex justify-between items-center">
-                    <span className="text-text-muted text-sm">Rate</span>
-                    <span className="font-bold text-green-400">
-                      1 USD = ₦{rate.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-text-muted text-sm">Fee</span>
-                    <span className="text-text-muted text-sm">
-                      {SPREADS[selectedCoin.id]?.fee === 0 ? '0%' : '1%'}
-                    </span>
-                  </div>
-                </div>
-              )}
-
+          {/* Balance Card */}
+          <div className="glass rounded-2xl p-4 border border-border mb-5">
+            <p className="text-text-muted text-sm">Available Balance</p>
+            <div className="flex items-end justify-between">
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                  Amount (USD)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={usdAmount}
-                    onChange={(e) => setUsdAmount(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl px-5 py-4 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-2xl font-bold placeholder:text-text-muted/50"
-                    placeholder="0.00"
-                    min="0.01"
-                    step="0.01"
-                  />
-                  <div className="absolute right-5 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">
-                    USD
+                <p className="text-2xl font-bold">{availableBalance.toFixed(6)} {selectedCoin.id}</p>
+                <p className="text-text-muted text-sm">≈ ${balanceInUsd.toFixed(2)} USD</p>
+              </div>
+              <i className={`${selectedCoin.icon} text-3xl opacity-30`} style={{ color: selectedCoin.color }}></i>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="relative mb-4">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 pl-12 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-base"
+              placeholder="Search supported asset"
+            />
+            <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-text-muted"></i>
+          </div>
+
+          {/* Coin Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+            {filteredCoins.map((coin) => {
+              const isSelected = selectedCoin.id === coin.id;
+              const price = coinPrices[coin.id] || 0;
+
+              return (
+                <button
+                  key={coin.id}
+                  onClick={() => {
+                    setSelectedCoin(coin);
+                    setUsdAmount('');
+                    setError('');
+                  }}
+                  className={`p-4 rounded-2xl border transition-all duration-200 text-left ${
+                    isSelected
+                      ? 'border-orange bg-orange/10 shadow-lg shadow-orange/10 scale-[1.02]'
+                      : 'border-border bg-black/20 hover:border-orange/50 hover:bg-black/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <i className={`${coin.icon} text-xl`} style={{ color: coin.color }}></i>
+                    <span className="font-bold text-sm">{coin.id}</span>
                   </div>
-                </div>
+                  <p className="text-text-muted text-xs mt-0.5">{coin.name}</p>
+                  <p className="text-sm font-semibold mt-1">${price.toFixed(2)}</p>
+                </button>
+              );
+            })}
+          </div>
 
-                <div className="flex gap-2 mt-3 flex-wrap">
-                  {[10, 25, 50, 100].map((pct) => (
-                    <button
-                      key={pct}
-                      type="button"
-                      onClick={() => setQuickAmount(pct)}
-                      className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-border hover:border-orange/50 hover:text-orange"
-                    >
-                      {pct}%
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={setSellAll}
-                    className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-orange/30 text-orange hover:bg-orange/10"
-                  >
-                    Sell All
-                  </button>
-                </div>
+          {/* Sell Form */}
+          <div className="glass rounded-2xl p-5 border border-border">
+            <div className="flex items-center gap-3 mb-4">
+              <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
+              <div>
+                <h2 className="text-xl font-bold">Sell {selectedCoin.name}</h2>
+                <p className="text-text-muted text-sm">1 {selectedCoin.id} ≈ ${priceUsd.toFixed(2)}</p>
+              </div>
+            </div>
 
-                <p className="text-text-muted text-xs mt-2">
-                  Minimum sell: $1.00
-                </p>
+            {/* Amount Input */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">Amount ({selectedCoin.id})</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={usdAmount}
+                  onChange={(e) => setUsdAmount(e.target.value)}
+                  className="w-full bg-black/40 border border-border rounded-xl px-5 py-4 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-2xl font-bold placeholder:text-text-muted/50"
+                  placeholder="0.00"
+                  min="0.01"
+                  step="0.01"
+                />
+                <div className="absolute right-5 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">
+                  {selectedCoin.id}
+                </div>
               </div>
 
-              {showRate && (
-                <div className="mt-4 bg-orange/5 border border-orange/20 rounded-xl p-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-text-muted text-sm">You Receive</span>
-                    <span className="text-2xl font-bold text-green-400">
-                      ₦{payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  {fee > 0 && (
-                    <div className="flex justify-between items-center mt-1 text-xs text-text-muted">
-                      <span>Fee deducted</span>
-                      <span>-${fee.toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Quick Amounts */}
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {quickAmounts.map((pct) => (
+                  <button
+                    key={pct}
+                    onClick={() => setQuickAmount(pct)}
+                    className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-border hover:border-orange/50 hover:text-orange"
+                  >
+                    {pct}%
+                  </button>
+                ))}
+                <button
+                  onClick={setSellAll}
+                  className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-orange/30 text-orange hover:bg-orange/10"
+                >
+                  Sell All
+                </button>
+              </div>
 
-              {error && (
-                <div className="mt-4 bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
-                  <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <button
-                onClick={handleContinue}
-                disabled={submitting || !usdAmount || parseFloat(usdAmount) <= 0}
-                className="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
-              >
-                <i className="fa-solid fa-paper-plane"></i> Continue ➤
-              </button>
+              <p className="text-text-muted text-xs mt-2">Minimum sell: $1.00</p>
             </div>
+
+            {/* Rate Preview */}
+            {showRate && (
+              <div className="mt-4 bg-black/30 rounded-xl p-4 border border-border/50">
+                <div className="flex justify-between items-center">
+                  <span className="text-text-muted text-sm">Rate</span>
+                  <span className="font-bold text-green-400">
+                    1 USD = ₦{rate.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-text-muted text-sm">Fee</span>
+                  <span className="text-text-muted text-sm">
+                    {SPREADS[selectedCoin.id]?.fee === 0 ? '0%' : '1%'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-2 pt-2 border-t border-border/50">
+                  <span className="text-text-muted text-sm">You Receive</span>
+                  <span className="text-2xl font-bold text-green-400">
+                    ₦{payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                {fee > 0 && (
+                  <div className="flex justify-between items-center mt-1 text-xs text-text-muted">
+                    <span>Fee deducted</span>
+                    <span>-${fee.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-4 bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
+                <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              onClick={handleContinue}
+              disabled={submitting || !usdAmount || parseFloat(usdAmount) <= 0}
+              className="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange/20"
+            >
+              <i className="fa-solid fa-paper-plane"></i> Continue ➤
+            </button>
           </div>
         </div>
       </DashboardLayout>
@@ -389,9 +417,7 @@ export default function Sell() {
                 <i className="fa-regular fa-circle-check text-green-400 mt-0.5"></i>
                 <div>
                   <p className="font-semibold">Minimum sell is $1.00</p>
-                  <p className="text-text-muted text-xs">
-                    Amounts below $1.00 will not be processed.
-                  </p>
+                  <p className="text-text-muted text-xs">Amounts below $1.00 will not be processed.</p>
                 </div>
               </div>
 
@@ -399,9 +425,7 @@ export default function Sell() {
                 <i className="fa-solid fa-percent text-yellow-400 mt-0.5"></i>
                 <div>
                   <p className="font-semibold">Transaction fee: {SPREADS[selectedCoin.id]?.fee === 0 ? '0%' : '1%'}</p>
-                  <p className="text-text-muted text-xs">
-                    Fee is deducted from your sale amount.
-                  </p>
+                  <p className="text-text-muted text-xs">Fee is deducted from your sale amount.</p>
                 </div>
               </div>
 
@@ -409,9 +433,7 @@ export default function Sell() {
                 <i className="fa-solid fa-shield text-orange mt-0.5"></i>
                 <div>
                   <p className="font-semibold">Instant credit</p>
-                  <p className="text-text-muted text-xs">
-                    Your Naira wallet will be credited immediately.
-                  </p>
+                  <p className="text-text-muted text-xs">Your Naira wallet will be credited immediately.</p>
                 </div>
               </div>
 
@@ -447,7 +469,7 @@ export default function Sell() {
             </div>
             <h2 className="text-2xl font-bold mt-4">Sale Completed! 🎉</h2>
             <p className="text-text-muted mt-2">
-              You have successfully sold {selectedCoin.name} for
+              You have successfully sold {lastSoldCoin} for
             </p>
             <p className="text-3xl font-bold text-green-400 mt-1">
               ₦{lastPayout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -459,7 +481,6 @@ export default function Sell() {
               <button
                 onClick={() => {
                   setShowSuccessModal(false);
-                  setSuccess('');
                 }}
                 className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition"
               >
