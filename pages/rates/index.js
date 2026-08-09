@@ -82,31 +82,25 @@ export default function Rates() {
     setGiftCardRates(cards.slice(0, 8));
   }, []);
 
-  // Fetch live NGN rate and crypto prices (using SAME API as sell.js)
+  // Fetch live NGN rate and crypto prices (same API as sell.js)
   useEffect(() => {
     const fetchRates = async () => {
       try {
         setIsLoading(true);
-        
-        // ✅ USE SAME API AS SELL.JS
         let ngn = 1389;
         try {
           const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
           const data = await res.json();
           if (data.rates?.NGN) ngn = data.rates.NGN;
         } catch (e) {
-          // Fallback to Frankfurter
           try {
             const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=NGN');
             const data = await res.json();
             if (data.rates?.NGN) ngn = data.rates.NGN;
-          } catch (e2) {
-            console.warn('All rate APIs failed, using fallback rate');
-          }
+          } catch (e2) {}
         }
         setNgnRate(ngn);
 
-        // Fetch crypto prices
         const cryptoRes = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,binancecoin,tron,litecoin,bitcoin-cash&vs_currencies=usd'
         );
@@ -145,7 +139,7 @@ export default function Rates() {
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate payout and display rate
+  // Calculate payout and display rate (still uses tiered spread internally)
   useEffect(() => {
     let ratePerUsd = 0;
 
@@ -296,11 +290,6 @@ export default function Rates() {
                       />
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">USD</div>
                     </div>
-                    {activeTab === 'crypto' && parseFloat(amount) > 0 && (
-                      <p className="text-xs text-text-muted mt-1">
-                        {parseFloat(amount) < 500 ? 'Under $500 rate' : '$500+ rate'}
-                      </p>
-                    )}
                   </div>
                 </div>
               </div>
@@ -350,15 +339,12 @@ export default function Rates() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Asset</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Rate (NGN per $1)</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">USD Price</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Tier</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
                     {cryptoAssets.map((asset) => {
                       const usdRate = getUsdRate(asset.id);
                       const usdPrice = cryptoUsdPrices[asset.id] || 0;
-                      const lowSpread = getSpread(asset.id, 100);
-                      const highSpread = getSpread(asset.id, 600);
                       return (
                         <tr key={asset.id} className="hover:bg-white/5 transition">
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -369,10 +355,6 @@ export default function Rates() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-medium">{formatRate(usdRate)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-text-muted">${usdPrice.toFixed(2)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-xs text-text-muted">
-                            <span className="block">Under $500: ₦{(ngnRate * (1 - lowSpread)).toFixed(2)}</span>
-                            <span className="block text-orange">$500+: ₦{(ngnRate * (1 - highSpread)).toFixed(2)}</span>
-                          </td>
                         </tr>
                       );
                     })}
@@ -380,8 +362,7 @@ export default function Rates() {
                 </table>
               </div>
               <div className="p-4 text-center border-t border-border text-xs text-text-muted">
-                * Rates update automatically with the live market rate. 
-                <span className="block text-orange mt-1">Live NGN rate: ₦{ngnRate.toFixed(2)} per USD</span>
+                * Rates update automatically with the live market rate.
               </div>
             </div>
           </div>
@@ -478,7 +459,7 @@ export default function Rates() {
           </div>
 
           <p className="text-center text-text-muted text-xs mt-6">
-            Rates updated every 60 seconds. Powered by exchange-rate.host, Frankfurter &amp; CoinGecko.
+            Rates updated every 60 seconds.
           </p>
         </div>
       </Layout>
