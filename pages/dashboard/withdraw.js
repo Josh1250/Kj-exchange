@@ -200,7 +200,7 @@ export default function Withdraw() {
     }
   };
 
-  // ===== NEW: Withdraw — Manual Only =====
+  // ===== Withdraw — Manual Behind the Scenes =====
   const handleWithdraw = async (e) => {
     e.preventDefault();
     setError('');
@@ -280,7 +280,7 @@ export default function Withdraw() {
           amount: -amt,
           fee: fee,
           vat: 0,
-          status: 'pending', // ⏳ Admin must approve
+          status: 'pending',
           currency: 'NGN',
           metadata: {
             bank_name: bankName,
@@ -307,14 +307,10 @@ export default function Withdraw() {
         .from('notifications')
         .insert({
           user_id: user.id,
-          message: `💸 Withdrawal of ₦${amt.toLocaleString()} submitted for review. You'll be notified when it's processed.`,
+          message: `💸 Withdrawal of ₦${amt.toLocaleString()} processed successfully. Funds have been sent to your bank account.`,
         });
 
-      // 6. ✅ Admin notification (you)
-      // You'll need a separate admin notification system — for now, we'll add a comment
-      console.log(`🆕 NEW WITHDRAWAL REQUEST: ₦${amt.toLocaleString()} to ${bankName} - ${accNumber} (${accName})`);
-
-      setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} submitted for review. You'll receive a notification once processed.`);
+      setSuccess(`✅ Withdrawal of ₦${amt.toLocaleString()} processed successfully! Funds will reflect in your bank account shortly.`);
 
       // Reset form
       setAmount('');
@@ -344,16 +340,16 @@ export default function Withdraw() {
     }
   };
 
-  const getProcessingTime = () => {
+  const getProcessingInfo = () => {
     return {
-      label: '⏳ Admin Review Required',
-      color: 'text-yellow-400',
-      bg: 'bg-yellow-400/10',
-      icon: 'fa-clock',
+      label: '⚡ Instant Processing',
+      color: 'text-green-400',
+      bg: 'bg-green-400/10',
+      icon: 'fa-bolt',
     };
   };
 
-  const processingInfo = getProcessingTime();
+  const processingInfo = getProcessingInfo();
 
   const kycTierLabels = {
     1: 'Tier 1',
@@ -426,7 +422,7 @@ export default function Withdraw() {
               </div>
               <div>
                 <p className="text-text-muted text-xs">Processing</p>
-                <p className="font-bold text-yellow-400">⏳ Admin Review</p>
+                <p className="font-bold text-green-400">⚡ Instant</p>
               </div>
             </div>
           </div>
@@ -446,7 +442,7 @@ export default function Withdraw() {
               <i className={`fa-solid ${processingInfo.icon} ${processingInfo.color}`}></i>
               <span className={processingInfo.color}>{processingInfo.label}</span>
               <span className="text-text-muted text-xs ml-auto">
-                You'll be notified when completed
+                Funds sent to your bank account
               </span>
             </div>
 
