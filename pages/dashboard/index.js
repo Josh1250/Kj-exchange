@@ -5,6 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Link from 'next/link';
 import Head from 'next/head';
+import RateCalculator from '../../components/calculator/RateCalculator'; // ✅ NEW IMPORT
 
 export default function DashboardOverview() {
   const { user, loading } = useAuth();
@@ -273,12 +274,10 @@ export default function DashboardOverview() {
 
           {/* Balance Card */}
           <div className="bg-gradient-to-br from-purple-900/40 via-orange-900/20 to-purple-900/40 rounded-2xl p-6 border border-border relative overflow-hidden">
-            {/* Background blobs */}
             <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl"></div>
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-orange-500/20 rounded-full blur-3xl"></div>
 
             <div className="relative z-10">
-              {/* Currency Toggle */}
               <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <p className="text-text-muted text-sm font-medium">Available Balance</p>
                 <div className="flex bg-black/30 rounded-full p-1 border border-border/50">
@@ -298,12 +297,10 @@ export default function DashboardOverview() {
                 </div>
               </div>
 
-              {/* Balance Amount */}
               <p className="text-4xl md:text-5xl font-bold tracking-tight">
                 {hideBalance ? '••••••' : `${symbol}${displayBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               </p>
 
-              {/* Conversion hints */}
               {!hideBalance && !isGiftPoints && (
                 <div className="flex flex-wrap gap-3 mt-1 text-sm text-text-muted">
                   {selectedCurrency !== 'NGN' && <span>≈ ₦{totalBalance.toLocaleString()}</span>}
@@ -314,7 +311,6 @@ export default function DashboardOverview() {
                 <p className="text-xs text-text-muted mt-1">10 points = ₦1</p>
               )}
 
-              {/* Sparkline */}
               {!hideBalance && !isGiftPoints && sparklineData.length > 0 && (
                 <div className="mt-4">
                   <svg width="200" height="50" className="opacity-80 w-full">
@@ -335,14 +331,12 @@ export default function DashboardOverview() {
                 </div>
               )}
 
-              {/* Bonus balance */}
               {bonusBalance > 0 && !isGiftPoints && (
                 <p className="text-sm text-green-400 mt-1">
                   🎁 Includes ₦{bonusBalance.toLocaleString()} welcome bonus
                 </p>
               )}
 
-              {/* Quick Action Buttons */}
               <div className="grid grid-cols-4 gap-3 mt-6">
                 {actions.map((action) => (
                   <Link
@@ -360,7 +354,7 @@ export default function DashboardOverview() {
             </div>
           </div>
 
-          {/* Quick Stats (2×2 grid) */}
+          {/* Quick Stats */}
           <div className="grid grid-cols-2 gap-3">
             <div className="glass rounded-2xl p-4 text-center border border-border">
               <div className="flex items-center justify-center gap-2 text-text-muted text-xs uppercase tracking-wider mb-1">
@@ -428,7 +422,10 @@ export default function DashboardOverview() {
             </Link>
           </div>
 
-          {/* Products Grid (2×3) */}
+          {/* ===== RATE CALCULATOR (REPLACES OLD RATE CARD) ===== */}
+          <RateCalculator />
+
+          {/* Products Grid (Rate Calculator card removed, Crypto → Sell Crypto) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-bold">Products</h2>
@@ -445,7 +442,7 @@ export default function DashboardOverview() {
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-brands fa-bitcoin"></i>
                 </div>
-                <p className="text-sm font-semibold mt-2">Crypto</p>
+                <p className="text-sm font-semibold mt-2">Sell Crypto</p>
               </Link>
               <Link href="/dashboard/pay-bills" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
@@ -461,9 +458,9 @@ export default function DashboardOverview() {
               </Link>
               <Link href="/rates" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
-                  <i className="fa-solid fa-calculator"></i>
+                  <i className="fa-solid fa-chart-simple"></i>
                 </div>
-                <p className="text-sm font-semibold mt-2">Rate Calculator</p>
+                <p className="text-sm font-semibold mt-2">All Rates</p>
               </Link>
               <div className="glass rounded-xl p-4 text-center border border-border opacity-60 relative">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-text-muted text-xl">
@@ -523,7 +520,7 @@ export default function DashboardOverview() {
           </div>
         </div>
 
-        {/* ===== BOTTOM NAVIGATION ===== */}
+        {/* Bottom Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border bg-bg-card/90 backdrop-blur-xl">
           <div className="container mx-auto px-4">
             <div className="flex justify-around items-center py-2">
