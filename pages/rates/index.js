@@ -3,7 +3,7 @@ import Layout from '../../components/layout/Layout';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GIFT_CARD_RATES } from '../../config/giftCardRates';
-import { getSpread } from '../../lib/rates';
+import { getSpread, TARGET_RATES } from '../../lib/rates';
 
 const formatRate = (rate) => {
   if (!rate || rate === 0) return '₦0.00';
@@ -138,8 +138,15 @@ export default function Rates() {
 
     if (activeTab === 'crypto') {
       const parsedAmount = parseFloat(amount) || 0;
-      const spread = getSpread(selectedAsset, parsedAmount);
-      ratePerUsd = ngnRate * (1 - spread);
+      // Use the target rates from lib/rates.js directly
+      const targetRates = TARGET_RATES[selectedAsset];
+      if (targetRates) {
+        ratePerUsd = parsedAmount < 500 ? targetRates.low : targetRates.high;
+      } else {
+        // Fallback: calculate from spread if no target rate
+        const spread = getSpread(selectedAsset, parsedAmount);
+        ratePerUsd = ngnRate * (1 - spread);
+      }
     } else {
       const card = giftCardRates.find(c => c.id === selectedGiftCard);
       if (card) ratePerUsd = card.rate;
@@ -150,8 +157,13 @@ export default function Rates() {
     setPayout(usdValue * ratePerUsd);
   }, [amount, selectedAsset, selectedGiftCard, giftCardRates, ngnRate, activeTab]);
 
-  // Get the per-USD rate for a coin (based on low tier for table)
+  // Get the per-USD rate for a coin (from target rates)
   const getUsdRate = (assetId) => {
+    const targets = TARGET_RATES[assetId];
+    if (targets) {
+      return targets.low; // Use low tier for table display
+    }
+    // Fallback: calculate from spread
     const spread = getSpread(assetId, 100);
     return ngnRate * (1 - spread);
   };
@@ -283,6 +295,11 @@ export default function Rates() {
                       />
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">USD</div>
                     </div>
+                    {activeTab === 'crypto' && parseFloat(amount) > 0 && (
+                      <p className="text-xs text-text-muted mt-1">
+                        {parseFloat(amount) < 500 ? 'Under $500 rate' : '$500+ rate'}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -332,12 +349,14 @@ export default function Rates() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Asset</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Rate (NGN per $1)</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">USD Price</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Tier</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
                     {cryptoAssets.map((asset) => {
                       const usdRate = getUsdRate(asset.id);
                       const usdPrice = cryptoUsdPrices[asset.id] || 0;
+                      const targets = TARGET_RATES[asset.id];
                       return (
                         <tr key={asset.id} className="hover:bg-white/5 transition">
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -348,6 +367,14 @@ export default function Rates() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-medium">{formatRate(usdRate)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-text-muted">${usdPrice.toFixed(2)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-xs text-text-muted">
+                            {targets ? (
+                              <>
+                                <span className="block">Under $500: ₦{targets.low.toFixed(2)}</span>
+                                <span className="block text-orange">$500+: ₦{targets.high.toFixed(2)}</span>
+                              </>
+                            ) : '-'}
+                          </td>
                         </tr>
                       );
                     })}
@@ -355,7 +382,7 @@ export default function Rates() {
                 </table>
               </div>
               <div className="p-4 text-center border-t border-border text-xs text-text-muted">
-                * Rates shown based on $100 USD amount. Rates may vary for amounts above $500.
+                * Rates shown based on $100 USD amount. Rates vary for amounts above $500.
               </div>
             </div>
           </div>
