@@ -25,10 +25,6 @@ const WALLETS = {
   BCH: 'qrsluzh9r24sa7306l9qpzwhd58ewerq0qnh47qjqh',
 };
 
-// ============================================
-// COIN CONFIG
-// ============================================
-
 const COINS = [
   { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a', networks: ['Bitcoin'] },
   { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea', networks: ['Ethereum'] },
@@ -59,24 +55,31 @@ export default function Deposit() {
   const [step, setStep] = useState('select');
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [showAgreement, setShowAgreement] = useState(false);
   const [coinPrices, setCoinPrices] = useState({});
   const [ngnRate, setNgnRate] = useState(1389);
   const [isLoadingRates, setIsLoadingRates] = useState(true);
   const [showQR, setShowQR] = useState(false);
   const [autosell, setAutosell] = useState(false);
+  const [cryptoBalances, setCryptoBalances] = useState({});
+  const [recentDeposits, setRecentDeposits] = useState([]);
+  const [isCopied, setIsCopied] = useState(false);
 
-  // Fetch rates
+  // Fetch rates + balances + recent deposits
   useEffect(() => {
-    const fetchRates = async () => {
+    const fetchData = async () => {
+      if (!user) return;
+      
       try {
         setIsLoadingRates(true);
+        
+        // Fetch NGN rate
         const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
         const data = await res.json();
         const ngn = data.rates?.NGN || 1389;
         setNgnRate(ngn);
 
+        // Fetch crypto prices
         const cryptoRes = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,binancecoin,tron,litecoin,bitcoin-cash&vs_currencies=usd'
         );
@@ -92,17 +95,41 @@ export default function Deposit() {
           LTC: cryptoData.litecoin?.usd || 0,
           BCH: cryptoData['bitcoin-cash']?.usd || 0,
         });
+
+        // Fetch user's crypto balances
+        const { data: walletData, error: walletError } = await supabase
+          .from('crypto_balances')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!walletError && walletData) {
+          setCryptoBalances(walletData);
+        }
+
+        // Fetch recent deposits
+        const { data: depositData, error: depositError } = await supabase
+          .from('deposits')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        if (!depositError && depositData) {
+          setRecentDeposits(depositData);
+        }
+
       } catch (error) {
-        console.warn('⚠️ Rate fetch failed', error);
+        console.warn('⚠️ Data fetch failed', error);
       } finally {
         setIsLoadingRates(false);
       }
     };
 
-    fetchRates();
-    const interval = setInterval(fetchRates, 60000);
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
 
   const getWalletAddress = () => {
     const coin = selectedCoin.id;
@@ -160,7 +187,6 @@ export default function Deposit() {
 
       setOrder(data);
       setStep('deposit');
-      setSuccess('✅ Wallet generated! Send crypto to the address below.');
       setShowQR(true);
     } catch (err) {
       setError(err.message || 'Failed to create order. Please try again.');
@@ -170,7 +196,8 @@ export default function Deposit() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    alert('✅ Address copied to clipboard!');
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
   };
 
   const shareAddress = () => {
@@ -199,7 +226,6 @@ export default function Deposit() {
     setStep('select');
     setOrder(null);
     setError('');
-    setSuccess('');
     setShowQR(false);
   };
 
@@ -212,7 +238,7 @@ export default function Deposit() {
     coin.id.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-primary">Loading...</div>;
   if (!user) {
     router.push('/auth/login');
     return null;
@@ -226,14 +252,32 @@ export default function Deposit() {
     ? walletAddress.slice(0, 8) + '...' + walletAddress.slice(-8)
     : walletAddress;
 
+  // Get user's balance for selected coin
+  const userBalance = cryptoBalances[selectedCoin.id?.toLowerCase()] || 0;
+  const balanceInUsd = userBalance * priceUsd;
+
+  // Quick amounts
+  const quickAmounts = [10, 25, 50, 100, 500];
+
+  // Status badge colors
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'completed': return 'bg-green-400/20 text-green-400';
+      case 'pending': return 'bg-yellow-400/20 text-yellow-400';
+      case 'failed': return 'bg-red-400/20 text-red-400';
+      default: return 'bg-yellow-400/20 text-yellow-400';
+    }
+  };
+
   return (
     <>
       <Head>
         <title>Deposit Crypto · KJ Exchange</title>
       </Head>
       <DashboardLayout>
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-2 mb-6">
+        <div className="max-w-2xl mx-auto px-4 py-4 pb-24">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-6">
             <Link href="/dashboard" className="text-text-muted hover:text-text-primary transition group">
               <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
             </Link>
@@ -244,22 +288,37 @@ export default function Deposit() {
           </div>
 
           {step === 'select' ? (
-            <div className="space-y-6">
+            <div className="space-y-5">
+              {/* Balance Card */}
+              <div className="glass rounded-2xl p-4 border border-border">
+                <p className="text-text-muted text-sm">Your {selectedCoin.name} Balance</p>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-2xl font-bold">{userBalance.toFixed(6)} {selectedCoin.id}</p>
+                    <p className="text-text-muted text-sm">≈ ${balanceInUsd.toFixed(2)} USD</p>
+                  </div>
+                  <i className={`${selectedCoin.icon} text-3xl opacity-30`} style={{ color: selectedCoin.color }}></i>
+                </div>
+              </div>
+
+              {/* Search */}
               <div className="relative">
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 pl-12 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20"
+                  className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 pl-12 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-base"
                   placeholder="Search supported asset"
                 />
                 <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-text-muted"></i>
               </div>
 
+              {/* Coin Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {filteredCoins.map((coin) => {
                   const isSelected = selectedCoin.id === coin.id;
                   const price = coinPrices[coin.id] || 0;
+                  const balance = cryptoBalances[coin.id?.toLowerCase()] || 0;
 
                   return (
                     <button
@@ -278,23 +337,28 @@ export default function Deposit() {
                       <div className="flex items-center gap-2">
                         <i className={`${coin.icon} text-xl`} style={{ color: coin.color }}></i>
                         <span className="font-bold text-sm">{coin.id}</span>
+                        {balance > 0 && (
+                          <span className="text-[10px] text-green-400 ml-auto">{balance.toFixed(4)}</span>
+                        )}
                       </div>
-                      <p className="text-text-muted text-xs mt-1">{coin.name}</p>
+                      <p className="text-text-muted text-xs mt-0.5">{coin.name}</p>
                       <p className="text-sm font-semibold mt-1">${price.toFixed(2)}</p>
                     </button>
                   );
                 })}
               </div>
 
-              <div className="glass rounded-2xl p-6 border border-border">
+              {/* Deposit Form */}
+              <div className="glass rounded-2xl p-5 border border-border">
                 <div className="flex items-center gap-3 mb-4">
                   <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
                   <div>
                     <h2 className="text-xl font-bold">Deposit {selectedCoin.name}</h2>
-                    <p className="text-text-muted text-sm">Price: ${priceUsd.toFixed(2)}</p>
+                    <p className="text-text-muted text-sm">1 {selectedCoin.id} ≈ ${priceUsd.toFixed(2)}</p>
                   </div>
                 </div>
 
+                {/* Network Selection */}
                 {selectedCoin.networks.length > 1 && (
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Network</label>
@@ -303,9 +367,9 @@ export default function Deposit() {
                         <button
                           key={net}
                           onClick={() => setSelectedNetwork(net)}
-                          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                          className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition ${
                             selectedNetwork === net
-                              ? 'bg-orange text-white shadow-lg shadow-orange/20'
+                              ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange/20'
                               : 'bg-black/20 border border-border text-text-muted hover:border-orange/50'
                           }`}
                         >
@@ -314,11 +378,12 @@ export default function Deposit() {
                       ))}
                     </div>
                     {selectedCoin.id === 'USDT' && selectedNetwork === 'TRC-20' && (
-                      <p className="text-xs text-green-400 mt-1">✅ Recommended — lowest fees</p>
+                      <p className="text-xs text-green-400 mt-1.5">✅ Recommended — lowest fees</p>
                     )}
                   </div>
                 )}
 
+                {/* Amount Input */}
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1.5">Amount (USD)</label>
                   <div className="relative">
@@ -333,6 +398,20 @@ export default function Deposit() {
                     />
                     <div className="absolute right-5 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">USD</div>
                   </div>
+                  
+                  {/* Quick Amounts */}
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {quickAmounts.map((amt) => (
+                      <button
+                        key={amt}
+                        onClick={() => setUsdAmount(amt.toString())}
+                        className="px-4 py-1.5 rounded-full text-xs font-medium transition border border-border hover:border-orange/50 hover:text-orange"
+                      >
+                        ${amt}
+                      </button>
+                    ))}
+                  </div>
+
                   {amount > 0 && priceUsd > 0 && (
                     <p className="text-text-muted text-sm mt-2">
                       ≈ {cryptoAmt.toFixed(6)} {selectedCoin.id}
@@ -356,6 +435,32 @@ export default function Deposit() {
                   <i className="fa-solid fa-arrow-down"></i> Continue ➤
                 </button>
               </div>
+
+              {/* Recent Deposits */}
+              {recentDeposits.length > 0 && (
+                <div className="glass rounded-2xl p-5 border border-border">
+                  <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Recent Deposits</h3>
+                  <div className="space-y-3">
+                    {recentDeposits.map((deposit) => (
+                      <div key={deposit.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <i className={`${COINS.find(c => c.id === deposit.coin)?.icon || 'fa-solid fa-coins'} text-lg`} style={{ color: COINS.find(c => c.id === deposit.coin)?.color || '#888' }}></i>
+                          <div>
+                            <p className="font-medium text-sm">{deposit.coin}</p>
+                            <p className="text-text-muted text-xs">{new Date(deposit.created_at).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-sm">${deposit.usd_amount?.toFixed(2)}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusBadge(deposit.status)}`}>
+                            {deposit.status || 'pending'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : step === 'generating' ? (
             <div className="glass rounded-2xl p-12 border border-border text-center">
@@ -367,77 +472,119 @@ export default function Deposit() {
               <p className="text-text-muted mt-3 max-w-sm mx-auto">
                 Sit tight while we set things up securely for you.
               </p>
-              <p className="text-text-muted text-xs mt-2">This usually takes a few seconds.</p>
             </div>
           ) : (
-            <div className="glass rounded-2xl p-6 border border-border">
-              <div className="flex items-center gap-3 mb-6">
-                <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
-                <h2 className="text-xl font-bold">Deposit {selectedCoin.name}</h2>
-              </div>
-
-              <div className="bg-black/20 rounded-xl p-4 border border-border text-center">
-                <p className="text-2xl font-mono font-bold text-orange tracking-wider">
-                  {truncatedAddress}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-3 mt-4">
-                <button
-                  onClick={() => copyToClipboard(walletAddress)}
-                  className="flex-1 bg-orange/10 hover:bg-orange/20 text-orange px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
-                >
-                  <i className="fa-regular fa-copy"></i> Copy
-                </button>
-                <button
-                  onClick={downloadQR}
-                  className="flex-1 bg-orange/10 hover:bg-orange/20 text-orange px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
-                >
-                  <i className="fa-solid fa-download"></i> Download QR
-                </button>
-                <button
-                  onClick={shareAddress}
-                  className="flex-1 bg-orange/10 hover:bg-orange/20 text-orange px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
-                >
-                  <i className="fa-solid fa-share-nodes"></i> Share
-                </button>
-              </div>
-
-              <div className="mt-4 bg-black/20 rounded-xl p-3 border border-border flex items-center justify-between">
-                <span className="text-text-muted text-sm">Network</span>
-                <span className="font-bold">{selectedNetwork}</span>
-              </div>
-
-              {showQR && walletAddress && walletAddress !== 'Address not available' && (
-                <div className="mt-4 bg-black/20 rounded-xl p-4 border border-border text-center">
-                  <p className="text-text-muted text-xs uppercase tracking-wider mb-2">SCAN QR CODE</p>
-                  <div className="inline-block p-2 bg-white rounded-xl">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(walletAddress)}`}
-                      alt="QR Code"
-                      width="180"
-                      height="180"
-                      className="rounded-lg"
-                    />
+            <div className="space-y-5">
+              {/* Wallet Display */}
+              <div className="glass rounded-2xl p-6 border border-border">
+                <div className="flex items-center gap-3 mb-4">
+                  <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
+                  <div>
+                    <h2 className="text-xl font-bold">Send {selectedCoin.name}</h2>
+                    <p className="text-text-muted text-sm">Network: {selectedNetwork}</p>
                   </div>
-                  <p className="text-text-muted text-xs mt-2">Scan to copy address</p>
                 </div>
-              )}
 
-              <div className="mt-4 flex items-center justify-between bg-black/20 rounded-xl p-3 border border-border">
-                <span className="text-sm font-medium">Turn on autosell for {selectedCoin.id}</span>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autosell}
-                    onChange={() => setAutosell(!autosell)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-orange rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange"></div>
-                </label>
+                {/* Address */}
+                <div className="bg-black/30 rounded-xl p-4 border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Wallet Address</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono font-bold text-orange break-all flex-1">{walletAddress}</p>
+                    {isCopied && (
+                      <span className="text-green-400 text-xs flex-shrink-0">✓ Copied!</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-3 gap-3 mt-4">
+                  <button
+                    onClick={() => copyToClipboard(walletAddress)}
+                    className={`py-3 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 ${
+                      isCopied ? 'bg-green-500/20 text-green-400' : 'bg-orange/10 hover:bg-orange/20 text-orange'
+                    }`}
+                  >
+                    <i className={`fa-regular ${isCopied ? 'fa-check' : 'fa-copy'}`}></i>
+                    {isCopied ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={downloadQR}
+                    className="bg-orange/10 hover:bg-orange/20 text-orange py-3 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-download"></i> QR
+                  </button>
+                  <button
+                    onClick={shareAddress}
+                    className="bg-orange/10 hover:bg-orange/20 text-orange py-3 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-share-nodes"></i> Share
+                  </button>
+                </div>
+
+                {/* QR Code */}
+                {showQR && walletAddress && walletAddress !== 'Address not available' && (
+                  <div className="mt-4 bg-black/30 rounded-xl p-4 border border-border text-center">
+                    <p className="text-text-muted text-xs uppercase tracking-wider mb-2">Scan QR Code</p>
+                    <div className="inline-block p-3 bg-white rounded-xl shadow-lg">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(walletAddress)}`}
+                        alt="QR Code"
+                        width="220"
+                        height="220"
+                        className="rounded-lg"
+                      />
+                    </div>
+                    <p className="text-text-muted text-xs mt-2">Scan with your wallet app</p>
+                  </div>
+                )}
               </div>
 
-              <div className="mt-4 space-y-2">
+              {/* Amount Info */}
+              <div className="glass rounded-2xl p-4 border border-border">
+                <div className="flex justify-between">
+                  <span className="text-text-muted text-sm">Amount to send</span>
+                  <span className="font-bold">{cryptoAmount.toFixed(6)} {selectedCoin.id}</span>
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-text-muted text-sm">≈ USD</span>
+                  <span className="font-semibold">${parseFloat(usdAmount).toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Autosell */}
+              <div className="glass rounded-2xl p-4 border border-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <i className="fa-solid fa-bolt text-orange"></i>
+                      <span className="font-semibold text-sm">Autosell</span>
+                    </div>
+                    <p className="text-text-muted text-xs mt-1">
+                      {autosell 
+                        ? '✅ Your crypto will be sold automatically for Naira' 
+                        : 'Crypto will be held in your wallet (sell anytime)'}
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autosell}
+                      onChange={() => setAutosell(!autosell)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-orange rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange"></div>
+                  </label>
+                </div>
+                {autosell && (
+                  <div className="mt-2 bg-orange/10 border border-orange/20 rounded-xl p-2 text-xs text-text-muted">
+                    <i className="fa-solid fa-circle-info text-orange mr-1"></i>
+                    When we receive your crypto, it will be automatically converted to Naira at the current rate.
+                  </div>
+                )}
+              </div>
+
+              {/* Warnings */}
+              <div className="space-y-3">
                 <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-yellow-400 text-sm flex items-start gap-2">
                   <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
                   <div>
@@ -448,14 +595,14 @@ export default function Deposit() {
                 <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
                   <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
                   <div>
-                    <p>This wallet address is exclusively for receiving {selectedCoin.id} on {selectedNetwork} chain. Sending any other cryptocurrency to this address will result in loss of assets.</p>
+                    <p><strong>IMPORTANT:</strong> Only send {selectedCoin.name} on the <strong>{selectedNetwork}</strong> network. Sending any other asset will result in permanent loss.</p>
                   </div>
                 </div>
               </div>
 
               <button
                 onClick={handleDone}
-                className="w-full mt-6 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition shadow-lg shadow-orange/20"
+                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition shadow-lg shadow-orange/20"
               >
                 Done
               </button>
