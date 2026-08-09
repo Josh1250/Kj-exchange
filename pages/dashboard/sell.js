@@ -17,24 +17,36 @@ const COINS = [
   { id: 'BCH', name: 'Bitcoin Cash', icon: 'fa-brands fa-bitcoin', color: '#8dc351' },
 ];
 
-// ===== FIXED SPREADS (Never change — matches Dtunes) =====
-// Low = amount < $500, High = amount >= $501
-const SPREADS = {
-  BTC: { low: 0.0286, high: 0.0142 },
-  ETH: { low: 0.0286, high: 0.0142 },
-  USDT: { low: 0.0106, high: 0.0034 },
-  SOL: { low: 0.0286, high: 0.0142 },
-  BNB: { low: 0.0286, high: 0.0142 },
-  TRX: { low: 0.0358, high: 0.0142 },
-  LTC: { low: 0.0286, high: 0.0142 },
-  BCH: { low: 0.1079, high: 0.0143 },
+// ===== SPREAD CONFIGURATION =====
+const SPREAD_CONFIG = {
+  BTC: { low: 0.069, high: 0.056 },
+  ETH: { low: 0.069, high: 0.056 },
+  USDT: { low: 0.052, high: 0.045 },
+  SOL: { low: 0.069, high: 0.056 },
+  BNB: { low: 0.069, high: 0.056 },
+  TRX: { low: 0.076, high: 0.056 },
+  LTC: { low: 0.069, high: 0.056 },
+  BCH: { low: 0.069, high: 0.056 },
+};
+
+const FEE_CONFIG = {
+  BTC: 0,
+  ETH: 0,
+  USDT: 0,
+  SOL: 0,
+  BNB: 0,
+  TRX: 0,
+  LTC: 0,
+  BCH: 0,
 };
 
 const getSpread = (coinId, amount) => {
-  const config = SPREADS[coinId];
-  if (!config) return 0.0286; // fallback
+  const config = SPREAD_CONFIG[coinId];
+  if (!config) return 0.06;
   return amount < 500 ? config.low : config.high;
 };
+
+const getFee = (coinId) => FEE_CONFIG[coinId] || 0;
 
 export default function Sell() {
   const { user, loading } = useAuth();
@@ -54,14 +66,15 @@ export default function Sell() {
   const [ngnRate, setNgnRate] = useState(1389);
   const [coinPrices, setCoinPrices] = useState({});
   const [isLoadingRates, setIsLoadingRates] = useState(true);
+  const [marketRate, setMarketRate] = useState(1389);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!user) return;
+
       try {
         setIsLoadingRates(true);
 
-        // 1. Fetch NGN rate with fallback
         let ngn = 1389;
         try {
           const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
@@ -75,12 +88,13 @@ export default function Sell() {
           } catch (e2) {}
         }
         setNgnRate(ngn);
+        setMarketRate(ngn);
 
-        // 2. Fetch crypto prices
         const cryptoRes = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,binancecoin,tron,litecoin,bitcoin-cash&vs_currencies=usd'
         );
         const cryptoData = await cryptoRes.json();
+
         setCoinPrices({
           BTC: cryptoData.bitcoin?.usd || 0,
           ETH: cryptoData.ethereum?.usd || 0,
@@ -92,18 +106,19 @@ export default function Sell() {
           BCH: cryptoData['bitcoin-cash']?.usd || 0,
         });
 
-        // 3. Fetch user's crypto balance
         const { data: walletData, error: walletError } = await supabase
           .from('crypto_balances')
           .select('*')
           .eq('user_id', user.id)
           .single();
+
         if (!walletError && walletData) {
           const balance = walletData[selectedCoin.id?.toLowerCase()] || 0;
           setAvailableBalance(balance);
         } else {
           setAvailableBalance(0);
         }
+
       } catch (error) {
         console.warn('⚠️ Data fetch failed', error);
       } finally {
@@ -116,14 +131,14 @@ export default function Sell() {
     return () => clearInterval(interval);
   }, [user, selectedCoin]);
 
-  // Calculate payout using fixed spread
   const calculatePayout = (coinId, amount) => {
     const parsed = parseFloat(amount) || 0;
-    if (parsed <= 0) return { rate: 0, payout: 0 };
+    if (parsed <= 0) return { rate: 0, fee: 0, netUsd: 0, payout: 0, spread: 0 };
 
     const spread = getSpread(coinId, parsed);
-    const rate = ngnRate * (1 - spread);
-    const fee = 0;
+    const rate = marketRate * (1 - spread);
+    const feePercent = getFee(coinId);
+    const fee = parsed * feePercent;
     const netUsd = parsed - fee;
     const payout = netUsd * rate;
 
@@ -183,11 +198,33 @@ export default function Sell() {
         throw new Error(data.error || 'Failed to sell');
       }
 
+      // ===== CREDIT BUSINESS WALLET (SPREAD PROFIT) =====
+      // Profit = amount * spread * marketRate (the extra NGN kept)
+      const profitInNGN = amount * spread * marketRate;
+      if (profitInNGN > 0) {
+        const { data: bizWallet, error: bizError } = await supabase
+          .from('business_wallets')
+          .select('balance')
+          .eq('currency', 'NGN')
+          .single();
+
+        if (!bizError && bizWallet) {
+          const newBizBalance = (bizWallet.balance || 0) + profitInNGN;
+          await supabase
+            .from('business_wallets')
+            .update({ balance: newBizBalance })
+            .eq('currency', 'NGN');
+        } else {
+          console.warn('Business wallet not found. Please create business_wallets table.');
+        }
+      }
+
       setLastPayout(payout);
       setLastSoldCoin(selectedCoin.id);
       setShowSuccessModal(true);
       setAvailableBalance(availableBalance - amount);
       setUsdAmount('');
+
     } catch (err) {
       setError(err.message || 'Failed to sell. Please try again.');
     } finally {
@@ -207,12 +244,13 @@ export default function Sell() {
   }
 
   const amount = parseFloat(usdAmount) || 0;
-  const { rate, payout } = calculatePayout(selectedCoin.id, amount);
+  const { rate, fee, netUsd, payout, spread } = calculatePayout(selectedCoin.id, amount);
   const showRate = amount > 0;
   const priceUsd = coinPrices[selectedCoin.id] || 0;
   const balanceInUsd = availableBalance * priceUsd;
 
   const quickAmounts = [10, 25, 50, 100];
+  const tierLabel = amount < 500 ? 'Under $500' : '$500+';
 
   return (
     <>
@@ -221,7 +259,6 @@ export default function Sell() {
       </Head>
       <DashboardLayout>
         <div className="max-w-2xl mx-auto px-4 py-4 pb-24">
-          {/* Header */}
           <div className="flex items-center gap-3 mb-6">
             <Link href="/dashboard" className="text-text-muted hover:text-text-primary transition group">
               <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
@@ -232,7 +269,6 @@ export default function Sell() {
             </h1>
           </div>
 
-          {/* Balance Card */}
           <div className="glass rounded-2xl p-4 border border-border mb-5">
             <p className="text-text-muted text-sm">Available Balance</p>
             <div className="flex items-end justify-between">
@@ -244,7 +280,6 @@ export default function Sell() {
             </div>
           </div>
 
-          {/* Search */}
           <div className="relative mb-4">
             <input
               type="text"
@@ -256,7 +291,6 @@ export default function Sell() {
             <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-text-muted"></i>
           </div>
 
-          {/* Coin Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             {filteredCoins.map((coin) => {
               const isSelected = selectedCoin.id === coin.id;
@@ -287,7 +321,6 @@ export default function Sell() {
             })}
           </div>
 
-          {/* Sell Form */}
           <div className="glass rounded-2xl p-5 border border-border">
             <div className="flex items-center gap-3 mb-4">
               <i className={`${selectedCoin.icon} text-2xl`} style={{ color: selectedCoin.color }}></i>
@@ -297,7 +330,6 @@ export default function Sell() {
               </div>
             </div>
 
-            {/* Amount Input */}
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1.5">Amount ({selectedCoin.id})</label>
               <div className="relative">
@@ -315,7 +347,6 @@ export default function Sell() {
                 </div>
               </div>
 
-              {/* Quick Amounts */}
               <div className="flex gap-2 mt-3 flex-wrap">
                 {quickAmounts.map((pct) => (
                   <button
@@ -337,11 +368,10 @@ export default function Sell() {
               <p className="text-text-muted text-xs mt-2">Minimum sell: $1.00</p>
             </div>
 
-            {/* Rate & Payout Preview — Clean like Dtunes */}
             {showRate && (
-              <div className="mt-4 bg-orange/5 border border-orange/20 rounded-xl p-4">
+              <div className="mt-4 bg-black/30 rounded-xl p-4 border border-border/50">
                 <div className="flex justify-between items-center">
-                  <span className="text-text-muted text-sm">Rate</span>
+                  <span className="text-text-muted text-sm">Rate ({tierLabel})</span>
                   <span className="font-bold text-green-400">₦{rate.toFixed(2)} / $</span>
                 </div>
                 <div className="flex justify-between items-center mt-2 pt-2 border-t border-border/50">
@@ -396,7 +426,6 @@ export default function Sell() {
                   <p className="text-text-muted text-xs">Amounts below $1.00 will not be processed.</p>
                 </div>
               </div>
-
               <div className="flex items-start gap-3">
                 <i className="fa-solid fa-shield text-orange mt-0.5"></i>
                 <div>
@@ -404,9 +433,8 @@ export default function Sell() {
                   <p className="text-text-muted text-xs">Your Naira wallet will be credited immediately.</p>
                 </div>
               </div>
-
               <div className="bg-black/20 rounded-xl p-3 border border-border text-text-muted text-xs">
-                By proceeding, you agree to these terms and acknowledge that KJ Exchange is not liable for issues arising from non-compliance.
+                By proceeding, you agree to these terms.
               </div>
             </div>
 
