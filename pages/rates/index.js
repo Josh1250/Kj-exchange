@@ -47,7 +47,7 @@ const cryptoAssets = [
 ];
 
 export default function Rates() {
-  const [ngnRate, setNgnRate] = useState(1389); // default, will be updated
+  const [ngnRate, setNgnRate] = useState(1389);
   const [giftCardRates, setGiftCardRates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedAsset, setSelectedAsset] = useState('BTC');
@@ -82,23 +82,27 @@ export default function Rates() {
     setGiftCardRates(cards.slice(0, 8));
   }, []);
 
-  // Fetch live NGN rate and crypto prices
+  // Fetch live NGN rate and crypto prices (using SAME API as sell.js)
   useEffect(() => {
     const fetchRates = async () => {
       try {
         setIsLoading(true);
-        // Fetch NGN rate with fallback
+        
+        // ✅ USE SAME API AS SELL.JS
         let ngn = 1389;
         try {
-          const res = await fetch('https://api.exchangerate.fun/latest?base=USD');
+          const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
           const data = await res.json();
           if (data.rates?.NGN) ngn = data.rates.NGN;
         } catch (e) {
+          // Fallback to Frankfurter
           try {
             const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=NGN');
             const data = await res.json();
             if (data.rates?.NGN) ngn = data.rates.NGN;
-          } catch (e2) {}
+          } catch (e2) {
+            console.warn('All rate APIs failed, using fallback rate');
+          }
         }
         setNgnRate(ngn);
 
@@ -141,13 +145,12 @@ export default function Rates() {
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate payout and display rate — dynamic like sell.js
+  // Calculate payout and display rate
   useEffect(() => {
     let ratePerUsd = 0;
 
     if (activeTab === 'crypto') {
       const parsedAmount = parseFloat(amount) || 0;
-      // Get spread from lib/rates.js (tiered)
       const spread = getSpread(selectedAsset, parsedAmount);
       ratePerUsd = ngnRate * (1 - spread);
     } else {
@@ -475,7 +478,7 @@ export default function Rates() {
           </div>
 
           <p className="text-center text-text-muted text-xs mt-6">
-            Rates updated every 60 seconds. Powered by CoinGecko &amp; ExchangeRate.fun.
+            Rates updated every 60 seconds. Powered by exchange-rate.host, Frankfurter &amp; CoinGecko.
           </p>
         </div>
       </Layout>
