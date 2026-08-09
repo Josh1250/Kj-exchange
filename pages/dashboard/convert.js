@@ -62,7 +62,7 @@ export default function Convert() {
         });
       }
 
-      // ✅ Fetch conversion history — use 'conversion' as type
+      // ✅ Fetch conversion history
       const { data: txs, error: txsError } = await supabase
         .from('transactions')
         .select('*')
@@ -75,7 +75,6 @@ export default function Convert() {
         console.error('Error fetching history:', txsError);
       } else {
         setHistory(txs || []);
-        console.log('✅ History loaded:', txs?.length || 0, 'items');
       }
     } catch (e) {
       console.warn('Data fetch failed:', e);
@@ -182,14 +181,14 @@ export default function Convert() {
         .update({ [toField]: newTarget })
         .eq('user_id', user.id);
 
-      // 3. Create transaction record — ✅ FIX: Use type 'conversion'
+      // 3. Create transaction record
       const effectiveRate = fromCurrency === 'NGN' 
         ? ngnRate * (1 + SPREAD) 
         : ngnRate * (1 - SPREAD);
 
       const insertData = {
         user_id: user.id,
-        type: 'conversion', // ✅ MUST be 'conversion'
+        type: 'conversion',
         amount: result,
         currency: toCurrency,
         status: 'completed',
@@ -200,7 +199,6 @@ export default function Convert() {
           from_amount: amt,
           to_amount: result,
           rate: effectiveRate,
-          spread_used: SPREAD,
         },
       };
 
@@ -217,7 +215,7 @@ export default function Convert() {
         console.log('✅ Transaction created:', txData);
       }
 
-      // 4. Credit business wallet (profit)
+      // 4. Credit business wallet (profit — NO SPREAD DISPLAYED TO USER)
       let profitInNGN = 0;
       if (fromCurrency === 'NGN' && toCurrency === 'USD') {
         profitInNGN = amt * SPREAD;
@@ -229,18 +227,33 @@ export default function Convert() {
       const totalProfit = profitInNGN + feeInNGN;
 
       if (totalProfit > 0) {
+        // ✅ First check if business_wallets table exists
         const { data: bizWallet, error: bizError } = await supabase
           .from('business_wallets')
           .select('balance')
           .eq('currency', 'NGN')
-          .single();
+          .maybeSingle();
 
-        if (!bizError && bizWallet) {
+        if (bizError) {
+          console.error('❌ Business wallet error:', bizError);
+          // If table doesn't exist, create it
+          if (bizError.message.includes('does not exist')) {
+            console.warn('⚠️ business_wallets table not found. Creating it now...');
+            // You'll need to create the table manually in Supabase SQL editor
+          }
+        } else if (bizWallet) {
           const newBizBalance = (bizWallet.balance || 0) + totalProfit;
           await supabase
             .from('business_wallets')
             .update({ balance: newBizBalance })
             .eq('currency', 'NGN');
+          console.log('✅ Business wallet credited with:', totalProfit);
+        } else {
+          // No business wallet found for NGN — insert one
+          console.warn('⚠️ No business wallet found, creating one...');
+          await supabase
+            .from('business_wallets')
+            .insert({ currency: 'NGN', balance: totalProfit });
         }
       }
 
@@ -255,7 +268,7 @@ export default function Convert() {
       setAmount('');
       setResult(0);
 
-      // ✅ Refresh history immediately
+      // 6. Refresh history
       const { data: txs, error: txsError } = await supabase
         .from('transactions')
         .select('*')
@@ -410,16 +423,12 @@ export default function Convert() {
                 </p>
               </div>
 
-              {/* Rate Breakdown */}
+              {/* Rate Breakdown — NO SPREAD % SHOWN */}
               {result > 0 && (
                 <div className="bg-black/20 rounded-xl p-4 border border-border space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-text-muted">Rate</span>
                     <span className="font-medium">1 {fromCurrency} = {effectiveRate.toFixed(4)} {toCurrency}</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-text-muted">
-                    <span>Spread (1.5%)</span>
-                    <span>Included in rate</span>
                   </div>
                   <div className="flex justify-between text-sm text-text-muted">
                     <span>Fee (1%)</span>
@@ -471,8 +480,7 @@ export default function Convert() {
               <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">
                 Conversion History
               </h3>
-              {/* ✅ FIX: Link to orders page with conversion filter */}
-              <Link href="/dashboard/orders?type=conversion" className="text-sm text-orange hover:underline">
+              <Link href="/dashboard/orders" className="text-sm text-orange hover:underline">
                 View All
               </Link>
             </div>
