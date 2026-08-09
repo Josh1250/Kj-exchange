@@ -3,8 +3,7 @@ import Layout from '../../components/layout/Layout';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GIFT_CARD_RATES } from '../../config/giftCardRates';
-// ===== IMPORT FROM SHARED RATES LIBRARY =====
-import { COINS, SPREADS, getSpread, calculateRate } from '../../lib/rates';
+import { getSpread } from '../../lib/rates';
 
 const formatRate = (rate) => {
   if (!rate || rate === 0) return '₦0.00';
@@ -35,7 +34,7 @@ const faqs = [
   },
 ];
 
-// Crypto assets array (matching COINS from lib/rates.js)
+// Crypto assets array
 const cryptoAssets = [
   { id: 'BTC', name: 'Bitcoin', icon: 'fa-brands fa-bitcoin', color: '#f7931a' },
   { id: 'ETH', name: 'Ethereum', icon: 'fa-brands fa-ethereum', color: '#627eea' },
@@ -48,7 +47,6 @@ const cryptoAssets = [
 ];
 
 export default function Rates() {
-  const [rates, setRates] = useState({});
   const [ngnRate, setNgnRate] = useState(1550);
   const [giftCardRates, setGiftCardRates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,7 +58,6 @@ export default function Rates() {
   const [openFaq, setOpenFaq] = useState(null);
   const [displayRate, setDisplayRate] = useState(0);
   const [cryptoUsdPrices, setCryptoUsdPrices] = useState({});
-  const [spreadUsed, setSpreadUsed] = useState(0);
 
   // Build top 8 gift cards with highest rate
   useEffect(() => {
@@ -89,11 +86,13 @@ export default function Rates() {
     const fetchRates = async () => {
       try {
         setIsLoading(true);
+        // Fetch NGN rate
         const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
         const fxData = await fxRes.json();
         const ngn = fxData.rates?.NGN || 1550;
         setNgnRate(ngn);
 
+        // Fetch crypto prices
         const cryptoRes = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,binancecoin,tron,litecoin,bitcoin-cash&vs_currencies=usd'
         );
@@ -111,20 +110,10 @@ export default function Rates() {
         };
         setCryptoUsdPrices(usdPrices);
 
-        // Calculate rates for each coin (using low spread for table display)
-        const calculatedRates = {};
-        for (const coin of cryptoAssets) {
-          const spread = getSpread(coin.id, 100); // Use $100 as default for table
-          // Rate per coin = (USD price of 1 coin) * (NGN per USD) * (1 - spread)
-          // This is the NGN you get for selling 1 coin
-          const usdPrice = usdPrices[coin.id] || 0;
-          calculatedRates[coin.id] = usdPrice * ngn * (1 - spread);
-        }
-        setRates(calculatedRates);
       } catch (error) {
         console.warn('Rate fetch failed, using fallback', error);
-        const ngn = 1550;
-        const usdPrices = {
+        setNgnRate(1550);
+        setCryptoUsdPrices({
           BTC: 60000,
           ETH: 2600,
           USDT: 1,
@@ -133,15 +122,7 @@ export default function Rates() {
           TRX: 0.12,
           LTC: 70,
           BCH: 300,
-        };
-        setCryptoUsdPrices(usdPrices);
-        const calculatedRates = {};
-        for (const coin of cryptoAssets) {
-          const spread = getSpread(coin.id, 100);
-          const usdPrice = usdPrices[coin.id] || 0;
-          calculatedRates[coin.id] = usdPrice * ngn * (1 - spread);
-        }
-        setRates(calculatedRates);
+        });
       } finally {
         setIsLoading(false);
       }
@@ -154,30 +135,26 @@ export default function Rates() {
   // Calculate payout and display rate
   useEffect(() => {
     let ratePerUsd = 0;
-    let spread = 0;
 
     if (activeTab === 'crypto') {
-      // Use tiered spread based on amount
       const parsedAmount = parseFloat(amount) || 0;
-      spread = getSpread(selectedAsset, parsedAmount);
+      const spread = getSpread(selectedAsset, parsedAmount);
       ratePerUsd = ngnRate * (1 - spread);
     } else {
-      // Gift card rate
       const card = giftCardRates.find(c => c.id === selectedGiftCard);
-      if (card) {
-        ratePerUsd = card.rate;
-        // For gift cards, spread isn't applicable
-      }
+      if (card) ratePerUsd = card.rate;
     }
 
-    setSpreadUsed(spread);
     setDisplayRate(ratePerUsd);
-
     const usdValue = parseFloat(amount) || 0;
     setPayout(usdValue * ratePerUsd);
-  }, [amount, selectedAsset, selectedGiftCard, rates, giftCardRates, ngnRate, activeTab]);
+  }, [amount, selectedAsset, selectedGiftCard, giftCardRates, ngnRate, activeTab]);
 
-  const getCryptoRate = (id) => rates[id] || 0;
+  // Get the per-USD rate for a coin (based on low tier for table)
+  const getUsdRate = (assetId) => {
+    const spread = getSpread(assetId, 100);
+    return ngnRate * (1 - spread);
+  };
 
   return (
     <>
@@ -306,12 +283,6 @@ export default function Rates() {
                       />
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">USD</div>
                     </div>
-                    {activeTab === 'crypto' && parseFloat(amount) > 0 && (
-                      <p className="text-xs text-text-muted mt-1">
-                        Using {parseFloat(amount) < 500 ? 'under $500' : '$500+'} rate tier
-                        {spreadUsed > 0 && ` (${(spreadUsed * 100).toFixed(2)}% spread)`}
-                      </p>
-                    )}
                   </div>
                 </div>
               </div>
@@ -359,20 +330,14 @@ export default function Rates() {
                   <thead className="bg-black/30">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Asset</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Rate (NGN)</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Rate (NGN per $1)</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">USD Price</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Spread</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
                     {cryptoAssets.map((asset) => {
-                      const rateNgn = getCryptoRate(asset.id);
+                      const usdRate = getUsdRate(asset.id);
                       const usdPrice = cryptoUsdPrices[asset.id] || 0;
-                      const lowSpread = getSpread(asset.id, 100);
-                      const highSpread = getSpread(asset.id, 600);
-                      const spreadDisplay = lowSpread === highSpread 
-                        ? `${(lowSpread * 100).toFixed(2)}%` 
-                        : `${(lowSpread * 100).toFixed(2)}% / ${(highSpread * 100).toFixed(2)}%`;
                       return (
                         <tr key={asset.id} className="hover:bg-white/5 transition">
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -381,9 +346,8 @@ export default function Rates() {
                               <span className="font-semibold">{asset.id}</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right font-medium">{formatRate(rateNgn)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right font-medium">{formatRate(usdRate)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-text-muted">${usdPrice.toFixed(2)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-text-muted text-xs">{spreadDisplay}</td>
                         </tr>
                       );
                     })}
@@ -396,7 +360,7 @@ export default function Rates() {
             </div>
           </div>
 
-          {/* Top Gift Card Rates Table */}
+          {/* Gift Card Rates Table */}
           <div className="mb-10">
             <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
               Top Gift Card Rates
