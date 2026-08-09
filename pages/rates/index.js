@@ -3,7 +3,7 @@ import Layout from '../../components/layout/Layout';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GIFT_CARD_RATES } from '../../config/giftCardRates';
-import { getSpread, TARGET_RATES } from '../../lib/rates';
+import { getSpread } from '../../lib/rates';
 
 const formatRate = (rate) => {
   if (!rate || rate === 0) return '₦0.00';
@@ -47,7 +47,7 @@ const cryptoAssets = [
 ];
 
 export default function Rates() {
-  const [ngnRate, setNgnRate] = useState(1550);
+  const [ngnRate, setNgnRate] = useState(1389); // default, will be updated
   const [giftCardRates, setGiftCardRates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedAsset, setSelectedAsset] = useState('BTC');
@@ -82,14 +82,24 @@ export default function Rates() {
     setGiftCardRates(cards.slice(0, 8));
   }, []);
 
+  // Fetch live NGN rate and crypto prices
   useEffect(() => {
     const fetchRates = async () => {
       try {
         setIsLoading(true);
-        // Fetch NGN rate
-        const fxRes = await fetch('https://api.exchangerate.fun/latest?base=USD');
-        const fxData = await fxRes.json();
-        const ngn = fxData.rates?.NGN || 1550;
+        // Fetch NGN rate with fallback
+        let ngn = 1389;
+        try {
+          const res = await fetch('https://api.exchangerate.fun/latest?base=USD');
+          const data = await res.json();
+          if (data.rates?.NGN) ngn = data.rates.NGN;
+        } catch (e) {
+          try {
+            const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=NGN');
+            const data = await res.json();
+            if (data.rates?.NGN) ngn = data.rates.NGN;
+          } catch (e2) {}
+        }
         setNgnRate(ngn);
 
         // Fetch crypto prices
@@ -98,7 +108,7 @@ export default function Rates() {
         );
         const cryptoData = await cryptoRes.json();
 
-        const usdPrices = {
+        setCryptoUsdPrices({
           BTC: cryptoData.bitcoin?.usd || 0,
           ETH: cryptoData.ethereum?.usd || 0,
           USDT: cryptoData.tether?.usd || 1,
@@ -107,12 +117,11 @@ export default function Rates() {
           TRX: cryptoData.tron?.usd || 0,
           LTC: cryptoData.litecoin?.usd || 0,
           BCH: cryptoData['bitcoin-cash']?.usd || 0,
-        };
-        setCryptoUsdPrices(usdPrices);
+        });
 
       } catch (error) {
         console.warn('Rate fetch failed, using fallback', error);
-        setNgnRate(1550);
+        setNgnRate(1389);
         setCryptoUsdPrices({
           BTC: 60000,
           ETH: 2600,
@@ -132,21 +141,15 @@ export default function Rates() {
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate payout and display rate
+  // Calculate payout and display rate — dynamic like sell.js
   useEffect(() => {
     let ratePerUsd = 0;
 
     if (activeTab === 'crypto') {
       const parsedAmount = parseFloat(amount) || 0;
-      // Use the target rates from lib/rates.js directly
-      const targetRates = TARGET_RATES[selectedAsset];
-      if (targetRates) {
-        ratePerUsd = parsedAmount < 500 ? targetRates.low : targetRates.high;
-      } else {
-        // Fallback: calculate from spread if no target rate
-        const spread = getSpread(selectedAsset, parsedAmount);
-        ratePerUsd = ngnRate * (1 - spread);
-      }
+      // Get spread from lib/rates.js (tiered)
+      const spread = getSpread(selectedAsset, parsedAmount);
+      ratePerUsd = ngnRate * (1 - spread);
     } else {
       const card = giftCardRates.find(c => c.id === selectedGiftCard);
       if (card) ratePerUsd = card.rate;
@@ -157,13 +160,8 @@ export default function Rates() {
     setPayout(usdValue * ratePerUsd);
   }, [amount, selectedAsset, selectedGiftCard, giftCardRates, ngnRate, activeTab]);
 
-  // Get the per-USD rate for a coin (from target rates)
+  // Get the per-USD rate for table (using low tier for display)
   const getUsdRate = (assetId) => {
-    const targets = TARGET_RATES[assetId];
-    if (targets) {
-      return targets.low; // Use low tier for table display
-    }
-    // Fallback: calculate from spread
     const spread = getSpread(assetId, 100);
     return ngnRate * (1 - spread);
   };
@@ -356,7 +354,8 @@ export default function Rates() {
                     {cryptoAssets.map((asset) => {
                       const usdRate = getUsdRate(asset.id);
                       const usdPrice = cryptoUsdPrices[asset.id] || 0;
-                      const targets = TARGET_RATES[asset.id];
+                      const lowSpread = getSpread(asset.id, 100);
+                      const highSpread = getSpread(asset.id, 600);
                       return (
                         <tr key={asset.id} className="hover:bg-white/5 transition">
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -368,12 +367,8 @@ export default function Rates() {
                           <td className="px-6 py-4 whitespace-nowrap text-right font-medium">{formatRate(usdRate)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-text-muted">${usdPrice.toFixed(2)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-xs text-text-muted">
-                            {targets ? (
-                              <>
-                                <span className="block">Under $500: ₦{targets.low.toFixed(2)}</span>
-                                <span className="block text-orange">$500+: ₦{targets.high.toFixed(2)}</span>
-                              </>
-                            ) : '-'}
+                            <span className="block">Under $500: ₦{(ngnRate * (1 - lowSpread)).toFixed(2)}</span>
+                            <span className="block text-orange">$500+: ₦{(ngnRate * (1 - highSpread)).toFixed(2)}</span>
                           </td>
                         </tr>
                       );
@@ -382,7 +377,8 @@ export default function Rates() {
                 </table>
               </div>
               <div className="p-4 text-center border-t border-border text-xs text-text-muted">
-                * Rates shown based on $100 USD amount. Rates vary for amounts above $500.
+                * Rates update automatically with the live market rate. 
+                <span className="block text-orange mt-1">Live NGN rate: ₦{ngnRate.toFixed(2)} per USD</span>
               </div>
             </div>
           </div>
