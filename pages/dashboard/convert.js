@@ -14,7 +14,7 @@ export default function Convert() {
   const [fromCurrency, setFromCurrency] = useState('NGN');
   const [toCurrency, setToCurrency] = useState('USD');
   const [amount, setAmount] = useState('');
-  const [ngnRate, setNgnRate] = useState(1550);
+  const [ngnRate, setNgnRate] = useState(1389);
   const [result, setResult] = useState(0);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState('');
@@ -23,8 +23,12 @@ export default function Convert() {
   const [balances, setBalances] = useState({ NGN: 0, USD: 0 });
   const [history, setHistory] = useState([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // ===== Fetch Rates & Balances =====
+  // ===== Spread (1.5%) =====
+  const SPREAD = 0.015; // 1.5%
+
+  // ===== Fetch Rates & Balances (same as sell.js) =====
   useEffect(() => {
     if (user) {
       fetchData();
@@ -32,16 +36,22 @@ export default function Convert() {
   }, [user]);
 
   const fetchData = async () => {
+    setIsLoading(true);
     try {
-      // 1. Fetch rate (mid-market)
-      const response = await fetch('https://api.frankfurter.app/latest?from=NGN');
-      const data = await response.json();
-      if (data.rates?.USD) {
-        // ✅ Apply a small spread (0.5%) to simulate parallel market
-        const spread = 0.005; // 0.5% — your profit margin
-        const adjustedRate = data.rates.USD * (1 + spread);
-        setNgnRate(adjustedRate);
+      // 1. Fetch NGN rate with fallback (same as sell.js)
+      let ngn = 1389;
+      try {
+        const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
+        const data = await res.json();
+        if (data.rates?.NGN) ngn = data.rates.NGN;
+      } catch (e) {
+        try {
+          const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=NGN');
+          const data = await res.json();
+          if (data.rates?.NGN) ngn = data.rates.NGN;
+        } catch (e2) {}
       }
+      setNgnRate(ngn);
 
       // 2. Fetch wallet balances
       const { data: wallet } = await supabase
@@ -69,6 +79,8 @@ export default function Convert() {
       if (txs) setHistory(txs);
     } catch (e) {
       console.warn('Data fetch failed:', e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -81,19 +93,27 @@ export default function Convert() {
       return;
     }
 
-    const feeRate = 0.01; // 1% fee
+    let effectiveRate = 0;
     let rawResult = 0;
+
     if (fromCurrency === 'NGN' && toCurrency === 'USD') {
-      rawResult = amt / ngnRate;
+      // NGN → USD: apply spread (user pays more NGN per USD, so they get less USD)
+      effectiveRate = ngnRate * (1 + SPREAD); // e.g., 1389 * 1.015 = 1409.8
+      rawResult = amt / effectiveRate;
     } else if (fromCurrency === 'USD' && toCurrency === 'NGN') {
-      rawResult = amt * ngnRate;
+      // USD → NGN: apply spread (user gets less NGN per USD)
+      effectiveRate = ngnRate * (1 - SPREAD); // e.g., 1389 * 0.985 = 1368.2
+      rawResult = amt * effectiveRate;
     } else {
+      // Same currency (shouldn't happen)
       rawResult = amt;
     }
 
+    // Fee (1% of the converted amount)
+    const feeRate = 0.01;
     const feeAmount = rawResult * feeRate;
     setFee(feeAmount);
-    setResult(rawResult - feeAmount);
+    setResult(Math.max(0, rawResult - feeAmount));
   }, [amount, fromCurrency, toCurrency, ngnRate]);
 
   // ===== Swap Currencies =====
@@ -171,6 +191,9 @@ export default function Convert() {
         .eq('user_id', user.id);
 
       // 3. Create transaction record
+      const effectiveRate = fromCurrency === 'NGN' 
+        ? ngnRate * (1 + SPREAD) 
+        : ngnRate * (1 - SPREAD);
       await supabase
         .from('transactions')
         .insert({
@@ -185,11 +208,12 @@ export default function Convert() {
             to_currency: toCurrency,
             from_amount: amt,
             to_amount: result,
-            rate: fromCurrency === 'NGN' ? ngnRate : 1 / ngnRate,
+            rate: effectiveRate,
+            spread_used: SPREAD,
           },
         });
 
-      // 4. Update balances
+      // 4. Update local balances
       setBalances(prev => ({
         ...prev,
         [fromCurrency]: newBalance,
@@ -220,7 +244,9 @@ export default function Convert() {
 
   const symbol = { NGN: '₦', USD: '$' };
   const flag = { NGN: '🇳🇬', USD: '🇺🇸' };
-  const rate = fromCurrency === 'NGN' ? ngnRate : 1 / ngnRate;
+  const effectiveRate = fromCurrency === 'NGN' 
+    ? ngnRate * (1 + SPREAD) 
+    : ngnRate * (1 - SPREAD);
   const fromBalance = balances[fromCurrency] || 0;
 
   if (loading) return <div>Loading...</div>;
@@ -231,85 +257,91 @@ export default function Convert() {
 
   return (
     <>
-      <Head><title>Convert · KJ Exchange</title></Head>
+      <Head><title>Convert & Save · KJ Exchange</title></Head>
       <DashboardLayout>
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-2xl mx-auto px-4 py-4 pb-24">
           {/* Header */}
-          <div className="flex items-center gap-2 mb-6">
+          <div className="flex items-center gap-3 mb-6">
             <Link href="/dashboard/wallet" className="text-text-muted hover:text-text-primary transition group">
               <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
             </Link>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <i className="fa-solid fa-arrow-right-arrow-left text-orange"></i>
-              Convert Currency
-            </h1>
-            <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-orange/10 text-orange border border-orange/20">
-              NGN ↔ USD
-            </span>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <i className="fa-solid fa-arrow-right-arrow-left text-orange"></i>
+                Convert & Save
+              </h1>
+              <p className="text-text-muted text-sm">Protect your money — convert Naira to USD</p>
+            </div>
+          </div>
+
+          {/* Why Save in USD Banner */}
+          <div className="glass rounded-2xl p-4 border border-orange/20 bg-orange/5 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg flex-shrink-0">
+                <i className="fa-solid fa-shield"></i>
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Why save in USD?</p>
+                <p className="text-text-muted text-xs">
+                  Protect your savings from Naira devaluation. Convert Naira to USD and hold your value in a stable currency.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Main Card */}
-          <div className="glass rounded-2xl p-6 md:p-8 border border-border">
+          <div className="glass rounded-2xl p-5 md:p-6 border border-border">
             <form onSubmit={handleOpenConfirm} className="space-y-6">
               {/* Currency Selection + Swap */}
               <div className="relative">
-                <div className="grid grid-cols-5 gap-2 items-center">
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-text-secondary mb-1.5">From</label>
-                    <div className="relative">
-                      <select
-                        value={fromCurrency}
-                        onChange={(e) => {
-                          setFromCurrency(e.target.value);
-                          setToCurrency(e.target.value === 'NGN' ? 'USD' : 'NGN');
-                          setAmount('');
-                        }}
-                        className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 pl-12 text-text-primary focus:border-orange focus:outline-none appearance-none"
-                      >
-                        <option value="NGN">🇳🇬 NGN (₦)</option>
-                        <option value="USD">🇺🇸 USD ($)</option>
-                      </select>
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">
-                        {flag[fromCurrency]}
-                      </span>
-                    </div>
+                <div className="grid grid-cols-[1fr,auto,1fr] gap-2 items-start">
+                  <div>
+                    <label className="block text-text-muted text-xs font-medium mb-1.5">From</label>
+                    <select
+                      value={fromCurrency}
+                      onChange={(e) => {
+                        setFromCurrency(e.target.value);
+                        setToCurrency(e.target.value === 'NGN' ? 'USD' : 'NGN');
+                        setAmount('');
+                      }}
+                      className="w-full bg-black/30 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 appearance-none text-base"
+                    >
+                      <option value="NGN">🇳🇬 NGN (₦)</option>
+                      <option value="USD">🇺🇸 USD ($)</option>
+                    </select>
                     <p className="text-text-muted text-xs mt-1">
-                      Balance: {symbol[fromCurrency]}{fromBalance.toLocaleString()}
+                      Bal: {symbol[fromCurrency]}{fromBalance.toLocaleString()}
                     </p>
                   </div>
 
-                  <div className="col-span-1 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={swapCurrencies}
-                      className="w-12 h-12 rounded-full bg-orange/10 hover:bg-orange/20 text-orange text-xl transition flex items-center justify-center hover:scale-110"
-                    >
-                      <i className="fa-solid fa-arrow-right-arrow-left"></i>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={swapCurrencies}
+                    className="mt-6 w-12 h-12 rounded-full bg-orange/10 hover:bg-orange/20 text-orange text-xl transition flex items-center justify-center hover:scale-110 flex-shrink-0"
+                  >
+                    <i className="fa-solid fa-arrow-right-arrow-left"></i>
+                  </button>
 
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-text-secondary mb-1.5">To</label>
-                    <div className="relative">
-                      <select
-                        value={toCurrency}
-                        onChange={(e) => setToCurrency(e.target.value)}
-                        className="w-full bg-black/40 border border-border rounded-xl px-4 py-3 pl-12 text-text-primary focus:border-orange focus:outline-none appearance-none"
-                      >
-                        <option value="USD">🇺🇸 USD ($)</option>
-                        <option value="NGN">🇳🇬 NGN (₦)</option>
-                      </select>
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">
-                        {flag[toCurrency]}
-                      </span>
-                    </div>
+                  <div>
+                    <label className="block text-text-muted text-xs font-medium mb-1.5">To</label>
+                    <select
+                      value={toCurrency}
+                      onChange={(e) => setToCurrency(e.target.value)}
+                      className="w-full bg-black/30 border border-border rounded-xl px-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 appearance-none text-base"
+                    >
+                      <option value="USD">🇺🇸 USD ($)</option>
+                      <option value="NGN">🇳🇬 NGN (₦)</option>
+                    </select>
+                    <p className="text-text-muted text-xs mt-1">
+                      Bal: {symbol[toCurrency]}{balances[toCurrency]?.toLocaleString() || 0}
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* Amount + Max */}
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                <label className="block text-text-muted text-xs font-medium mb-1.5">
                   Amount ({fromCurrency})
                 </label>
                 <div className="relative flex items-center gap-3">
@@ -321,7 +353,7 @@ export default function Convert() {
                       type="number"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      className="w-full bg-black/40 border border-border rounded-xl pl-10 pr-4 py-3.5 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-lg"
+                      className="w-full bg-black/30 border border-border rounded-xl pl-10 pr-4 py-4 text-text-primary focus:border-orange focus:outline-none focus:ring-2 focus:ring-orange/20 text-2xl font-bold placeholder:text-text-muted/50"
                       placeholder="0.00"
                       required
                       min="1"
@@ -331,22 +363,26 @@ export default function Convert() {
                   <button
                     type="button"
                     onClick={handleMax}
-                    className="px-4 py-2 bg-orange/10 hover:bg-orange/20 text-orange rounded-xl text-sm font-semibold transition whitespace-nowrap"
+                    className="px-4 py-2.5 bg-orange/10 hover:bg-orange/20 text-orange rounded-xl text-sm font-semibold transition whitespace-nowrap"
                   >
                     Max
                   </button>
                 </div>
                 <p className="text-text-muted text-xs mt-1.5">
-                  1 {fromCurrency} ≈ {rate.toFixed(4)} {toCurrency}
+                  1 {fromCurrency} ≈ {effectiveRate.toFixed(4)} {toCurrency}
                 </p>
               </div>
 
-              {/* Fee Breakdown */}
+              {/* Rate Breakdown */}
               {result > 0 && (
                 <div className="bg-black/20 rounded-xl p-4 border border-border space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-text-muted">Rate</span>
-                    <span>1 {fromCurrency} = {rate.toFixed(4)} {toCurrency}</span>
+                    <span className="font-medium">1 {fromCurrency} = {effectiveRate.toFixed(4)} {toCurrency}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-text-muted">
+                    <span>Spread (1.5%)</span>
+                    <span>Included in rate</span>
                   </div>
                   <div className="flex justify-between text-sm text-text-muted">
                     <span>Fee (1%)</span>
@@ -354,7 +390,7 @@ export default function Convert() {
                   </div>
                   <div className="flex justify-between text-lg border-t border-border pt-2">
                     <span className="text-text-muted">You'll receive</span>
-                    <span className="text-green-400 font-extrabold">{symbol[toCurrency]}{result.toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-green-400">{symbol[toCurrency]}{result.toFixed(2)}</span>
                   </div>
                 </div>
               )}
@@ -374,8 +410,8 @@ export default function Convert() {
 
               <button
                 type="submit"
-                disabled={submitting || result <= 0}
-                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2"
+                disabled={submitting || result <= 0 || isLoading}
+                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition disabled:opacity-50 shadow-lg shadow-orange/20 flex items-center justify-center gap-2 touch-manipulation"
               >
                 {submitting ? (
                   <><i className="fa-solid fa-spinner fa-spin"></i> Processing...</>
@@ -384,23 +420,29 @@ export default function Convert() {
                 )}
               </button>
 
-              <p className="text-center text-text-muted text-xs flex items-center justify-center gap-2">
-                <i className="fa-solid fa-lock text-green-400"></i>
-                Secure &amp; Transparent
-              </p>
+              <div className="flex items-center justify-center gap-4 text-text-muted text-xs">
+                <span className="flex items-center gap-1"><i className="fa-solid fa-lock text-green-400"></i> Secure</span>
+                <span className="flex items-center gap-1"><i className="fa-solid fa-bolt text-orange"></i> Instant</span>
+                <span className="flex items-center gap-1"><i className="fa-solid fa-wallet text-green-400"></i> Transparent</span>
+              </div>
             </form>
           </div>
 
           {/* ===== Conversion History ===== */}
-          <div className="glass rounded-2xl p-6 border border-border mt-6">
-            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-              <i className="fa-solid fa-clock-rotate-left text-orange"></i>
-              Conversion History
-            </h2>
+          <div className="glass rounded-2xl p-5 border border-border mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">
+                Conversion History
+              </h3>
+              <Link href="/dashboard/orders" className="text-sm text-orange hover:underline">
+                View All
+              </Link>
+            </div>
             {history.length === 0 ? (
               <div className="text-center py-6 text-text-muted">
                 <i className="fa-regular fa-clock text-4xl block mb-2 opacity-40"></i>
                 <p className="text-sm">No conversions yet.</p>
+                <p className="text-xs mt-1">Convert your Naira to USD to save.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -413,7 +455,7 @@ export default function Convert() {
                       key={tx.id}
                       className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-border"
                     >
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium text-sm flex items-center gap-1">
                           <span className="text-orange">{fromSym}</span>
                           <i className="fa-solid fa-arrow-right text-text-muted text-xs"></i>
@@ -424,12 +466,12 @@ export default function Convert() {
                           {tx.fee > 0 && ` • Fee: ${symbol[toSym]}${tx.fee.toFixed(2)}`}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-green-400">
+                      <div className="text-right flex-shrink-0 ml-3">
+                        <p className="font-bold text-green-400">
                           +{symbol[toSym]}{Math.abs(tx.amount).toFixed(2)}
                         </p>
                         <p className="text-text-muted text-xs">
-                          Rate: {meta.rate?.toFixed(4) || '—'}
+                          {meta.rate?.toFixed(2) || '—'}
                         </p>
                       </div>
                     </div>
@@ -466,7 +508,7 @@ export default function Convert() {
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted">Rate</span>
-                <span className="font-medium">1 {fromCurrency} = {rate.toFixed(4)} {toCurrency}</span>
+                <span className="font-medium">1 {fromCurrency} = {effectiveRate.toFixed(4)} {toCurrency}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted">Fee (1%)</span>
