@@ -28,7 +28,7 @@ export default function Convert() {
   // ===== Spread (1.5%) =====
   const SPREAD = 0.015; // 1.5%
 
-  // ===== Fetch Rates & Balances (same as sell.js) =====
+  // ===== Fetch Rates & Balances =====
   useEffect(() => {
     if (user) {
       fetchData();
@@ -38,7 +38,6 @@ export default function Convert() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // 1. Fetch NGN rate with fallback (same as sell.js)
       let ngn = 1389;
       try {
         const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
@@ -53,7 +52,6 @@ export default function Convert() {
       }
       setNgnRate(ngn);
 
-      // 2. Fetch wallet balances
       const { data: wallet } = await supabase
         .from('wallets')
         .select('balance, usd_balance')
@@ -67,7 +65,6 @@ export default function Convert() {
         });
       }
 
-      // 3. Fetch conversion history
       const { data: txs } = await supabase
         .from('transactions')
         .select('*')
@@ -97,19 +94,15 @@ export default function Convert() {
     let rawResult = 0;
 
     if (fromCurrency === 'NGN' && toCurrency === 'USD') {
-      // NGN → USD: apply spread (user pays more NGN per USD, so they get less USD)
-      effectiveRate = ngnRate * (1 + SPREAD); // e.g., 1389 * 1.015 = 1409.8
+      effectiveRate = ngnRate * (1 + SPREAD);
       rawResult = amt / effectiveRate;
     } else if (fromCurrency === 'USD' && toCurrency === 'NGN') {
-      // USD → NGN: apply spread (user gets less NGN per USD)
-      effectiveRate = ngnRate * (1 - SPREAD); // e.g., 1389 * 0.985 = 1368.2
+      effectiveRate = ngnRate * (1 - SPREAD);
       rawResult = amt * effectiveRate;
     } else {
-      // Same currency (shouldn't happen)
       rawResult = amt;
     }
 
-    // Fee (1% of the converted amount)
     const feeRate = 0.01;
     const feeAmount = rawResult * feeRate;
     setFee(feeAmount);
@@ -194,7 +187,8 @@ export default function Convert() {
       const effectiveRate = fromCurrency === 'NGN' 
         ? ngnRate * (1 + SPREAD) 
         : ngnRate * (1 - SPREAD);
-      await supabase
+      
+      const { data: txData, error: txError } = await supabase
         .from('transactions')
         .insert({
           user_id: user.id,
@@ -211,9 +205,53 @@ export default function Convert() {
             rate: effectiveRate,
             spread_used: SPREAD,
           },
-        });
+        })
+        .select();
 
-      // 4. Update local balances
+      if (txError) {
+        console.error('Transaction insert error:', txError);
+        // Continue anyway — the conversion already happened
+      } else {
+        console.log('Transaction created:', txData);
+      }
+
+      // ===== 4. CREDIT BUSINESS WALLET (YOUR PROFIT) =====
+      // Calculate profit from spread
+      let profitInNGN = 0;
+
+      if (fromCurrency === 'NGN' && toCurrency === 'USD') {
+        // User paid extra NGN per USD
+        profitInNGN = amt * SPREAD; // e.g., 100,000 * 0.015 = 1,500 NGN
+      } else if (fromCurrency === 'USD' && toCurrency === 'NGN') {
+        // User got less NGN per USD
+        const effectiveRateNGN = ngnRate * (1 - SPREAD);
+        profitInNGN = amt * effectiveRateNGN * SPREAD; // e.g., 100 * 1368.2 * 0.015 = 2,052 NGN
+      }
+
+      // Add fee to profit (fee is in USD, convert to NGN)
+      const feeInNGN = fee * ngnRate;
+      const totalProfit = profitInNGN + feeInNGN;
+
+      if (totalProfit > 0) {
+        const { data: bizWallet, error: bizError } = await supabase
+          .from('business_wallets')
+          .select('balance')
+          .eq('currency', 'NGN')
+          .single();
+
+        if (!bizError && bizWallet) {
+          const newBizBalance = (bizWallet.balance || 0) + totalProfit;
+          await supabase
+            .from('business_wallets')
+            .update({ balance: newBizBalance })
+            .eq('currency', 'NGN');
+        } else {
+          // If business_wallets table doesn't exist yet, log a warning
+          console.warn('Business wallet not found. Please create the business_wallets table.');
+        }
+      }
+
+      // 5. Update local balances
       setBalances(prev => ({
         ...prev,
         [fromCurrency]: newBalance,
