@@ -25,7 +25,7 @@ export default function DashboardLayout({ children }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
   const bellRef = useRef(null);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
 
   // Fetch unread count & notifications on mount
   useEffect(() => {
@@ -120,18 +120,17 @@ export default function DashboardLayout({ children }) {
     if (!showDropdown) {
       if (bellRef.current) {
         const rect = bellRef.current.getBoundingClientRect();
-        const dropdownWidth = 320;
-        // Align the dropdown's right edge with the bell's right edge
-        let left = rect.left + rect.width - dropdownWidth;
-        // Prevent going off-screen left
-        if (left < 10) left = 10;
-        // Prevent going off-screen right
-        if (left + dropdownWidth > window.innerWidth - 10) {
-          left = window.innerWidth - dropdownWidth - 10;
+        // Position dropdown on the right edge of the screen
+        const dropdownWidth = 360;
+        let right = window.innerWidth - rect.right;
+        // Ensure it doesn't go off-screen
+        if (right < 10) right = 10;
+        if (right + dropdownWidth > window.innerWidth - 10) {
+          right = 10;
         }
         setDropdownPosition({
           top: rect.bottom + 8,
-          left: left,
+          right: right,
         });
       }
     }
@@ -158,6 +157,26 @@ export default function DashboardLayout({ children }) {
     router.push('/auth/login');
     return null;
   }
+
+  // Helper to get notification icon
+  const getNotificationIcon = (message) => {
+    if (message.includes('✅') || message.includes('completed') || message.includes('processed')) {
+      return 'fa-regular fa-circle-check text-green-400';
+    }
+    if (message.includes('❌') || message.includes('failed') || message.includes('rejected')) {
+      return 'fa-regular fa-circle-xmark text-red-400';
+    }
+    if (message.includes('🛒') || message.includes('order') || message.includes('gift')) {
+      return 'fa-solid fa-gift text-orange';
+    }
+    if (message.includes('💸') || message.includes('withdrawal')) {
+      return 'fa-solid fa-arrow-down text-red-400';
+    }
+    if (message.includes('💰') || message.includes('deposit') || message.includes('funds')) {
+      return 'fa-solid fa-arrow-up text-green-400';
+    }
+    return 'fa-regular fa-bell text-orange';
+  };
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
@@ -216,7 +235,7 @@ export default function DashboardLayout({ children }) {
           <button className="md:hidden p-2 rounded-lg hover:bg-white/10 transition" onClick={() => setIsSidebarOpen(true)}>
             <i className="fa-solid fa-bars text-xl text-text-primary"></i>
           </button>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 ml-auto">
             <button
               ref={bellRef}
               onClick={toggleDropdown}
@@ -241,66 +260,102 @@ export default function DashboardLayout({ children }) {
         <main className="flex-1 p-6">{children}</main>
       </div>
 
-      {/* Notification Dropdown – Portal with LEFT positioning */}
+      {/* ===== NOTIFICATION DRAWER (Premium, Right-Aligned, Glassmorphism) ===== */}
       {showDropdown && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed border border-border rounded-xl shadow-2xl shadow-black/70 z-[9999] p-2"
+          className="fixed z-[9999] glass rounded-2xl border border-border/50 shadow-2xl shadow-black/70 overflow-hidden transition-all duration-200 ease-out"
           style={{
             top: dropdownPosition.top,
-            left: dropdownPosition.left,
-            width: '320px',
-            maxHeight: '400px',
-            overflowY: 'auto',
-            backgroundColor: '#0B0815',
-            backdropFilter: 'none',
-            opacity: 1,
+            right: dropdownPosition.right,
+            width: '360px',
+            maxHeight: '480px',
+            backgroundColor: 'rgba(11, 8, 21, 0.95)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
           }}
         >
-          <div
-            className="flex justify-between items-center p-2 border-b border-border sticky top-0 z-10 rounded-t-xl"
-            style={{ backgroundColor: '#0B0815' }}
-          >
-            <h3 className="font-bold text-sm">Notifications</h3>
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-border/50 bg-black/20">
+            <div className="flex items-center gap-2">
+              <i className="fa-regular fa-bell text-orange text-lg"></i>
+              <h3 className="font-bold text-text-primary">Notifications</h3>
+              {unreadCount > 0 && (
+                <span className="text-xs bg-orange/20 text-orange px-2 py-0.5 rounded-full border border-orange/20">
+                  {unreadCount} new
+                </span>
+              )}
+            </div>
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
-                className="text-xs text-orange hover:underline"
+                className="text-xs text-orange hover:underline transition"
               >
-                Mark all as read
+                Mark all read
               </button>
             )}
           </div>
-          {notifications.length === 0 ? (
-            <div className="text-center text-text-muted py-4 text-sm">No notifications</div>
-          ) : (
-            <div className="space-y-2 mt-2">
-              {notifications.map((n) => (
-                <div
-                  key={n.id}
-                  className={`flex items-start justify-between p-2 rounded-lg transition ${
-                    n.read ? 'opacity-60' : 'bg-orange/5 border border-orange/10'
-                  }`}
-                >
-                  <div className="flex-1 mr-2">
-                    <p className="text-sm text-text-primary">{n.message}</p>
-                    <p className="text-xs text-text-muted">{new Date(n.created_at).toLocaleDateString()}</p>
+
+          {/* Notification List */}
+          <div className="overflow-y-auto max-h-[360px] p-2 space-y-1.5">
+            {notifications.length === 0 ? (
+              <div className="text-center text-text-muted py-8 text-sm">
+                <i className="fa-regular fa-bell-slash text-2xl block mb-2 opacity-30"></i>
+                <p>No notifications</p>
+              </div>
+            ) : (
+              notifications.map((n) => {
+                const isUnread = !n.read;
+                const icon = getNotificationIcon(n.message);
+                return (
+                  <div
+                    key={n.id}
+                    className={`flex items-start gap-3 p-3 rounded-xl transition ${
+                      isUnread
+                        ? 'bg-orange/5 border border-orange/10'
+                        : 'hover:bg-white/5'
+                    }`}
+                  >
+                    {/* Icon */}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      isUnread ? 'bg-orange/10' : 'bg-black/20'
+                    }`}>
+                      <i className={`${icon} text-sm`}></i>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${isUnread ? 'font-semibold text-text-primary' : 'text-text-muted'}`}>
+                        {n.message}
+                      </p>
+                      <p className="text-xs text-text-muted mt-0.5">
+                        {new Date(n.created_at).toLocaleString()}
+                      </p>
+                    </div>
+
+                    {/* Actions */}
+                    {isUnread && (
+                      <button
+                        onClick={() => markAsRead(n.id)}
+                        className="text-xs text-orange hover:underline transition whitespace-nowrap flex-shrink-0"
+                      >
+                        Mark read
+                      </button>
+                    )}
                   </div>
-                  {!n.read && (
-                    <button
-                      onClick={() => markAsRead(n.id)}
-                      className="text-xs text-orange hover:underline whitespace-nowrap"
-                    >
-                      Mark read
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="p-2 border-t border-border mt-2 text-center">
-            <Link href="/dashboard/notifications" className="text-xs text-orange hover:underline">
-              View all notifications
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-3 border-t border-border/50 text-center bg-black/10 rounded-b-2xl">
+            <Link
+              href="/dashboard/notifications"
+              className="text-sm text-orange hover:underline transition"
+              onClick={() => setShowDropdown(false)}
+            >
+              View all notifications →
             </Link>
           </div>
         </div>,
