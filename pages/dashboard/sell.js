@@ -17,39 +17,24 @@ const COINS = [
   { id: 'BCH', name: 'Bitcoin Cash', icon: 'fa-brands fa-bitcoin', color: '#8dc351' },
 ];
 
-// ===== SPREAD CONFIGURATION (Matches Dtunes) =====
-// Low = amount < $500 | High = amount >= $501
-const SPREAD_CONFIG = {
-  BTC: { low: 0.069, high: 0.056 },
-  ETH: { low: 0.069, high: 0.056 },
-  USDT: { low: 0.052, high: 0.045 },
-  SOL: { low: 0.069, high: 0.056 },
-  BNB: { low: 0.069, high: 0.056 },
-  TRX: { low: 0.076, high: 0.056 },
-  LTC: { low: 0.069, high: 0.056 },
-  BCH: { low: 0.069, high: 0.056 },
+// ===== FIXED SPREADS (Never change — matches Dtunes) =====
+// Low = amount < $500, High = amount >= $501
+const SPREADS = {
+  BTC: { low: 0.0286, high: 0.0142 },
+  ETH: { low: 0.0286, high: 0.0142 },
+  USDT: { low: 0.0106, high: 0.0034 },
+  SOL: { low: 0.0286, high: 0.0142 },
+  BNB: { low: 0.0286, high: 0.0142 },
+  TRX: { low: 0.0358, high: 0.0142 },
+  LTC: { low: 0.0286, high: 0.0142 },
+  BCH: { low: 0.1079, high: 0.0143 },
 };
 
-// Fee Config (0% fee like Dtunes)
-const FEE_CONFIG = {
-  BTC: 0,
-  ETH: 0,
-  USDT: 0,
-  SOL: 0,
-  BNB: 0,
-  TRX: 0,
-  LTC: 0,
-  BCH: 0,
-};
-
-// Get spread based on coin and amount
 const getSpread = (coinId, amount) => {
-  const config = SPREAD_CONFIG[coinId];
-  if (!config) return 0.06;
+  const config = SPREADS[coinId];
+  if (!config) return 0.0286; // fallback
   return amount < 500 ? config.low : config.high;
 };
-
-const getFee = (coinId) => FEE_CONFIG[coinId] || 0;
 
 export default function Sell() {
   const { user, loading } = useAuth();
@@ -69,41 +54,33 @@ export default function Sell() {
   const [ngnRate, setNgnRate] = useState(1389);
   const [coinPrices, setCoinPrices] = useState({});
   const [isLoadingRates, setIsLoadingRates] = useState(true);
-  const [marketRate, setMarketRate] = useState(1389);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!user) return;
-
       try {
         setIsLoadingRates(true);
 
-        // Fetch NGN rate with fallback
+        // 1. Fetch NGN rate with fallback
         let ngn = 1389;
         try {
           const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=NGN');
           const data = await res.json();
           if (data.rates?.NGN) ngn = data.rates.NGN;
         } catch (e) {
-          console.warn('Primary rate API failed, using fallback');
-          // Fallback: try another API
           try {
             const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=NGN');
             const data = await res.json();
             if (data.rates?.NGN) ngn = data.rates.NGN;
-          } catch (e2) {
-            console.warn('Fallback rate API also failed, using cached rate');
-          }
+          } catch (e2) {}
         }
         setNgnRate(ngn);
-        setMarketRate(ngn);
 
-        // Fetch crypto prices
+        // 2. Fetch crypto prices
         const cryptoRes = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,solana,binancecoin,tron,litecoin,bitcoin-cash&vs_currencies=usd'
         );
         const cryptoData = await cryptoRes.json();
-
         setCoinPrices({
           BTC: cryptoData.bitcoin?.usd || 0,
           ETH: cryptoData.ethereum?.usd || 0,
@@ -115,20 +92,18 @@ export default function Sell() {
           BCH: cryptoData['bitcoin-cash']?.usd || 0,
         });
 
-        // Fetch user's crypto balance
+        // 3. Fetch user's crypto balance
         const { data: walletData, error: walletError } = await supabase
           .from('crypto_balances')
           .select('*')
           .eq('user_id', user.id)
           .single();
-
         if (!walletError && walletData) {
           const balance = walletData[selectedCoin.id?.toLowerCase()] || 0;
           setAvailableBalance(balance);
         } else {
           setAvailableBalance(0);
         }
-
       } catch (error) {
         console.warn('⚠️ Data fetch failed', error);
       } finally {
@@ -141,15 +116,14 @@ export default function Sell() {
     return () => clearInterval(interval);
   }, [user, selectedCoin]);
 
-  // Calculate payout with dynamic spread
+  // Calculate payout using fixed spread
   const calculatePayout = (coinId, amount) => {
     const parsed = parseFloat(amount) || 0;
-    if (parsed <= 0) return { rate: 0, fee: 0, netUsd: 0, payout: 0, spread: 0 };
+    if (parsed <= 0) return { rate: 0, payout: 0 };
 
     const spread = getSpread(coinId, parsed);
-    const rate = marketRate * (1 - spread); // Your rate = market rate × (1 - spread)
-    const feePercent = getFee(coinId);
-    const fee = parsed * feePercent;
+    const rate = ngnRate * (1 - spread);
+    const fee = 0;
     const netUsd = parsed - fee;
     const payout = netUsd * rate;
 
@@ -214,7 +188,6 @@ export default function Sell() {
       setShowSuccessModal(true);
       setAvailableBalance(availableBalance - amount);
       setUsdAmount('');
-
     } catch (err) {
       setError(err.message || 'Failed to sell. Please try again.');
     } finally {
@@ -234,16 +207,12 @@ export default function Sell() {
   }
 
   const amount = parseFloat(usdAmount) || 0;
-  const { rate, fee, netUsd, payout, spread } = calculatePayout(selectedCoin.id, amount);
+  const { rate, payout } = calculatePayout(selectedCoin.id, amount);
   const showRate = amount > 0;
   const priceUsd = coinPrices[selectedCoin.id] || 0;
   const balanceInUsd = availableBalance * priceUsd;
 
-  // Quick amounts (percentage of balance)
   const quickAmounts = [10, 25, 50, 100];
-
-  // Tier label
-  const tierLabel = amount < 500 ? 'Under $500' : '$500+';
 
   return (
     <>
@@ -368,20 +337,12 @@ export default function Sell() {
               <p className="text-text-muted text-xs mt-2">Minimum sell: $1.00</p>
             </div>
 
-            {/* Rate Preview */}
+            {/* Rate & Payout Preview — Clean like Dtunes */}
             {showRate && (
-              <div className="mt-4 bg-black/30 rounded-xl p-4 border border-border/50">
+              <div className="mt-4 bg-orange/5 border border-orange/20 rounded-xl p-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-text-muted text-sm">Market Rate</span>
-                  <span className="font-medium">₦{marketRate.toFixed(2)} / $</span>
-                </div>
-                <div className="flex justify-between items-center mt-1">
-                  <span className="text-text-muted text-sm">Our Rate ({tierLabel})</span>
+                  <span className="text-text-muted text-sm">Rate</span>
                   <span className="font-bold text-green-400">₦{rate.toFixed(2)} / $</span>
-                </div>
-                <div className="flex justify-between items-center mt-1">
-                  <span className="text-text-muted text-sm">Spread</span>
-                  <span className="text-text-muted">{(spread * 100).toFixed(1)}%</span>
                 </div>
                 <div className="flex justify-between items-center mt-2 pt-2 border-t border-border/50">
                   <span className="text-text-muted text-sm">You Receive</span>
@@ -389,12 +350,6 @@ export default function Sell() {
                     ₦{payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
-                {fee > 0 && (
-                  <div className="flex justify-between items-center mt-1 text-xs text-text-muted">
-                    <span>Fee deducted</span>
-                    <span>-${fee.toFixed(2)}</span>
-                  </div>
-                )}
               </div>
             )}
 
@@ -416,7 +371,7 @@ export default function Sell() {
         </div>
       </DashboardLayout>
 
-      {/* ===== Agreement Modal ===== */}
+      {/* Agreement Modal */}
       {showAgreement && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
@@ -439,14 +394,6 @@ export default function Sell() {
                 <div>
                   <p className="font-semibold">Minimum sell is $1.00</p>
                   <p className="text-text-muted text-xs">Amounts below $1.00 will not be processed.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <i className="fa-solid fa-percent text-yellow-400 mt-0.5"></i>
-                <div>
-                  <p className="font-semibold">Spread: {(spread * 100).toFixed(1)}%</p>
-                  <p className="text-text-muted text-xs">Our rate is {((1 - spread) * 100).toFixed(0)}% of the market rate.</p>
                 </div>
               </div>
 
@@ -481,7 +428,7 @@ export default function Sell() {
         </div>
       )}
 
-      {/* ===== Success Modal ===== */}
+      {/* Success Modal */}
       {showSuccessModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border text-center">
@@ -500,9 +447,7 @@ export default function Sell() {
             </p>
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => {
-                  setShowSuccessModal(false);
-                }}
+                onClick={() => setShowSuccessModal(false)}
                 className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition"
               >
                 Close
