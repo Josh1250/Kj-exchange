@@ -118,14 +118,10 @@ export default function RateCalculator() {
   const getAssetRate = (asset) => {
     if (assetType === 'crypto') {
       const usdPrice = cryptoUsdPrices[asset.id] || 0;
-      // Apply spread based on amount (tiered)
       const spread = getSpread(asset.id, amount);
-      // Rate per USD in NGN
       const ratePerUsd = ngnRate * (1 - spread);
-      // Rate per coin = USD price × NGN rate per USD
       return usdPrice * ratePerUsd;
     } else {
-      // Gift card rate — rate per $1 in NGN
       return ngnRate * asset.rate;
     }
   };
@@ -133,6 +129,20 @@ export default function RateCalculator() {
   const getAssetSymbol = (asset) => {
     if (assetType === 'crypto') return asset.symbol;
     return '$';
+  };
+
+  // ============================================================
+  // GET RATE PER USD (FOR DISPLAY)
+  // ============================================================
+  const getRatePerUsd = () => {
+    if (!selectedAsset) return 0;
+    if (assetType === 'crypto') {
+      const spread = getSpread(selectedAsset.id, amount);
+      return ngnRate * (1 - spread);
+    } else {
+      // Gift card: rate is per $1
+      return ngnRate * selectedAsset.rate;
+    }
   };
 
   // ============================================================
@@ -155,16 +165,12 @@ export default function RateCalculator() {
     const rate = getAssetRate(selectedAsset);
     
     if (assetType === 'crypto') {
-      // For crypto: input is USD, payout = USD amount × rate per USD
-      // But our getAssetRate returns rate per coin (USD price × NGN rate)
-      // So we need rate per USD: ratePerUsd = ngnRate * (1 - spread)
       const usdPrice = cryptoUsdPrices[selectedAsset.id] || 0;
       const spread = getSpread(selectedAsset.id, amount);
       const ratePerUsd = ngnRate * (1 - spread);
       const total = amount * ratePerUsd;
       setResult(total);
     } else {
-      // For gift cards: input is $ amount, rate is per $1
       const total = amount * rate;
       setResult(total);
     }
@@ -202,6 +208,8 @@ export default function RateCalculator() {
     if (usdPrice === 0) return 0;
     return amount / usdPrice;
   };
+
+  const ratePerUsd = getRatePerUsd();
 
   return (
     <div className="glass rounded-3xl p-5 md:p-8 border border-border relative overflow-hidden">
@@ -390,28 +398,38 @@ export default function RateCalculator() {
         </div>
 
         {/* ============================================
-            RESULT
+            RESULT (SHOWS RATE + PAYOUT)
         ============================================ */}
         <div className="mt-2 bg-gradient-to-r from-purple-900/10 to-orange-900/10 rounded-xl p-5 border border-border/50">
           <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
             <span className="text-xs uppercase tracking-wider text-text-muted font-semibold">
-              <i className="fa-solid fa-arrow-right text-orange mr-2"></i> You get approximately
+              <i className="fa-solid fa-arrow-right text-orange mr-2"></i> Rate
             </span>
             <span className="text-[10px] bg-green-400/10 text-green-400 px-2 py-0.5 rounded-full border border-green-400/20 whitespace-nowrap">
               <i className="fa-regular fa-circle-check mr-1"></i> Live Rate
             </span>
           </div>
-          <div className="text-3xl md:text-4xl font-extrabold mt-1 break-all">
-            <span className="text-text-muted text-xl font-semibold">₦</span>{' '}
-            {formatResult()}
+          <div className="text-2xl md:text-3xl font-bold text-orange">
+            {selectedAsset && ratePerUsd > 0 ? `₦${ratePerUsd.toFixed(2)} / $` : '—'}
           </div>
+
+          <div className="mt-3 pt-3 border-t border-border/50">
+            <p className="text-xs uppercase tracking-wider text-text-muted font-semibold mb-1">
+              <i className="fa-solid fa-wallet text-green-400 mr-2"></i> You receive
+            </p>
+            <div className="text-3xl md:text-4xl font-extrabold">
+              <span className="text-text-muted text-xl font-semibold">₦</span>{' '}
+              {formatResult()}
+            </div>
+          </div>
+          
           {selectedAsset && result > 0 && (
-            <p className="text-xs text-text-muted mt-1">
+            <p className="text-xs text-text-muted mt-2">
               <i className="fa-regular fa-clock mr-1"></i> Rate locked for 60s • Updated automatically
             </p>
           )}
           {isLoading && (
-            <p className="text-xs text-text-muted mt-1 animate-pulse">
+            <p className="text-xs text-text-muted mt-2 animate-pulse">
               <i className="fa-solid fa-spinner fa-spin mr-1"></i> Loading rates...
             </p>
           )}
