@@ -55,6 +55,10 @@ export default function Sell() {
   const [coinPrices, setCoinPrices] = useState({});
   const [isLoadingRates, setIsLoadingRates] = useState(true);
 
+  // ===== CRYPTO HISTORY STATE =====
+  const [cryptoHistory, setCryptoHistory] = useState([]);
+  const [cryptoHistoryLoading, setCryptoHistoryLoading] = useState(true);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user) return;
@@ -104,6 +108,10 @@ export default function Sell() {
         } else {
           setAvailableBalance(0);
         }
+
+        // 4. Fetch crypto history
+        await fetchCryptoHistory();
+
       } catch (error) {
         console.warn('⚠️ Data fetch failed', error);
       } finally {
@@ -115,6 +123,29 @@ export default function Sell() {
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, [user, selectedCoin]);
+
+  // ===== Fetch Crypto History =====
+  const fetchCryptoHistory = async () => {
+    if (!user) return;
+    setCryptoHistoryLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('type', 'crypto')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!error && data) {
+        setCryptoHistory(data);
+      }
+    } catch (err) {
+      console.error('Error fetching crypto history:', err);
+    } finally {
+      setCryptoHistoryLoading(false);
+    }
+  };
 
   // Calculate payout using fixed spread
   const calculatePayout = (coinId, amount) => {
@@ -183,11 +214,35 @@ export default function Sell() {
         throw new Error(data.error || 'Failed to sell');
       }
 
+      // ===== CREDIT BUSINESS WALLET (SPREAD PROFIT) =====
+      const profitInNGN = amount * spread * ngnRate;
+      if (profitInNGN > 0) {
+        const { data: bizWallet, error: bizError } = await supabase
+          .from('business_wallets')
+          .select('balance')
+          .eq('currency', 'NGN')
+          .single();
+
+        if (!bizError && bizWallet) {
+          const newBizBalance = (bizWallet.balance || 0) + profitInNGN;
+          await supabase
+            .from('business_wallets')
+            .update({ balance: newBizBalance })
+            .eq('currency', 'NGN');
+        } else {
+          console.warn('Business wallet not found. Please create business_wallets table.');
+        }
+      }
+
       setLastPayout(payout);
       setLastSoldCoin(selectedCoin.id);
       setShowSuccessModal(true);
       setAvailableBalance(availableBalance - amount);
       setUsdAmount('');
+
+      // ✅ Refresh history
+      await fetchCryptoHistory();
+
     } catch (err) {
       setError(err.message || 'Failed to sell. Please try again.');
     } finally {
@@ -297,9 +352,11 @@ export default function Sell() {
               </div>
             </div>
 
-            {/* Amount Input */}
+            {/* Amount Input — ✅ NOW IN USD */}
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">Amount ({selectedCoin.id})</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                Amount (USD)
+              </label>
               <div className="relative">
                 <input
                   type="number"
@@ -311,7 +368,7 @@ export default function Sell() {
                   step="0.01"
                 />
                 <div className="absolute right-5 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">
-                  {selectedCoin.id}
+                  USD
                 </div>
               </div>
 
@@ -367,6 +424,56 @@ export default function Sell() {
             >
               <i className="fa-solid fa-paper-plane"></i> Continue ➤
             </button>
+          </div>
+
+          {/* ===== CRYPTO HISTORY ===== */}
+          <div className="glass rounded-2xl p-5 border border-border mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">
+                Recent Crypto Sales
+              </h3>
+              <Link href="/dashboard/orders" className="text-sm text-orange hover:underline">
+                View All
+              </Link>
+            </div>
+
+            {cryptoHistoryLoading ? (
+              <div className="text-center py-6 text-text-muted">
+                <i className="fa-solid fa-spinner fa-spin"></i> Loading...
+              </div>
+            ) : cryptoHistory.length === 0 ? (
+              <div className="text-center py-6 text-text-muted">
+                <i className="fa-regular fa-clock text-4xl block mb-2 opacity-40"></i>
+                <p className="text-sm">No crypto sales yet.</p>
+                <p className="text-xs mt-1">Sell your first crypto to see history here.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {cryptoHistory.map((order) => (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-border/50 hover:border-orange/20 transition"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{order.asset}</p>
+                      <p className="text-text-muted text-xs">
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-3">
+                      <p className="font-bold text-green-400">₦{order.value_ngn?.toLocaleString()}</p>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                        order.status === 'completed' ? 'bg-green-400/20 text-green-400' :
+                        order.status === 'pending' ? 'bg-yellow-400/20 text-yellow-400' :
+                        'bg-red-400/20 text-red-400'
+                      }`}>
+                        {order.status || 'pending'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </DashboardLayout>
