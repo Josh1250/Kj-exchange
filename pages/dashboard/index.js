@@ -5,7 +5,6 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { supabase } from '../../lib/supabaseClient';
 import Link from 'next/link';
 import Head from 'next/head';
-import RateCalculator from '../../components/calculator/RateCalculator';
 
 export default function DashboardOverview() {
   const { user, loading } = useAuth();
@@ -404,10 +403,7 @@ export default function DashboardOverview() {
             </Link>
           </div>
 
-          {/* Rate Calculator (Full Widget) */}
-          <RateCalculator />
-
-          {/* Products Grid (6 cards — NO Rate Calculator card) */}
+          {/* Products Grid (6 cards — Rate Calculator as a product card) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-bold">Products</h2>
@@ -438,6 +434,7 @@ export default function DashboardOverview() {
                 </div>
                 <p className="text-sm font-semibold mt-2">Airtime & Data</p>
               </Link>
+              {/* ✅ Rate Calculator as a Product Card */}
               <Link href="/rates" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-solid fa-calculator"></i>
