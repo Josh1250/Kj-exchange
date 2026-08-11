@@ -6,13 +6,22 @@ import { useRouter } from 'next/router';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+// Sidebar nav items
 const navItems = [
   { name: 'Home', href: '/dashboard', icon: 'fa-solid fa-house' },
   { name: 'Products', href: '/dashboard/products', icon: 'fa-solid fa-box' },
-  { name: 'Transactions', href: '/dashboard/orders', icon: 'fa-solid fa-credit-card' },
   { name: 'Wallet', href: '/dashboard/wallet', icon: 'fa-solid fa-wallet' },
+  { name: 'Transactions', href: '/dashboard/transactions', icon: 'fa-solid fa-credit-card' },
   { name: 'Referral', href: '/dashboard/referral', icon: 'fa-solid fa-user-group' },
   { name: 'Profile', href: '/dashboard/profile', icon: 'fa-solid fa-user' },
+  { name: 'Settings', href: '/dashboard/settings', icon: 'fa-solid fa-gear' },
+];
+
+// ✅ BOTTOM NAV (4 TABS)
+const bottomNavItems = [
+  { name: 'Home', href: '/dashboard', icon: 'fa-solid fa-house' },
+  { name: 'Wallet', href: '/dashboard/wallet', icon: 'fa-solid fa-wallet' },
+  { name: 'Transactions', href: '/dashboard/transactions', icon: 'fa-solid fa-credit-card' },
   { name: 'Settings', href: '/dashboard/settings', icon: 'fa-solid fa-gear' },
 ];
 
@@ -27,7 +36,7 @@ export default function DashboardLayout({ children }) {
   const bellRef = useRef(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
 
-  // Fetch unread count & notifications on mount
+  // Fetch unread count & notifications
   useEffect(() => {
     if (!user) return;
     fetchUnreadCount();
@@ -67,7 +76,7 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  // Real‑time subscription
+  // Real-time subscription
   useEffect(() => {
     if (!user) return;
     const subscription = supabase
@@ -120,10 +129,8 @@ export default function DashboardLayout({ children }) {
     if (!showDropdown) {
       if (bellRef.current) {
         const rect = bellRef.current.getBoundingClientRect();
-        // Position dropdown on the right edge of the screen
         const dropdownWidth = 360;
         let right = window.innerWidth - rect.right;
-        // Ensure it doesn't go off-screen
         if (right < 10) right = 10;
         if (right + dropdownWidth > window.innerWidth - 10) {
           right = 10;
@@ -158,7 +165,6 @@ export default function DashboardLayout({ children }) {
     return null;
   }
 
-  // Helper to get notification icon
   const getNotificationIcon = (message) => {
     if (message.includes('✅') || message.includes('completed') || message.includes('processed')) {
       return 'fa-regular fa-circle-check text-green-400';
@@ -230,7 +236,7 @@ export default function DashboardLayout({ children }) {
         <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>
       )}
 
-      <div className="flex-1 flex flex-col md:ml-64 overflow-y-auto">
+      <div className="flex-1 flex flex-col md:ml-64 overflow-y-auto pb-20">
         <header className="bg-bg-secondary/80 backdrop-blur-lg border-b border-border px-6 py-3 flex justify-between items-center sticky top-0 z-10">
           <button className="md:hidden p-2 rounded-lg hover:bg-white/10 transition" onClick={() => setIsSidebarOpen(true)}>
             <i className="fa-solid fa-bars text-xl text-text-primary"></i>
@@ -249,7 +255,7 @@ export default function DashboardLayout({ children }) {
               )}
             </button>
 
-            <Link href="/dashboard/profile" className="flex items-center gap-2 hover:bg-white/10 rounded-full px-3 py-1 transition">
+            <Link href="/dashboard/settings" className="flex items-center gap-2 hover:bg-white/10 rounded-full px-3 py-1 transition">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
                 {user?.email?.charAt(0).toUpperCase()}
               </div>
@@ -257,10 +263,35 @@ export default function DashboardLayout({ children }) {
             </Link>
           </div>
         </header>
-        <main className="flex-1 p-6">{children}</main>
+
+        <main className="flex-1 p-4 md:p-6">{children}</main>
+
+        {/* ===== BOTTOM NAVIGATION (4 Tabs) ===== */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border bg-bg-card/90 backdrop-blur-xl md:hidden">
+          <div className="container mx-auto px-2">
+            <div className="flex justify-around items-center py-2">
+              {bottomNavItems.map((tab) => {
+                const isActive = router.pathname === tab.href || router.pathname.startsWith(tab.href + '/');
+                return (
+                  <Link
+                    key={tab.name}
+                    href={tab.href}
+                    className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition ${
+                      isActive ? 'text-orange' : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    <i className={`fa-solid ${tab.icon} text-lg ${isActive ? 'scale-110' : ''}`}></i>
+                    <span className="text-[10px] font-medium">{tab.name}</span>
+                    {isActive && <span className="w-1 h-1 bg-orange rounded-full mt-0.5"></span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </nav>
       </div>
 
-      {/* ===== NOTIFICATION DRAWER (Premium, Right-Aligned, Glassmorphism) ===== */}
+      {/* Notification Dropdown */}
       {showDropdown && createPortal(
         <div
           ref={dropdownRef}
@@ -275,7 +306,6 @@ export default function DashboardLayout({ children }) {
             WebkitBackdropFilter: 'blur(24px)',
           }}
         >
-          {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border/50 bg-black/20">
             <div className="flex items-center gap-2">
               <i className="fa-regular fa-bell text-orange text-lg"></i>
@@ -296,7 +326,6 @@ export default function DashboardLayout({ children }) {
             )}
           </div>
 
-          {/* Notification List */}
           <div className="overflow-y-auto max-h-[360px] p-2 space-y-1.5">
             {notifications.length === 0 ? (
               <div className="text-center text-text-muted py-8 text-sm">
@@ -316,14 +345,11 @@ export default function DashboardLayout({ children }) {
                         : 'hover:bg-white/5'
                     }`}
                   >
-                    {/* Icon */}
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                       isUnread ? 'bg-orange/10' : 'bg-black/20'
                     }`}>
                       <i className={`${icon} text-sm`}></i>
                     </div>
-
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm ${isUnread ? 'font-semibold text-text-primary' : 'text-text-muted'}`}>
                         {n.message}
@@ -332,8 +358,6 @@ export default function DashboardLayout({ children }) {
                         {new Date(n.created_at).toLocaleString()}
                       </p>
                     </div>
-
-                    {/* Actions */}
                     {isUnread && (
                       <button
                         onClick={() => markAsRead(n.id)}
@@ -348,7 +372,6 @@ export default function DashboardLayout({ children }) {
             )}
           </div>
 
-          {/* Footer */}
           <div className="p-3 border-t border-border/50 text-center bg-black/10 rounded-b-2xl">
             <Link
               href="/dashboard/notifications"
