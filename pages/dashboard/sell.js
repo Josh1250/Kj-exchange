@@ -68,9 +68,9 @@ export default function Sell() {
   const [isLoadingRates, setIsLoadingRates] = useState(true);
   const [marketRate, setMarketRate] = useState(1389);
 
-  // ===== CRYPTO HISTORY =====
+  // ===== CRYPTO HISTORY STATE =====
   const [cryptoHistory, setCryptoHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
+  const [cryptoHistoryLoading, setCryptoHistoryLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -123,7 +123,7 @@ export default function Sell() {
           setAvailableBalance(0);
         }
 
-        // Fetch crypto history
+        // ✅ Fetch crypto history
         await fetchCryptoHistory();
 
       } catch (error) {
@@ -141,7 +141,7 @@ export default function Sell() {
   // ===== Fetch Crypto History =====
   const fetchCryptoHistory = async () => {
     if (!user) return;
-    setHistoryLoading(true);
+    setCryptoHistoryLoading(true);
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -157,7 +157,7 @@ export default function Sell() {
     } catch (err) {
       console.error('Error fetching crypto history:', err);
     } finally {
-      setHistoryLoading(false);
+      setCryptoHistoryLoading(false);
     }
   };
 
@@ -228,7 +228,7 @@ export default function Sell() {
         throw new Error(data.error || 'Failed to sell');
       }
 
-      // Credit business wallet
+      // ===== CREDIT BUSINESS WALLET (SPREAD PROFIT) =====
       const profitInNGN = amount * spread * marketRate;
       if (profitInNGN > 0) {
         const { data: bizWallet, error: bizError } = await supabase
@@ -243,6 +243,8 @@ export default function Sell() {
             .from('business_wallets')
             .update({ balance: newBizBalance })
             .eq('currency', 'NGN');
+        } else {
+          console.warn('Business wallet not found. Please create business_wallets table.');
         }
       }
 
@@ -252,7 +254,7 @@ export default function Sell() {
       setAvailableBalance(availableBalance - amount);
       setUsdAmount('');
 
-      // Refresh crypto history
+      // ✅ Refresh history
       await fetchCryptoHistory();
 
     } catch (err) {
@@ -289,24 +291,14 @@ export default function Sell() {
       </Head>
       <DashboardLayout>
         <div className="max-w-2xl mx-auto px-4 py-4 pb-24">
-          {/* Back Button */}
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition mb-4 group"
-          >
-            <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
-            <span className="text-sm font-medium">Back to Dashboard</span>
-          </Link>
-
-          {/* Header */}
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange flex-shrink-0">
-              <i className="fa-solid fa-arrow-up text-lg"></i>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Sell Crypto</h1>
-              <p className="text-text-muted text-sm">Sell your crypto for Naira instantly</p>
-            </div>
+            <Link href="/dashboard" className="text-text-muted hover:text-text-primary transition group">
+              <i className="fa-solid fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
+            </Link>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <i className="fa-solid fa-arrow-up text-orange"></i>
+              Sell Crypto
+            </h1>
           </div>
 
           <div className="glass rounded-2xl p-4 border border-border mb-5">
@@ -450,7 +442,7 @@ export default function Sell() {
               </Link>
             </div>
 
-            {historyLoading ? (
+            {cryptoHistoryLoading ? (
               <div className="text-center py-6 text-text-muted">
                 <i className="fa-solid fa-spinner fa-spin"></i> Loading...
               </div>
@@ -488,98 +480,98 @@ export default function Sell() {
               </div>
             )}
           </div>
-
-          {/* Agreement Modal */}
-          {showAgreement && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold flex items-center gap-2">
-                    <i className="fa-solid fa-triangle-exclamation text-orange"></i>
-                    Before you sell...
-                  </h2>
-                  <button
-                    onClick={() => setShowAgreement(false)}
-                    className="text-text-muted hover:text-text-primary transition text-xl"
-                  >
-                    <i className="fa-regular fa-xmark"></i>
-                  </button>
-                </div>
-
-                <div className="space-y-4 text-sm">
-                  <div className="flex items-start gap-3">
-                    <i className="fa-regular fa-circle-check text-green-400 mt-0.5"></i>
-                    <div>
-                      <p className="font-semibold">Minimum sell is $1.00</p>
-                      <p className="text-text-muted text-xs">Amounts below $1.00 will not be processed.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <i className="fa-solid fa-shield text-orange mt-0.5"></i>
-                    <div>
-                      <p className="font-semibold">Instant credit</p>
-                      <p className="text-text-muted text-xs">Your Naira wallet will be credited immediately.</p>
-                    </div>
-                  </div>
-                  <div className="bg-black/20 rounded-xl p-3 border border-border text-text-muted text-xs">
-                    By proceeding, you agree to these terms.
-                  </div>
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => setShowAgreement(false)}
-                    className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSell}
-                    className="flex-1 bg-orange text-white font-bold py-2.5 rounded-xl hover:bg-orange-600 transition flex items-center justify-center gap-2"
-                  >
-                    <i className="fa-regular fa-check-circle"></i> I Agree
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Success Modal */}
-          {showSuccessModal && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="glass rounded-2xl max-w-md w-full p-6 border border-border text-center">
-                <div className="w-16 h-16 rounded-full bg-green-400/20 flex items-center justify-center text-green-400 text-3xl mx-auto">
-                  <i className="fa-regular fa-circle-check"></i>
-                </div>
-                <h2 className="text-2xl font-bold mt-4">Sale Completed! 🎉</h2>
-                <p className="text-text-muted mt-2">
-                  You have successfully sold {lastSoldCoin} for
-                </p>
-                <p className="text-3xl font-bold text-green-400 mt-1">
-                  ₦{lastPayout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-                <p className="text-text-muted text-xs mt-2">
-                  Funds have been credited to your Naira wallet.
-                </p>
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => setShowSuccessModal(false)}
-                    className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition"
-                  >
-                    Close
-                  </button>
-                  <Link
-                    href="/dashboard/wallet"
-                    className="flex-1 bg-orange text-white font-bold py-2.5 rounded-xl hover:bg-orange-600 transition text-center"
-                  >
-                    View Wallet
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </DashboardLayout>
+
+      {/* Agreement Modal */}
+      {showAgreement && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <i className="fa-solid fa-triangle-exclamation text-orange"></i>
+                Before you sell...
+              </h2>
+              <button
+                onClick={() => setShowAgreement(false)}
+                className="text-text-muted hover:text-text-primary transition text-xl"
+              >
+                <i className="fa-regular fa-xmark"></i>
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div className="flex items-start gap-3">
+                <i className="fa-regular fa-circle-check text-green-400 mt-0.5"></i>
+                <div>
+                  <p className="font-semibold">Minimum sell is $1.00</p>
+                  <p className="text-text-muted text-xs">Amounts below $1.00 will not be processed.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <i className="fa-solid fa-shield text-orange mt-0.5"></i>
+                <div>
+                  <p className="font-semibold">Instant credit</p>
+                  <p className="text-text-muted text-xs">Your Naira wallet will be credited immediately.</p>
+                </div>
+              </div>
+              <div className="bg-black/20 rounded-xl p-3 border border-border text-text-muted text-xs">
+                By proceeding, you agree to these terms.
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowAgreement(false)}
+                className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSell}
+                className="flex-1 bg-orange text-white font-bold py-2.5 rounded-xl hover:bg-orange-600 transition flex items-center justify-center gap-2"
+              >
+                <i className="fa-regular fa-check-circle"></i> I Agree
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl max-w-md w-full p-6 border border-border text-center">
+            <div className="w-16 h-16 rounded-full bg-green-400/20 flex items-center justify-center text-green-400 text-3xl mx-auto">
+              <i className="fa-regular fa-circle-check"></i>
+            </div>
+            <h2 className="text-2xl font-bold mt-4">Sale Completed! 🎉</h2>
+            <p className="text-text-muted mt-2">
+              You have successfully sold {lastSoldCoin} for
+            </p>
+            <p className="text-3xl font-bold text-green-400 mt-1">
+              ₦{lastPayout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+            <p className="text-text-muted text-xs mt-2">
+              Funds have been credited to your Naira wallet.
+            </p>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowSuccessModal(false)}
+                className="flex-1 border border-border text-text-primary px-4 py-2.5 rounded-xl hover:border-orange transition"
+              >
+                Close
+              </button>
+              <Link
+                href="/dashboard/wallet"
+                className="flex-1 bg-orange text-white font-bold py-2.5 rounded-xl hover:bg-orange-600 transition text-center"
+              >
+                View Wallet
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
