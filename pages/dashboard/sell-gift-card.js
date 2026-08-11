@@ -355,7 +355,6 @@ export default function SellGiftCard() {
       if (feeUsd > 0) {
         profitInNGN += feeUsd * ngnRate;
       }
-      // 5% margin
       const marginPercent = 0.05;
       const marginProfit = finalPayout * marginPercent;
       profitInNGN += marginProfit;
@@ -408,8 +407,6 @@ export default function SellGiftCard() {
     }
   };
 
-  // ... (keeping your existing UI - the JSX section is large, I'm keeping it as is)
-
   return (
     <>
       <Head><title>Sell Gift Card · KJ Exchange</title></Head>
@@ -435,6 +432,57 @@ export default function SellGiftCard() {
             </div>
           </div>
 
+          {/* ===== GIFT CARD HISTORY (MOVED TO TOP) ===== */}
+          <div className="glass rounded-2xl p-5 border border-border mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">
+                Recent Gift Card Sales
+              </h3>
+              <Link href="/dashboard/orders" className="text-sm text-orange hover:underline">
+                View All
+              </Link>
+            </div>
+
+            {giftCardHistoryLoading ? (
+              <div className="text-center py-3 text-text-muted">
+                <i className="fa-solid fa-spinner fa-spin"></i> Loading...
+              </div>
+            ) : giftCardHistory.length === 0 ? (
+              <div className="text-center py-3 text-text-muted text-sm">
+                <i className="fa-regular fa-clock text-2xl block mb-1 opacity-40"></i>
+                <p>No gift card sales yet.</p>
+                <p className="text-xs">Sell your first gift card to see history here.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {giftCardHistory.map((order) => (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between p-2.5 bg-black/20 rounded-xl border border-border/50 hover:border-orange/20 transition"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{order.asset}</p>
+                      <p className="text-text-muted text-xs">
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-3">
+                      <p className="font-bold text-green-400 text-sm">₦{order.value_ngn?.toLocaleString()}</p>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                        order.status === 'completed' ? 'bg-green-400/20 text-green-400' :
+                        order.status === 'pending' ? 'bg-yellow-400/20 text-yellow-400' :
+                        'bg-red-400/20 text-red-400'
+                      }`}>
+                        {order.status || 'pending'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Main Form */}
           <div className="glass rounded-2xl p-5 md:p-6 border border-border">
             {/* Error / Success Messages */}
             {error && (
@@ -479,7 +527,7 @@ export default function SellGiftCard() {
                   </div>
 
                   {showDropdown && (
-                    <div className="absolute z-20 w-full mt-2 glass rounded-xl border border-border max-h-60 overflow-y-auto shadow-2xl">
+                    <div className="absolute z-30 w-full mt-2 glass rounded-xl border border-border max-h-60 overflow-y-auto shadow-2xl">
                       {filteredBrands.length === 0 ? (
                         <div className="px-4 py-6 text-center text-text-muted text-sm">No gift cards found.</div>
                       ) : (
@@ -889,56 +937,6 @@ export default function SellGiftCard() {
                 </>
               )}
             </form>
-          </div>
-
-          {/* ===== GIFT CARD HISTORY ===== */}
-          <div className="glass rounded-2xl p-5 border border-border mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">
-                Recent Gift Card Sales
-              </h3>
-              <Link href="/dashboard/orders" className="text-sm text-orange hover:underline">
-                View All
-              </Link>
-            </div>
-
-            {giftCardHistoryLoading ? (
-              <div className="text-center py-6 text-text-muted">
-                <i className="fa-solid fa-spinner fa-spin"></i> Loading...
-              </div>
-            ) : giftCardHistory.length === 0 ? (
-              <div className="text-center py-6 text-text-muted">
-                <i className="fa-regular fa-clock text-4xl block mb-2 opacity-40"></i>
-                <p className="text-sm">No gift card sales yet.</p>
-                <p className="text-xs mt-1">Sell your first gift card to see history here.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {giftCardHistory.map((order) => (
-                  <div
-                    key={order.id}
-                    className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-border/50 hover:border-orange/20 transition"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm truncate">{order.asset}</p>
-                      <p className="text-text-muted text-xs">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0 ml-3">
-                      <p className="font-bold text-green-400">₦{order.value_ngn?.toLocaleString()}</p>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                        order.status === 'completed' ? 'bg-green-400/20 text-green-400' :
-                        order.status === 'pending' ? 'bg-yellow-400/20 text-yellow-400' :
-                        'bg-red-400/20 text-red-400'
-                      }`}>
-                        {order.status || 'pending'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </DashboardLayout>
