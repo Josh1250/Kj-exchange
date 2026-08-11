@@ -17,7 +17,7 @@ export default function Wallet() {
   const [hideBalance, setHideBalance] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('NGN');
   const [exchangeRates, setExchangeRates] = useState({ USD: 1500 });
-  const [filterStatus, setFilterStatus] = useState('all'); // all, completed, pending, failed
+  const [filterStatus, setFilterStatus] = useState('all');
 
   // Top-Up Modal
   const [showTopUpModal, setShowTopUpModal] = useState(false);
@@ -27,10 +27,9 @@ export default function Wallet() {
   const [topUpError, setTopUpError] = useState('');
   const [verifying, setVerifying] = useState(false);
 
-  // Preset amounts for top-up
   const presetAmounts = [1000, 5000, 10000, 25000, 50000, 100000];
 
-  // ===== Check for Flutterwave return =====
+  // Check for Flutterwave return
   useEffect(() => {
     const { transaction_id, status } = router.query;
     if (transaction_id && status) {
@@ -72,7 +71,7 @@ export default function Wallet() {
     }
   };
 
-  // ===== Load Data =====
+  // Load Data
   useEffect(() => {
     if (!loading && !user) {
       router.push('/auth/login');
@@ -102,10 +101,12 @@ export default function Wallet() {
         });
       }
 
+      // Fetch wallet transactions (deposits, withdrawals, conversions)
       const { data: txs } = await supabase
         .from('transactions')
         .select('*')
         .eq('user_id', user.id)
+        .in('type', ['deposit', 'withdrawal', 'conversion'])
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -135,7 +136,6 @@ export default function Wallet() {
     }
   };
 
-  // ===== Top-Up Handler =====
   const handleTopUp = async (e) => {
     e.preventDefault();
     setTopUpLoading(true);
@@ -182,7 +182,6 @@ export default function Wallet() {
     }
   };
 
-  // ===== Get Converted Balance =====
   const getConvertedBalance = () => {
     switch (selectedCurrency) {
       case 'USD': return balances.usd;
@@ -199,7 +198,6 @@ export default function Wallet() {
     }
   };
 
-  // ===== Filter Transactions by Status =====
   const filterTransactions = (status) => {
     setFilterStatus(status);
     if (status === 'all') {
@@ -210,7 +208,6 @@ export default function Wallet() {
     setFilteredTransactions(filtered);
   };
 
-  // ===== Get Status Badge =====
   const getStatusBadge = (status) => {
     switch (status) {
       case 'completed': return 'bg-green-400/20 text-green-400';
@@ -232,24 +229,16 @@ export default function Wallet() {
   };
 
   const getTransactionIcon = (type) => {
-    if (type === 'crypto_sale' || type === 'gift_card_sale' || type === 'trade') return 'fa-arrow-up text-green-400';
-    if (type === 'withdrawal') return 'fa-arrow-down text-red-400';
     if (type === 'deposit') return 'fa-arrow-down text-green-400';
-    if (type === 'bonus') return 'fa-gift text-orange';
-    if (type === 'airtime') return 'fa-wifi text-blue-400';
+    if (type === 'withdrawal') return 'fa-arrow-up text-red-400';
     if (type === 'conversion') return 'fa-arrow-right-arrow-left text-purple-400';
     return 'fa-arrow-right text-text-muted';
   };
 
   const getTransactionLabel = (tx) => {
-    if (tx.type === 'crypto_sale') return 'Crypto Sold';
-    if (tx.type === 'gift_card_sale') return 'Gift Card Sold';
-    if (tx.type === 'withdrawal') return 'Withdrawal';
     if (tx.type === 'deposit') return 'Deposit';
-    if (tx.type === 'bonus') return 'Bonus';
-    if (tx.type === 'airtime') return 'Airtime Purchase';
+    if (tx.type === 'withdrawal') return 'Withdrawal';
     if (tx.type === 'conversion') return 'Currency Conversion';
-    if (tx.type === 'trade') return 'Trade';
     return tx.type?.replace('_', ' ') || 'Transaction';
   };
 
@@ -261,12 +250,10 @@ export default function Wallet() {
   const symbol = getCurrencySymbol();
   const isGiftPoints = selectedCurrency === 'Gift Points';
 
-  // Quick actions
   const actions = [
     { label: 'Deposit', icon: 'fa-circle-plus', href: '#', onClick: () => setShowTopUpModal(true), color: 'text-green-400' },
     { label: 'Withdraw', icon: 'fa-arrow-down', href: '/dashboard/withdraw', color: 'text-orange' },
     { label: 'Convert', icon: 'fa-arrow-right-arrow-left', href: '/dashboard/convert', color: 'text-purple-400' },
-    { label: 'History', icon: 'fa-clock-rotate-left', href: '/dashboard/orders', color: 'text-blue-400' },
   ];
 
   return (
@@ -356,7 +343,7 @@ export default function Wallet() {
           </div>
 
           {/* Quick Actions */}
-          <div className="grid grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-3 gap-3 mb-5">
             {actions.map((action) => (
               action.onClick ? (
                 <button
@@ -382,6 +369,40 @@ export default function Wallet() {
                 </Link>
               )
             ))}
+          </div>
+
+          {/* 🎁 Gift Points Banner (NEW) */}
+          <div className="glass rounded-2xl p-4 border border-orange/20 bg-orange/5 mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg flex-shrink-0">
+                <i className="fa-solid fa-gift"></i>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-sm">Gift Points</p>
+                  <p className="text-xl font-bold text-orange">
+                    {hideBalance ? '••••' : balances.gift_points.toLocaleString()}
+                  </p>
+                </div>
+                <div className="w-full bg-black/30 rounded-full h-2 mt-1">
+                  <div
+                    className="bg-gradient-to-r from-orange to-purple-500 h-2 rounded-full transition-all"
+                    style={{ width: `${Math.min((balances.gift_points / 10000) * 100, 100)}%` }}
+                  ></div>
+                </div>
+                <p className="text-text-muted text-xs mt-0.5">
+                  {balances.gift_points >= 10000
+                    ? '🎉 Ready to redeem!'
+                    : `${10000 - balances.gift_points} points to minimum redemption`}
+                </p>
+              </div>
+              <Link
+                href="/dashboard/referral"
+                className="border border-orange/30 text-orange hover:bg-orange/10 px-3 py-1.5 rounded-full text-xs font-semibold transition whitespace-nowrap"
+              >
+                Redeem →
+              </Link>
+            </div>
           </div>
 
           {/* Balance Breakdown */}
@@ -420,47 +441,13 @@ export default function Wallet() {
             </div>
           </div>
 
-          {/* Gift Points Banner */}
-          <div className="glass rounded-2xl p-4 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center text-orange text-lg flex-shrink-0">
-                <i className="fa-solid fa-gift"></i>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-sm">Gift Points</p>
-                  <p className="text-2xl font-bold text-orange">
-                    {hideBalance ? '••••' : balances.gift_points.toLocaleString()}
-                  </p>
-                </div>
-                <div className="w-full bg-black/30 rounded-full h-2 mt-1">
-                  <div
-                    className="bg-gradient-to-r from-orange to-purple-500 h-2 rounded-full transition-all"
-                    style={{ width: `${Math.min((balances.gift_points / 10000) * 100, 100)}%` }}
-                  ></div>
-                </div>
-                <p className="text-text-muted text-xs mt-0.5">
-                  {balances.gift_points >= 10000
-                    ? '🎉 Ready to redeem!'
-                    : `${10000 - balances.gift_points} points to minimum redemption`}
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/dashboard/referral"
-              className="border border-orange/30 text-orange hover:bg-orange/10 px-4 py-2 rounded-full text-sm font-semibold transition whitespace-nowrap"
-            >
-              View Rewards →
-            </Link>
-          </div>
-
-          {/* Transaction History */}
+          {/* Wallet History */}
           <div className="glass rounded-2xl p-5 border border-border">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">
-                Recent Transactions
+                Wallet History
               </h3>
-              <Link href="/dashboard/orders" className="text-sm text-orange hover:underline">
+              <Link href="/dashboard/transactions" className="text-sm text-orange hover:underline">
                 View All
               </Link>
             </div>
@@ -487,7 +474,7 @@ export default function Wallet() {
             ) : filteredTransactions.length === 0 ? (
               <div className="text-center py-8">
                 <i className="fa-regular fa-clock text-4xl text-text-muted mb-3 block"></i>
-                <p className="text-text-muted text-sm">No transactions found.</p>
+                <p className="text-text-muted text-sm">No wallet transactions found.</p>
                 <button
                   onClick={() => setShowTopUpModal(true)}
                   className="text-orange text-sm hover:underline inline-block mt-2"
@@ -500,7 +487,7 @@ export default function Wallet() {
                 {filteredTransactions.map((tx) => (
                   <div
                     key={tx.id}
-                    className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-border/50 hover:border-orange/20 transition"
+                    className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-border/50 hover:border-orange/20 transition"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center flex-shrink-0">
@@ -530,7 +517,7 @@ export default function Wallet() {
         </div>
       </DashboardLayout>
 
-      {/* ===== TOP-UP MODAL ===== */}
+      {/* Top-Up Modal (same as before) */}
       {showTopUpModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
