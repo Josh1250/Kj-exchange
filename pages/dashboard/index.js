@@ -15,7 +15,6 @@ export default function DashboardOverview() {
   const [bonusBalance, setBonusBalance] = useState(0);
   const [usdBalance, setUsdBalance] = useState(0);
   const [giftPoints, setGiftPoints] = useState(0);
-  const [recentOrders, setRecentOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hideBalance, setHideBalance] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('NGN');
@@ -24,9 +23,6 @@ export default function DashboardOverview() {
   const [quickStats, setQuickStats] = useState({ orders: 0, pending: 0, earned: 0 });
   const [sparklineData, setSparklineData] = useState([]);
   const [username, setUsername] = useState('');
-
-  // ===== STATE FOR SLIDE-IN DRAWER =====
-  const [showRateCalculator, setShowRateCalculator] = useState(false);
 
   // Fetch KYC level and username
   useEffect(() => {
@@ -166,15 +162,6 @@ export default function DashboardOverview() {
         setBonusBalance(wallet.bonus_balance || 0);
         setUsdBalance(wallet.usd_balance || 0);
       }
-
-      const { data: txs } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (txs) setRecentOrders(txs);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -245,20 +232,13 @@ export default function DashboardOverview() {
   const symbol = getCurrencySymbol();
   const displayName = username || user?.email?.split('@')[0] || 'User';
 
-  const navTabs = [
-    { label: 'Home', icon: 'fa-house', href: '/dashboard' },
-    { label: 'Trade', icon: 'fa-arrows-rotate', href: '/dashboard/sell' },
-    { label: 'Wallet', icon: 'fa-wallet', href: '/dashboard/wallet' },
-    { label: 'Profile', icon: 'fa-user', href: '/dashboard/settings' },
-  ];
-
   return (
     <>
       <Head>
         <title>Dashboard · KJ Exchange</title>
       </Head>
       <DashboardLayout>
-        <div className="space-y-6 pb-24">
+        <div className="max-w-2xl mx-auto px-4 py-4 pb-24 space-y-6">
           {/* Welcome & Hide Balance */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
@@ -417,65 +397,53 @@ export default function DashboardOverview() {
               </div>
             </div>
             <Link
-              href="/dashboard/redeem-points"
+              href="/dashboard/referral"
               className="border border-orange/30 text-orange hover:bg-orange/10 px-4 py-2 rounded-full text-sm font-semibold transition whitespace-nowrap"
             >
               Redeem →
             </Link>
           </div>
 
-          {/* Products Grid */}
+          {/* Rate Calculator (Full Widget) */}
+          <RateCalculator />
+
+          {/* Products Grid (6 cards — NO Rate Calculator card) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-bold">Products</h2>
               <Link href="/dashboard/products" className="text-sm text-orange hover:underline">View All</Link>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {/* Gift Cards */}
               <Link href="/dashboard/sell-gift-card" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-solid fa-gift"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Gift Cards</p>
               </Link>
-
-              {/* Sell Crypto */}
               <Link href="/dashboard/sell" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-brands fa-bitcoin"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Sell Crypto</p>
               </Link>
-
-              {/* Pay Bills */}
               <Link href="/dashboard/pay-bills" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-credit-card"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Pay Bills</p>
               </Link>
-
-              {/* Airtime & Data */}
               <Link href="/dashboard/buy-airtime" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-solid fa-wifi"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Airtime & Data</p>
               </Link>
-
-              {/* ===== RATE CALCULATOR CARD (Opens Drawer) ===== */}
-              <button
-                onClick={() => setShowRateCalculator(true)}
-                className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group cursor-pointer"
-              >
+              <Link href="/rates" className="glass rounded-xl p-4 text-center hover:border-orange transition border border-border group">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-orange text-xl group-hover:scale-110 transition">
                   <i className="fa-solid fa-calculator"></i>
                 </div>
                 <p className="text-sm font-semibold mt-2">Rate Calculator</p>
-                <span className="text-[10px] text-text-muted">Live rates</span>
-              </button>
-
-              {/* eSIM (Soon) */}
+              </Link>
               <div className="glass rounded-xl p-4 text-center border border-border opacity-60 relative">
                 <div className="w-10 h-10 mx-auto rounded-full bg-orange/10 flex items-center justify-center text-text-muted text-xl">
                   <i className="fa-solid fa-sim-card"></i>
@@ -488,119 +456,8 @@ export default function DashboardOverview() {
               </div>
             </div>
           </div>
-
-          {/* Recent Transactions */}
-          <div className="glass rounded-2xl p-6 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold">Recent Transactions</h2>
-              <Link href="/dashboard/orders" className="text-sm text-orange hover:underline">View All</Link>
-            </div>
-            {isLoading ? (
-              <p className="text-text-muted">Loading...</p>
-            ) : recentOrders.length === 0 ? (
-              <div className="text-center py-6">
-                <i className="fa-regular fa-clock text-4xl text-text-muted mb-2 block"></i>
-                <p className="text-text-muted">No transactions yet.</p>
-                <Link href="/dashboard/sell-gift-card" className="text-orange text-sm hover:underline inline-block mt-2">
-                  Start trading now →
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentOrders.map((tx) => (
-                  <div key={tx.id} className="flex justify-between items-center border-b border-border pb-3 last:border-0 last:pb-0">
-                    <div className="flex-1 min-w-0">
-                      <p className="capitalize font-medium text-sm">{tx.type?.replace('_', ' ') || 'Transaction'}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-text-muted text-xs">{new Date(tx.created_at).toLocaleDateString()}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          tx.status === 'completed' ? 'bg-green-400/20 text-green-400' :
-                          tx.status === 'pending' ? 'bg-yellow-400/20 text-yellow-400' :
-                          'bg-red-400/20 text-red-400'
-                        }`}>
-                          {tx.status || 'pending'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right flex-shrink-0 ml-4">
-                      <p className={`font-semibold ${tx.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {tx.amount > 0 ? '+' : ''}{tx.currency || '₦'}{tx.amount?.toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
-
-        {/* Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border bg-bg-card/90 backdrop-blur-xl">
-          <div className="container mx-auto px-4">
-            <div className="flex justify-around items-center py-2">
-              {navTabs.map((tab) => {
-                const isActive = router.pathname === tab.href;
-                return (
-                  <Link
-                    key={tab.label}
-                    href={tab.href}
-                    className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition ${
-                      isActive ? 'text-orange' : 'text-text-muted hover:text-text-primary'
-                    }`}
-                  >
-                    <i className={`fa-solid ${tab.icon} text-lg ${isActive ? 'scale-110' : ''}`}></i>
-                    <span className="text-[10px] font-medium">{tab.label}</span>
-                    {isActive && <span className="w-1 h-1 bg-orange rounded-full mt-0.5"></span>}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </nav>
       </DashboardLayout>
-
-      {/* ===== SLIDE-IN DRAWER ===== */}
-      <div
-        className={`fixed inset-0 z-50 transition-all duration-300 ease-out ${
-          showRateCalculator ? 'pointer-events-auto' : 'pointer-events-none'
-        }`}
-      >
-        {/* Backdrop */}
-        <div
-          className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${
-            showRateCalculator ? 'opacity-100' : 'opacity-0'
-          }`}
-          onClick={() => setShowRateCalculator(false)}
-        ></div>
-
-        {/* Drawer */}
-        <div
-          className={`absolute right-0 top-0 h-full w-full max-w-2xl bg-bg-primary transition-transform duration-300 ease-out shadow-2xl ${
-            showRateCalculator ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          {/* Close Button */}
-          <button
-            onClick={() => setShowRateCalculator(false)}
-            className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white transition flex items-center justify-center backdrop-blur-sm border border-white/10"
-          >
-            <i className="fa-solid fa-arrow-left text-lg"></i>
-          </button>
-
-          {/* Close Button (Mobile) */}
-          <button
-            onClick={() => setShowRateCalculator(false)}
-            className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white transition flex items-center justify-center backdrop-blur-sm border border-white/10 md:hidden"
-          >
-            <i className="fa-solid fa-xmark text-lg"></i>
-          </button>
-
-          {/* Scrollable Content */}
-          <div className="h-full overflow-y-auto p-6 pt-20">
-            <RateCalculator />
-          </div>
-        </div>
-      </div>
     </>
   );
 }
