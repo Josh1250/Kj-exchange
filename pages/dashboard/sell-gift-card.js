@@ -33,10 +33,6 @@ export default function SellGiftCard() {
   const [ngnRate, setNgnRate] = useState(1410);
   const [orderId, setOrderId] = useState(null);
 
-  // ===== GIFT CARD HISTORY STATE =====
-  const [giftCardHistory, setGiftCardHistory] = useState([]);
-  const [giftCardHistoryLoading, setGiftCardHistoryLoading] = useState(true);
-
   const fileInputRef = useRef(null);
   const frontInputRef = useRef(null);
   const backInputRef = useRef(null);
@@ -52,35 +48,7 @@ export default function SellGiftCard() {
       }
     };
     fetchRate();
-    
-    // ✅ Fetch gift card history
-    if (user) {
-      fetchGiftCardHistory();
-    }
-  }, [user]);
-
-  // ===== Fetch Gift Card History =====
-  const fetchGiftCardHistory = async () => {
-    if (!user) return;
-    setGiftCardHistoryLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('type', 'gift_card')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (!error && data) {
-        setGiftCardHistory(data);
-      }
-    } catch (err) {
-      console.error('Error fetching gift card history:', err);
-    } finally {
-      setGiftCardHistoryLoading(false);
-    }
-  };
+  }, []);
 
   if (loading) return <div>Loading...</div>;
   if (!user) {
@@ -330,7 +298,6 @@ export default function SellGiftCard() {
       const newOrderId = data[0].id;
       setOrderId(newOrderId);
 
-      // Gift points
       if (giftPoints > 0) {
         await supabase
           .from('gift_point_transactions')
@@ -342,7 +309,6 @@ export default function SellGiftCard() {
           });
       }
 
-      // Notification
       await supabase
         .from('notifications')
         .insert({
@@ -350,7 +316,7 @@ export default function SellGiftCard() {
           message: `🛒 Gift card order submitted: ${brandData.name} - ₦${finalPayout.toLocaleString()} (pending verification)`,
         });
 
-      // ===== CREDIT BUSINESS WALLET (FEE) =====
+      // Business wallet credit
       let profitInNGN = 0;
       if (feeUsd > 0) {
         profitInNGN += feeUsd * ngnRate;
@@ -372,8 +338,6 @@ export default function SellGiftCard() {
             .from('business_wallets')
             .update({ balance: newBizBalance })
             .eq('currency', 'NGN');
-        } else {
-          console.warn('Business wallet not found. Please create business_wallets table.');
         }
       }
 
@@ -395,9 +359,6 @@ export default function SellGiftCard() {
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (frontInputRef.current) frontInputRef.current.value = '';
       if (backInputRef.current) backInputRef.current.value = '';
-
-      // ✅ Refresh history
-      await fetchGiftCardHistory();
 
     } catch (err) {
       console.error('Submit error:', err);
@@ -432,59 +393,8 @@ export default function SellGiftCard() {
             </div>
           </div>
 
-          {/* ===== GIFT CARD HISTORY (MOVED TO TOP) ===== */}
-          <div className="glass rounded-2xl p-5 border border-border mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">
-                Recent Gift Card Sales
-              </h3>
-              <Link href="/dashboard/orders" className="text-sm text-orange hover:underline">
-                View All
-              </Link>
-            </div>
-
-            {giftCardHistoryLoading ? (
-              <div className="text-center py-3 text-text-muted">
-                <i className="fa-solid fa-spinner fa-spin"></i> Loading...
-              </div>
-            ) : giftCardHistory.length === 0 ? (
-              <div className="text-center py-3 text-text-muted text-sm">
-                <i className="fa-regular fa-clock text-2xl block mb-1 opacity-40"></i>
-                <p>No gift card sales yet.</p>
-                <p className="text-xs">Sell your first gift card to see history here.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {giftCardHistory.map((order) => (
-                  <div
-                    key={order.id}
-                    className="flex items-center justify-between p-2.5 bg-black/20 rounded-xl border border-border/50 hover:border-orange/20 transition"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm truncate">{order.asset}</p>
-                      <p className="text-text-muted text-xs">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0 ml-3">
-                      <p className="font-bold text-green-400 text-sm">₦{order.value_ngn?.toLocaleString()}</p>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                        order.status === 'completed' ? 'bg-green-400/20 text-green-400' :
-                        order.status === 'pending' ? 'bg-yellow-400/20 text-yellow-400' :
-                        'bg-red-400/20 text-red-400'
-                      }`}>
-                        {order.status || 'pending'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Main Form */}
           <div className="glass rounded-2xl p-5 md:p-6 border border-border">
-            {/* Error / Success Messages */}
             {error && (
               <div className="mb-6 bg-red-400/10 border border-red-400/20 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
                 <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
@@ -527,7 +437,7 @@ export default function SellGiftCard() {
                   </div>
 
                   {showDropdown && (
-                    <div className="absolute z-30 w-full mt-2 glass rounded-xl border border-border max-h-60 overflow-y-auto shadow-2xl">
+                    <div className="absolute z-20 w-full mt-2 glass rounded-xl border border-border max-h-60 overflow-y-auto shadow-2xl">
                       {filteredBrands.length === 0 ? (
                         <div className="px-4 py-6 text-center text-text-muted text-sm">No gift cards found.</div>
                       ) : (
